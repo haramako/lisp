@@ -36,7 +36,7 @@ static Value _quote( Value args )
 static Value _quasi_quote_inner( Value args )
 {
 	switch( TYPE_OF(args) ){
-	case TYPE_CELL:
+	case TYPE_PAIR:
 		if( CAR(args) == intern("unquote") ){
 			return eval( CAR( CDR(args) ) );
 		}else{
@@ -63,7 +63,7 @@ Value display( Value args )
 {
 	char buf[1024];
 	value_to_str(buf, args);
-	if( V_IS_CELL(args) ){
+	if( V_IS_PAIR(args) ){
 		buf[ strlen(buf) - 1 ] = '\0';
 		printf( "%s\n", buf+1 );
 	}else{

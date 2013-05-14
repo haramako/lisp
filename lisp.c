@@ -7,17 +7,17 @@
 #include "gc.h"
 
 inline void value_mark( Value v ){
-	if( V_IS_CELL(v) ){
-		gc_mark(V2CELL(v));
-	}else if( V_IS_CFUNCTION(v) ){
-		gc_mark(V2CFUNCTION(v));
+	if( V_IS_PAIR(v) ){
+		gc_mark(V2PAIR(v));
+	}else if( V_IS_LAMBDA(v) ){
+		gc_mark(V2LAMBDA(v));
 	}
 }
 
-static void _Cell_mark( void *p )
+static void _Pair_mark( void *p )
 {
 	// display_val( "mark: ", (Value)p );
-	Cell *cell = V2CELL((Value)p);
+	Pair *cell = V2PAIR((Value)p);
 	value_mark( cell->car );
 	value_mark( cell->cdr );
 }
@@ -49,19 +49,19 @@ static void _Bundle_mark( void *p )
 	gc_mark( b->head );
 }
 
-static void _CFunction_mark( void *p )
+static void _Lambda_mark( void *p )
 {
-	CFunction *f = (CFunction*)p;
+	Lambda *f = (Lambda*)p;
 	// display_val( "mark_func: ", CFUNCTION2V(f) );
 	value_mark( f->args );
 	value_mark( f->body );
 	if( f->bundle ) gc_mark( f->bundle );
 }
 
-gc_vtbl Cell_vtbl = { _Cell_mark, _value_free };
+gc_vtbl Pair_vtbl = { _Pair_mark, _value_free };
 gc_vtbl Slot_vtbl = { _Slot_mark, _free };
 gc_vtbl Bundle_vtbl = { _Bundle_mark, _free };
-gc_vtbl CFunction_vtbl = { _CFunction_mark, _value_free };
+gc_vtbl Lambda_vtbl = { _Lambda_mark, _value_free };
 
 Type TYPE_OF( Value v )
 {
@@ -74,15 +74,15 @@ Type TYPE_OF( Value v )
 	}else if( (v & 7) == 2 ){
 		return TYPE_SYMBOL;
 	}else if( (v & 7) == 4 ){
-		return TYPE_CFUNCTION;
+		return TYPE_LAMBDA;
 	}else{
-		return TYPE_CELL;
+		return TYPE_PAIR;
 	}
 }
 
 Value cons( Value car, Value cdr )
 {
-	Cell *new_cell = GC_MALLOC(Cell);
+	Pair *new_cell = GC_MALLOC(Pair);
 	if( !new_cell ) assert(0);
 	new_cell->car = car;
 	new_cell->cdr = cdr;
@@ -91,7 +91,7 @@ Value cons( Value car, Value cdr )
 
 size_t value_length( Value v )
 {
-	assert( V_IS_CELL(v) );
+	assert( V_IS_PAIR(v) );
 	size_t len = 0;
 	for( Value cur=v; cur != NIL; cur = CDR(cur) ) len++;
 	return len;
@@ -114,28 +114,28 @@ size_t value_to_str( char *buf, Value v )
 	case TYPE_SYMBOL:
 		buf += sprintf( buf, "%s", V2SYMBOL(v)->str );
 		break;
-	case TYPE_CFUNCTION:
+	case TYPE_LAMBDA:
 		{
-			CFunction *lmd = V2CFUNCTION(v);
+			Lambda *lmd = V2LAMBDA(v);
 			switch( lmd->type ){
-			case C_FUNCTION_TYPE_LAMBDA:
-				buf += sprintf( buf, "(LAMBDA:%p)", V2CFUNCTION(v) );
+			case LAMBDA_TYPE_LAMBDA:
+				buf += sprintf( buf, "(LAMBDA:%p)", V2LAMBDA(v) );
 				break;
-			case C_FUNCTION_TYPE_MACRO:
-				buf += sprintf( buf, "(MACRO:%p)", V2CFUNCTION(v) );
+			case LAMBDA_TYPE_MACRO:
+				buf += sprintf( buf, "(MACRO:%p)", V2LAMBDA(v) );
 				break;
-			case C_FUNCTION_TYPE_FUNC:
-				buf += sprintf( buf, "(CFUNCTION:%p)", V2CFUNCTION(v) );
+			case LAMBDA_TYPE_CFUNC:
+				buf += sprintf( buf, "(CFUNCTION:%p)", V2LAMBDA(v) );
 				break;
-			case C_FUNCTION_TYPE_SPECIAL:
-				buf += sprintf( buf, "(SPECIAL:%p)", V2CFUNCTION(v) );
+			case LAMBDA_TYPE_SPECIAL:
+				buf += sprintf( buf, "(SPECIAL:%p)", V2LAMBDA(v) );
 				break;
 			default:
 				assert(0);
 			}
 		}
 		break;
-	case TYPE_CELL:
+	case TYPE_PAIR:
 		buf += sprintf( buf, "(" );
 		bool finished = false;
 		while( !finished ){
@@ -152,7 +152,7 @@ size_t value_to_str( char *buf, Value v )
 				buf += value_to_str( buf, CDR(v) );
 				finished = true;
 				break;
-			case TYPE_CELL:
+			case TYPE_PAIR:
 				buf += value_to_str( buf, CAR(v) );
 				buf += sprintf( buf, " " );
 				break;
@@ -169,9 +169,9 @@ size_t value_to_str( char *buf, Value v )
 	return buf - orig_buf;
 }
 
-CFunction* lambda_new()
+Lambda* lambda_new()
 {
-	CFunction *lmd = GC_MALLOC(CFunction)
+	Lambda *lmd = GC_MALLOC(Lambda)
 	assert( lmd );
 	lmd->arity = 0;
 	lmd->args = NIL;
@@ -424,20 +424,20 @@ Value parse_list( char *src )
 	return val;
 }
 
-void register_cfunc( char *sym, CFunctionType type, CFunctionFunc func )
+void register_cfunc( char *sym, LambdaType type, CFunction func )
 {
-	CFunction* cfunc = lambda_new();
+	Lambda* cfunc = lambda_new();
 	assert( cfunc );
 	cfunc->func = func;
 	cfunc->type = type;
-	bundle_define( bundle_cur, intern(sym), CFUNCTION2V(cfunc) );
+	bundle_define( bundle_cur, intern(sym), LAMBDA2V(cfunc) );
 }
 
 //********************************************************
 // Evaluatin
 //********************************************************
 
-Value call( CFunction *func, Value vals, bool as_macro )
+Value call( Lambda *func, Value vals, bool as_macro )
 {
 	Bundle *bundle = bundle_new( func->bundle );
 	Value args = func->args;
@@ -472,17 +472,17 @@ Value _macro_expand_args( Value v )
 
 Value _macro_expand( Value v )
 {
-	if( V_IS_CELL(v) ){
+	if( V_IS_PAIR(v) ){
 		Value car = CAR(v);
 		if( V_IS_SYMBOL(car) ){
 			Value lmd_val = eval(car);
-			if( V_IS_CFUNCTION(lmd_val) ){
-				CFunction *lmd = V2CFUNCTION(lmd_val);
+			if( V_IS_LAMBDA(lmd_val) ){
+				Lambda *lmd = V2LAMBDA(lmd_val);
 				Value vals = CDR(v);
 				switch( lmd->type ){
-				case C_FUNCTION_TYPE_MACRO:
+				case LAMBDA_TYPE_MACRO:
 					return call( lmd, vals, true );
-				case C_FUNCTION_TYPE_SPECIAL:
+				case LAMBDA_TYPE_SPECIAL:
 					if( car == intern("if") || car == intern("macro") || car == intern("define")){
 						return cons( CAR(v), _macro_expand_args( CDR(v) ) );
 					}else if( car == intern("lambda") ){
@@ -513,7 +513,7 @@ Value eval( Value v )
 	switch( TYPE_OF(v) ){
 	case TYPE_NIL:
 	case TYPE_INT:
-	case TYPE_CFUNCTION:
+	case TYPE_LAMBDA:
 	case TYPE_BOOL:
 		return v;
 	case TYPE_SYMBOL:
@@ -526,22 +526,22 @@ Value eval( Value v )
 			}
 			return val;
 		}
-	case TYPE_CELL:
+	case TYPE_PAIR:
 		{
 			Value car = eval(CAR(v));
 			Value cdr = CDR(v);
 			switch( TYPE_OF(car) ){
-			case TYPE_CFUNCTION:
+			case TYPE_LAMBDA:
 				{
-					CFunction *func = V2CFUNCTION(car);
+					Lambda *func = V2LAMBDA(car);
 					switch( func->type ){
-					case C_FUNCTION_TYPE_LAMBDA:
+					case LAMBDA_TYPE_LAMBDA:
 						return call( func, cdr, false );
-					case C_FUNCTION_TYPE_MACRO:
+					case LAMBDA_TYPE_MACRO:
 						return eval( call( func, cdr, true ) );
-					case C_FUNCTION_TYPE_FUNC:
+					case LAMBDA_TYPE_CFUNC:
 						return func->func( eval_list(cdr) );
-					case C_FUNCTION_TYPE_SPECIAL:
+					case LAMBDA_TYPE_SPECIAL:
 						return func->func( cdr );
 					default:
 						assert(0);
@@ -593,24 +593,24 @@ Value let( Value v )
 
 Value lambda( Value v )
 {
-	CFunction *new_lambda = lambda_new();
-	new_lambda->type = C_FUNCTION_TYPE_LAMBDA;
+	Lambda *new_lambda = lambda_new();
+	new_lambda->type = LAMBDA_TYPE_LAMBDA;
 	new_lambda->args = first(v);
 	new_lambda->arity = value_length( new_lambda->args );
 	new_lambda->body = _macro_expand_args(CDR(v));
 	new_lambda->bundle = bundle_cur;
-	return CFUNCTION2V(new_lambda);
+	return LAMBDA2V(new_lambda);
 }
 
 Value macro( Value v )
 {
-	CFunction *new_lambda = lambda_new();
-	new_lambda->type = C_FUNCTION_TYPE_MACRO;
+	Lambda *new_lambda = lambda_new();
+	new_lambda->type = LAMBDA_TYPE_MACRO;
 	new_lambda->args = first(v);
 	new_lambda->arity = value_length( new_lambda->args );
 	new_lambda->body = CDR(v);
 	new_lambda->bundle = bundle_cur;
-	return CFUNCTION2V(new_lambda);
+	return LAMBDA2V(new_lambda);
 }
 
 static jmp_buf *_loop_env = NULL;

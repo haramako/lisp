@@ -10,8 +10,8 @@
  * 0.0110: #f
  * xxxxx1: Number
  * xxx010: Symbol    ( >= VALUE_MIN_POINTER )
- * xxx100: CFunction ( >= VALUE_MIN_POINTER )
- * xxx000: Cell      ( >= VALUE_MIN_POINTER )
+ * xxx100: Lambda    ( >= VALUE_MIN_POINTER )
+ * xxx000: Pair      ( >= VALUE_MIN_POINTER )
  */
 typedef uintptr_t Value;
 
@@ -20,8 +20,8 @@ typedef enum {
 	TYPE_BOOL = 1,
 	TYPE_INT  = 2,
 	TYPE_SYMBOL = 3,
-	TYPE_CELL = 4,
-	TYPE_CFUNCTION = 5,
+	TYPE_PAIR = 4,
+	TYPE_LAMBDA = 5,
 } Type;
 
 #define TYPE_MASK_INT 1
@@ -32,14 +32,14 @@ typedef struct Symbol {
 	struct Symbol *next;
 } Symbol;
 
-typedef Value (*CFunctionFunc)( Value args );
+typedef Value (*CFunction)( Value args );
 
 typedef enum {
-	C_FUNCTION_TYPE_LAMBDA = 0,
-	C_FUNCTION_TYPE_FUNC,
-	C_FUNCTION_TYPE_SPECIAL,
-	C_FUNCTION_TYPE_MACRO,
-} CFunctionType;
+	LAMBDA_TYPE_LAMBDA = 0,
+	LAMBDA_TYPE_CFUNC,
+	LAMBDA_TYPE_SPECIAL,
+	LAMBDA_TYPE_MACRO,
+} LambdaType;
 
 typedef struct Slot {
 	Value name;
@@ -53,18 +53,18 @@ typedef struct Bundle {
 } Bundle;
 
 typedef struct {
-	CFunctionType type;
+	LambdaType type;
 	int arity;
 	Value args;
 	Value body;
 	Bundle *bundle;
-	CFunctionFunc func;
-} CFunction; 
+	CFunction func;
+} Lambda; 
 
 typedef struct {
 	Value car;
 	Value cdr;
-} Cell;
+} Pair;
 
 #define NIL 0L
 #define VALUE_T 4L
@@ -72,22 +72,22 @@ typedef struct {
 
 inline bool V_IS_INT( Value v ){ return (v & 1) > 0; }
 inline bool V_IS_SYMBOL( Value v ){ return v >= VALUE_MIN_POINTER && (v & 7) == 2; }
-inline bool V_IS_CELL( Value v ){ return v >= VALUE_MIN_POINTER && (v & 7) == 0; }
-inline bool V_IS_CFUNCTION( Value v ){ return v >= VALUE_MIN_POINTER && (v & 7) == 4; }
-inline bool V_IS_POINTER( Value v ){ return V_IS_CELL(v) || V_IS_CFUNCTION(v); }
+inline bool V_IS_PAIR( Value v ){ return v >= VALUE_MIN_POINTER && (v & 7) == 0; }
+inline bool V_IS_LAMBDA( Value v ){ return v >= VALUE_MIN_POINTER && (v & 7) == 4; }
+inline bool V_IS_POINTER( Value v ){ return V_IS_PAIR(v) || V_IS_LAMBDA(v); }
 
 inline int V2INT( Value v ){ assert( V_IS_INT(v) ); return (intptr_t)v >> 1; }
 inline Value INT2V( int i ){ return ((Value)i) << 1 | 1; }
 inline Symbol* V2SYMBOL( Value v ){ assert( V_IS_SYMBOL(v) ); return (Symbol*)(v & ~7); }
 inline Value SYMBOL2V( Symbol* atom ){ return ((Value)atom) | 2; }
-inline CFunction* V2CFUNCTION( Value v ){ assert( V_IS_CFUNCTION(v) ); return (CFunction*)(v & ~7); }
-inline Value CFUNCTION2V( CFunction *f ){ return ((Value)f) | 4; }
-inline Cell* V2CELL( Value v ){ assert( V_IS_CELL(v) ); return (Cell*)v; }
-inline Value CELL2V( Cell* c ){ return (Value)c; }
+inline Lambda* V2LAMBDA( Value v ){ assert( V_IS_LAMBDA(v) ); return (Lambda*)(v & ~7); }
+inline Value LAMBDA2V( Lambda *f ){ return ((Value)f) | 4; }
+inline Pair* V2PAIR( Value v ){ assert( V_IS_PAIR(v) ); return (Pair*)v; }
+inline Value PAIR2V( Pair* c ){ return (Value)c; }
 inline void* V2POINTER( Value v ){ return (void*)(v&~7); }
 
-#define CAR(v) (V2CELL(v)->car)
-#define CDR(v) (V2CELL(v)->cdr)
+#define CAR(v) (V2PAIR(v)->car)
+#define CDR(v) (V2PAIR(v)->cdr)
 #define CAAR(v) (CAR(CAR(v)))
 #define CADR(v) (CDR(CAR(v)))
 #define CDAR(v) (CAR(CDR(v)))
@@ -101,7 +101,7 @@ Value cons( Value car, Value cdr );
 size_t value_to_str( char *buf, Value v );
 Value intern( const char *sym );
 size_t value_length( Value v );
-CFunction* lambda_new();
+Lambda* lambda_new();
 
 // Bundle and Slot
 
@@ -116,9 +116,9 @@ bool bundle_find( Bundle *b, Value sym, Value *result );
 Value parse( char *src );
 Value parse_list( char *src );
 
-void register_cfunc( char *sym, CFunctionType type, CFunctionFunc func );
-inline void defun( char *sym, CFunctionFunc func ){ return register_cfunc( sym, C_FUNCTION_TYPE_FUNC, func ); }
-inline void defspecial( char *sym, CFunctionFunc func ){ return register_cfunc( sym, C_FUNCTION_TYPE_SPECIAL, func ); }
+void register_cfunc( char *sym, LambdaType type, CFunction func );
+inline void defun( char *sym, CFunction func ){ return register_cfunc( sym, LAMBDA_TYPE_CFUNC, func ); }
+inline void defspecial( char *sym, CFunction func ){ return register_cfunc( sym, LAMBDA_TYPE_SPECIAL, func ); }
 
 Value eval( Value v );
 Value eval_list( Value v );
