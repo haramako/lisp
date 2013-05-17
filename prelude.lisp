@@ -16,7 +16,7 @@
 			   (list 'if (car c) (cons 'begin (cdr c)) (foo rest)))))
 		 (foo code)))
 
-(define zero? (macro (x) (list 'eq? x 0)))
+(define zero? (macro (x) (list 'eqv? x 0)))
 
 (define and
   (macro code
@@ -97,6 +97,8 @@
 							   (#t (mcons form (foo level (car form))
 										  (foo level (cdr form))))))))))
 		 (foo 0 l)))
+
+(display 'unquote-splicing)
 
 (define macro-form?
   (lambda (form)

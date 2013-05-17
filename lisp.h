@@ -3,18 +3,6 @@
 #include <assert.h>
 #include <stdbool.h>
 
-/**
- * Value.
- * 0.0000: nil
- * 0.0100: #t
- * 0.0110: #f
- * xxxxx1: Number
- * xxx010: Symbol    ( >= VALUE_MIN_POINTER )
- * xxx100: Lambda    ( >= VALUE_MIN_POINTER )
- * xxx000: Pair      ( >= VALUE_MIN_POINTER )
- */
-typedef uintptr_t Value;
-
 typedef enum {
 	TYPE_NIL  = 0,
 	TYPE_BOOL = 1,
@@ -22,94 +10,189 @@ typedef enum {
 	TYPE_SYMBOL = 3,
 	TYPE_PAIR = 4,
 	TYPE_LAMBDA = 5,
+	TYPE_BUNDLE = 6,
+	TYPE_CONTINUATION = 7,
+	TYPE_SPECIAL = 8,
+	TYPE_SLOT = 9,
 } Type;
 
 #define TYPE_MASK_INT 1
-#define VALUE_MIN_POINTER 32
+#define VALUE_MIN_POINTER 128
 
-typedef struct Symbol {
-	char *str;
-	struct Symbol *next;
-} Symbol;
-
-typedef Value (*CFunction)( Value args );
+typedef enum {
+	OP_BEGIN = 0,
+	OP_CALL0, 
+	OP_CALL1,
+	OP_QUOTE,
+	OP_DEFINE,
+	OP_DEFINE2,
+	OP_SET_I,
+	OP_SET_I2,
+	OP_LET,
+	OP_LET2,
+	OP_LET3,
+	OP_LAMBDA,
+	OP_MACRO,
+	OP_EXEC_MACRO,
+	OP_IF,
+	OP_IF2,
+} Operator;
 
 typedef enum {
 	LAMBDA_TYPE_LAMBDA = 0,
 	LAMBDA_TYPE_CFUNC,
-	LAMBDA_TYPE_SPECIAL,
 	LAMBDA_TYPE_MACRO,
+	LAMBDA_TYPE_CMACRO,
 } LambdaType;
 
-typedef struct Slot {
-	Value name;
-	Value val;
-	struct Slot *next;
-} Slot;
 
-typedef struct Bundle {
-	Slot *head;
-	struct Bundle *upper;
-} Bundle;
+typedef struct Cell {
+	Type type;
+	union {
+		int64_t number;
+		struct {
+			struct Cell *car;
+			struct Cell *cdr;
+		} pair;
+		struct {
+			char *str;
+			struct Cell *val;
+			struct Cell *next;
+		} symbol;
+		struct {
+			struct Cell *sym;
+			struct Cell *val;
+			struct Cell *next;
+		} slot;
+		struct {
+			struct Cell *slot;
+			struct Cell *upper;
+		} bundle;
+		struct {
+			LambdaType type;
+			struct Cell *args;
+			struct Cell *body;
+			struct Cell *bundle;
+			void *func;
+		} lambda;
+		struct {
+			Operator op;
+			char *str;
+		} special;
+		struct {
+			struct Cell *bundle;
+			struct Cell *code;
+			struct Cell *next;
+		} continuation;
+	} d;
+} Cell;
 
-typedef struct {
-	LambdaType type;
-	int arity;
-	Value args;
-	Value body;
-	Bundle *bundle;
-	CFunction func;
-} Lambda; 
+typedef Cell* Value;
 
-typedef struct {
-	Value car;
-	Value cdr;
-} Pair;
+typedef Value (*CFunction)( Value args, Value cont, Value *result );
 
-#define NIL 0L
-#define VALUE_T 4L
-#define VALUE_F 6L
 
-inline bool V_IS_INT( Value v ){ return (v & 1) > 0; }
-inline bool V_IS_SYMBOL( Value v ){ return v >= VALUE_MIN_POINTER && (v & 7) == 2; }
-inline bool V_IS_PAIR( Value v ){ return v >= VALUE_MIN_POINTER && (v & 7) == 0; }
-inline bool V_IS_LAMBDA( Value v ){ return v >= VALUE_MIN_POINTER && (v & 7) == 4; }
-inline bool V_IS_POINTER( Value v ){ return V_IS_PAIR(v) || V_IS_LAMBDA(v); }
+extern Value NIL;
+extern Value VALUE_T;
+extern Value VALUE_F;
 
-inline int V2INT( Value v ){ assert( V_IS_INT(v) ); return (intptr_t)v >> 1; }
-inline Value INT2V( int i ){ return ((Value)i) << 1 | 1; }
-inline Symbol* V2SYMBOL( Value v ){ assert( V_IS_SYMBOL(v) ); return (Symbol*)(v & ~7); }
-inline Value SYMBOL2V( Symbol* atom ){ return ((Value)atom) | 2; }
-inline Lambda* V2LAMBDA( Value v ){ assert( V_IS_LAMBDA(v) ); return (Lambda*)(v & ~7); }
-inline Value LAMBDA2V( Lambda *f ){ return ((Value)f) | 4; }
-inline Pair* V2PAIR( Value v ){ assert( V_IS_PAIR(v) ); return (Pair*)v; }
-inline Value PAIR2V( Pair* c ){ return (Value)c; }
-inline void* V2POINTER( Value v ){ return (void*)(v&~7); }
+Value int_new( int i );
 
-#define CAR(v) (V2PAIR(v)->car)
-#define CDR(v) (V2PAIR(v)->cdr)
+#define TYPE_OF(v) (v->type)
+
+#define V_IS_CELL(v) 1
+#define V2CELL(v) (v)
+
+#define V_IS_INT(v) (v->type==TYPE_INT)
+#define V_IS_SYMBOL(v) ((v)->type==TYPE_SYMBOL)
+#define V_IS_PAIR(v) ((v)->type==TYPE_PAIR)
+#define V_IS_LAMBDA(v) ((v)->type==TYPE_LAMBDA)
+#define V_IS_SLOT(v) ((v)->type==TYPE_SLOT)
+#define V_IS_BUNDLE(v) ((v)->type==TYPE_BUNDLE)
+#define V_IS_CONTINUATION(v) ((v)->type==TYPE_CONTINUATION)
+#define V_IS_SPECIAL(v) ((v)->type==TYPE_SPECIAL)
+
+#define V2INT(v) (assert(V_IS_INT(v)),v->d.number)
+#define INT2V(v) (int_new(v))
+#define V2SYMBOL(v) (assert(V_IS_SYMBOL(v)),v)
+#define SYMBOL2V(v) (v)
+#define V2PAIR(v) (assert(V_IS_PAIR(v)),v)
+#define PAIR2V(v) (v)
+#define V2LAMBDA(v) (assert(V_IS_LAMBDA(v)),v)
+#define LAMBDA2V(v) (v)
+#define V2SLOT(v) (assert(V_IS_SLOT(v)),v)
+#define SLOT2V(v) (v)
+#define V2BUNDLE(v) (assert(V_IS_BUNDLE(v)),v)
+#define BUNDLE2V(v) (v)
+#define V2CONTINUATION(v) (assert(V_IS_CONTINUATION(v)),v)
+#define CONTINUATION2V(v) (v)
+#define V2SPECIAL(v) (assert(V_IS_SPECIAL(v)),v)
+#define SPECIAL2V(v) (v)
+
+#define CAR(v) (V2PAIR(v)->d.pair.car)
+#define CDR(v) (V2PAIR(v)->d.pair.cdr)
 #define CAAR(v) (CAR(CAR(v)))
-#define CADR(v) (CDR(CAR(v)))
-#define CDAR(v) (CAR(CDR(v)))
+#define CADR(v) (CAR(CDR(v)))
+#define CDAR(v) (CDR(CAR(v)))
 #define CDDR(v) (CDR(CDR(v)))
-inline Value first( Value v ){ return CAR(v); }
-inline Value second( Value v ){ return CAR(CDR(v)); }
-inline Value third( Value v ){ return CAR(CDR(CDR(v))); }
 
-Type TYPE_OF( Value v );
 Value cons( Value car, Value cdr );
 size_t value_to_str( char *buf, Value v );
 Value intern( const char *sym );
 size_t value_length( Value v );
-Lambda* lambda_new();
+Value lambda_new();
+
+#define cons3(v1,v2,v3) (cons( v1, cons( v2, v3 ) ))
+#define cons4(v1,v2,v3,v4) (cons( v1, cons( v2, cons( v3, v4 ) ) ))
+#define cons5(v1,v2,v3,v4,v5) (cons( v1, cons( v2, cons( v3, cons( v4, v5 ) ) ))
+#define cons6(v1,v2,v3,v4,v5,v6) (cons( v1, cons( v2, cons( v3, cons( v4, cons( v5, v6 ) ) ) ))
+#define bind2cdr(list,v1,v2) do{Value _=(list);v1=CAR(_);v2=CDR(_);}while(0);
+#define bind3cdr(list,v1,v2,v3) do{Value _=(list);v1=CAR(_);_=CDR(_);v2=CAR(_);v3=CDR(_);}while(0);
+#define bind4cdr(list,v1,v2,v3,v4) do{Value _=(list);v1=CAR(_);_=CDR(_);v2=CAR(_);_=CDR(_);v3=CAR(_);v4=CDR(_);}while(0);
+#define bind2(list,v1,v2) do{bind2cdr(list,v1,v2);v2=CAR(v2);}while(0);
+#define bind3(list,v1,v2,v3) do{bind3cdr(list,v1,v2,v3);v3=CAR(v3);}while(0);
+#define bind4(list,v1,v2,v3,v4) do{bind4cdr(list,v1,v2,v3,v4);v4=CAR(v4);}while(0);
+
+// Symbol
+
+#define SYMBOL_STR(v) (V2SYMBOL(v)->d.symbol.str)
+#define SYMBOL_NEXT(v) (V2SYMBOL(v)->d.symbol.next)
+
+// Lambda
+
+#define LAMBDA_KIND(v) (V2LAMBDA(v)->d.lambda.type)
+#define LAMBDA_ARGS(v) (V2LAMBDA(v)->d.lambda.args)
+#define LAMBDA_BODY(v) (V2LAMBDA(v)->d.lambda.body)
+#define LAMBDA_FUNC(v) (V2LAMBDA(v)->d.lambda.func)
+#define LAMBDA_BUNDLE(v) (V2LAMBDA(v)->d.lambda.bundle)
 
 // Bundle and Slot
 
-extern Bundle* bundle_cur;
-Bundle* bundle_new( Bundle *upper );
-bool bundle_set( Bundle *b, Value sym, Value v );
-void bundle_define( Bundle *b, Value sym, Value v );
-bool bundle_find( Bundle *b, Value sym, Value *result );
+#define SLOT_SYM(v) (V2SLOT(v)->d.slot.sym)
+#define SLOT_VAL(v) (V2SLOT(v)->d.slot.val)
+#define SLOT_NEXT(v) (V2SLOT(v)->d.slot.next)
+
+#define BUNDLE_SLOT(v) (V2BUNDLE(v)->d.bundle.slot)
+#define BUNDLE_UPPER(v) (V2BUNDLE(v)->d.bundle.upper)
+
+extern Value bundle_cur;
+Value bundle_new( Value upper );
+bool bundle_set( Value b, Value sym, Value v );
+void bundle_define( Value b, Value sym, Value v );
+bool bundle_find( Value b, Value sym, Value *result );
+
+// Continuation
+
+#define CONTINUATION_CODE(v) (V2CONTINUATION(v)->d.continuation.code)
+#define CONTINUATION_BUNDLE(v) (V2CONTINUATION(v)->d.continuation.bundle)
+#define CONTINUATION_NEXT(v) (V2CONTINUATION(v)->d.continuation.next)
+
+Value continuation_new( Value code, Value bundle, Value next );
+
+// Special
+
+#define SPECIAL_OP(v) (V2SPECIAL(v)->d.special.op)
+#define SPECIAL_STR(v) (V2SPECIAL(v)->d.special.str)
 
 // Parsing
 
@@ -117,18 +200,17 @@ Value parse( char *src );
 Value parse_list( char *src );
 
 void register_cfunc( char *sym, LambdaType type, CFunction func );
-inline void defun( char *sym, CFunction func ){ return register_cfunc( sym, LAMBDA_TYPE_CFUNC, func ); }
-inline void defspecial( char *sym, CFunction func ){ return register_cfunc( sym, LAMBDA_TYPE_SPECIAL, func ); }
+void defun( char *sym, CFunction func );
+void defmacro( char *sym, CFunction func );
 
-Value eval( Value v );
-Value eval_list( Value v );
-Value begin( Value v );
+Value call( Value lmd, Value vals, Value cont, Value *result );
+Value compile( Value code );
+Value eval_loop( Value v );
 void display_val( char *str, Value args );
-Value display( Value v );
 
 extern Value retained;
 
-inline Value retain( Value v ){ retained = cons( v, retained ); return v; }
+Value retain( Value v );
 Value release( Value v );
 void gc();
 

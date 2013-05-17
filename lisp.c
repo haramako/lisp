@@ -6,25 +6,48 @@
 #include <setjmp.h>
 #include "gc.h"
 
-inline void value_mark( Value v ){
-	if( V_IS_PAIR(v) ){
-		gc_mark(V2PAIR(v));
-	}else if( V_IS_LAMBDA(v) ){
-		gc_mark(V2LAMBDA(v));
-	}
-}
+//********************************************************
+// Garbage collection
+//********************************************************
 
-static void _Pair_mark( void *p )
+static void _Cell_mark( void *p )
 {
 	// display_val( "mark: ", (Value)p );
-	Pair *cell = V2PAIR((Value)p);
-	value_mark( cell->car );
-	value_mark( cell->cdr );
-}
-
-static void _value_free( void *p )
-{
-	// display_val( "free: ", (Value)p );
+	Value v = (Cell*)p;
+	switch( TYPE_OF(v) ){
+	case TYPE_NIL:
+	case TYPE_INT:
+	case TYPE_BOOL:
+		break;
+	case TYPE_SYMBOL:
+		gc_mark( SYMBOL_NEXT(v) );
+		break;
+	case TYPE_SPECIAL:
+		break;
+	case TYPE_PAIR:
+		gc_mark( CAR(v) );
+		gc_mark( CDR(v) );
+		break;
+	case TYPE_SLOT:
+		gc_mark( SLOT_SYM(v) );
+		gc_mark( SLOT_VAL(v) );
+		gc_mark( SLOT_NEXT(v) );
+		break;
+	case TYPE_LAMBDA:
+		gc_mark( LAMBDA_ARGS(v) );
+		gc_mark( LAMBDA_BODY(v) );
+		gc_mark( LAMBDA_BUNDLE(v) );
+		break;
+	case TYPE_BUNDLE:
+		gc_mark( BUNDLE_SLOT(v) );
+		gc_mark( BUNDLE_UPPER(v) );
+		break;
+	case TYPE_CONTINUATION:
+		gc_mark( CONTINUATION_BUNDLE(v) );
+		gc_mark( CONTINUATION_CODE(v) );
+		gc_mark( CONTINUATION_NEXT(v) );
+		break;
+	}
 }
 
 static void _free( void *p )
@@ -32,61 +55,76 @@ static void _free( void *p )
 	// printf( "free: %p\n", p );
 }
 
-static void _Slot_mark( void *p )
+gc_vtbl Cell_vtbl = { _Cell_mark, _free };
+
+Value retained = NULL;
+
+static void _mark_root()
 {
-	// printf( "mark slot: %p\n", p );
-	Slot *s = (Slot*)p;
-	value_mark( s->name );
-	value_mark( s->val );
-	gc_mark( s->next );
+	gc_mark( (void*)retained );
+	gc_mark( (void*)bundle_cur );
 }
 
-static void _Bundle_mark( void *p )
-{
-	// printf( "mark bundle: %p\n", p );
-	Bundle *b = (Bundle*)p;
-	gc_mark( b->upper );
-	gc_mark( b->head );
+Value retain( Value v ){
+	retained = cons( v, retained ); return v;
 }
 
-static void _Lambda_mark( void *p )
+Value release( Value v )
 {
-	Lambda *f = (Lambda*)p;
-	// display_val( "mark_func: ", CFUNCTION2V(f) );
-	value_mark( f->args );
-	value_mark( f->body );
-	if( f->bundle ) gc_mark( f->bundle );
-}
-
-gc_vtbl Pair_vtbl = { _Pair_mark, _value_free };
-gc_vtbl Slot_vtbl = { _Slot_mark, _free };
-gc_vtbl Bundle_vtbl = { _Bundle_mark, _free };
-gc_vtbl Lambda_vtbl = { _Lambda_mark, _value_free };
-
-Type TYPE_OF( Value v )
-{
-	if( v == 0 ){
-		return TYPE_NIL;
-	}else if( v == VALUE_T || v == VALUE_F ){
-		return TYPE_BOOL;
-	}else if( v & TYPE_MASK_INT ){
-		return TYPE_INT;
-	}else if( (v & 7) == 2 ){
-		return TYPE_SYMBOL;
-	}else if( (v & 7) == 4 ){
-		return TYPE_LAMBDA;
-	}else{
-		return TYPE_PAIR;
+	assert( V_IS_PAIR(v) );
+	for( Value *cur=&retained; *cur != NIL; cur = &CDR(*cur) ){
+		if( CAR(*cur) == v ){
+			if( CDR(*cur) ){
+				CAR(*cur) = CADR(*cur);
+				CDR(*cur) = CDDR(*cur);
+			}else{
+				*cur = NIL;
+			}
+			break;
+		}
 	}
+	return v;
+}
+
+void gc()
+{
+	gc_run();
+}
+
+//********************************************************
+// Utility
+//********************************************************
+
+Value NIL = NULL;
+Value VALUE_T = NULL;
+Value VALUE_F = NULL;
+Value SYM_A_DEBUG_A = NULL;
+Value SYM_A_COMPILE_HOOK_A = NULL;
+Value SYM_QUASIQUOTE = NULL;
+Value SYM_UNQUOTE = NULL;
+
+Value cell_new( Type type )
+{
+	Cell *cell = GC_MALLOC(Cell);
+	assert(cell);
+	cell->type = type;
+	return cell;
+}
+
+Value int_new( int i )
+{
+	Cell *cell = GC_MALLOC(Cell);
+	cell->type = TYPE_INT;
+	cell->d.number = i;
+	return cell;
 }
 
 Value cons( Value car, Value cdr )
 {
-	Pair *new_cell = GC_MALLOC(Pair);
-	if( !new_cell ) assert(0);
-	new_cell->car = car;
-	new_cell->cdr = cdr;
-	return (Value)new_cell;
+	Value v = cell_new(TYPE_PAIR);
+	CAR(v) = car;
+	CDR(v) = cdr;
+	return v;
 }
 
 size_t value_length( Value v )
@@ -109,15 +147,17 @@ size_t value_to_str( char *buf, Value v )
 		buf += sprintf( buf, (v==VALUE_T)?"#t":"#f" );
 		break;
 	case TYPE_INT:
-		buf += sprintf( buf, "%d", V2INT(v) );
+		buf += sprintf( buf, "%lld", V2INT(v) );
 		break;
 	case TYPE_SYMBOL:
-		buf += sprintf( buf, "%s", V2SYMBOL(v)->str );
+		buf += sprintf( buf, "%s", SYMBOL_STR(v) );
+		break;
+	case TYPE_SLOT:
+		buf += sprintf( buf, "(SLOT:%p)", v );
 		break;
 	case TYPE_LAMBDA:
 		{
-			Lambda *lmd = V2LAMBDA(v);
-			switch( lmd->type ){
+			switch( LAMBDA_KIND(v) ){
 			case LAMBDA_TYPE_LAMBDA:
 				buf += sprintf( buf, "(LAMBDA:%p)", V2LAMBDA(v) );
 				break;
@@ -127,8 +167,8 @@ size_t value_to_str( char *buf, Value v )
 			case LAMBDA_TYPE_CFUNC:
 				buf += sprintf( buf, "(CFUNCTION:%p)", V2LAMBDA(v) );
 				break;
-			case LAMBDA_TYPE_SPECIAL:
-				buf += sprintf( buf, "(SPECIAL:%p)", V2LAMBDA(v) );
+			case LAMBDA_TYPE_CMACRO:
+				buf += sprintf( buf, "(CMACRO:%p)", V2LAMBDA(v) );
 				break;
 			default:
 				assert(0);
@@ -144,133 +184,183 @@ size_t value_to_str( char *buf, Value v )
 				buf += value_to_str( buf, CAR(v) );
 				finished = true;
 				break;
-			case TYPE_BOOL:
-			case TYPE_INT:
-			case TYPE_SYMBOL:
-				buf += value_to_str( buf, CAR(v) );
-				buf += sprintf( buf, " . " );
-				buf += value_to_str( buf, CDR(v) );
-				finished = true;
-				break;
 			case TYPE_PAIR:
 				buf += value_to_str( buf, CAR(v) );
 				buf += sprintf( buf, " " );
 				break;
 			default:
-				assert(0);
+				buf += value_to_str( buf, CAR(v) );
+				buf += sprintf( buf, " . " );
+				buf += value_to_str( buf, CDR(v) );
+				finished = true;
+				break;
 			}
 			v = CDR(v);
 		}
 		buf += sprintf( buf, ")" );
 		break;
-	default:
-		assert(0);
+	case TYPE_BUNDLE:
+		buf += sprintf( buf, "(BUNDLE:%p)", V2BUNDLE(v) );
+		break;
+	case TYPE_CONTINUATION:
+		buf += sprintf( buf, "(CONTINUATION:%p)", V2CONTINUATION(v) );
+		break;
+	case TYPE_SPECIAL:
+		buf += sprintf( buf, "%s", SPECIAL_STR(v) );
+		break;
 	}
 	return buf - orig_buf;
 }
 
-Lambda* lambda_new()
+Value lambda_new()
 {
-	Lambda *lmd = GC_MALLOC(Lambda)
-	assert( lmd );
-	lmd->arity = 0;
-	lmd->args = NIL;
-	lmd->body = NIL;
-	lmd->bundle = NULL;
-	lmd->func = NULL;
-	return lmd;
+	Value v = cell_new(TYPE_LAMBDA);
+	LAMBDA_ARGS(v) = NIL;
+	LAMBDA_BODY(v) = NIL;
+	LAMBDA_BUNDLE(v) = NIL;
+	LAMBDA_FUNC(v) = NULL;
+	return v;
+}
+
+//********************************************************
+// Special forms
+//********************************************************
+
+Value V_BEGIN;
+Value V_CALL0;
+Value V_CALL1;
+Value V_QUOTE;
+Value V_DEFINE, V_DEFINE2;
+Value V_SET_I, V_SET_I2;
+Value V_LET, V_LET2, V_LET3;
+Value V_LAMBDA, V_MACRO, V_EXEC_MACRO;
+Value V_IF, V_IF2;
+
+Value _operator( char *sym, Operator op ){
+	Value v = cell_new(TYPE_SPECIAL);
+	SPECIAL_OP(v) = op;
+	SPECIAL_STR(v) = sym;
+	bundle_define( bundle_cur, intern(sym), v );
+	return retain(v);
+}
+
+static void _special_init()
+{
+	V_BEGIN = _operator("begin", OP_BEGIN);
+	V_CALL0 = _operator("*call0*", OP_CALL0);
+	V_CALL1 = _operator("*call1*", OP_CALL1);
+	V_QUOTE = _operator("quote", OP_QUOTE);
+	V_DEFINE = _operator("define", OP_DEFINE);
+	V_DEFINE2 = _operator("*define2*", OP_DEFINE2);
+	V_SET_I = _operator("set!", OP_SET_I);
+	V_SET_I2 = _operator("*set!2*", OP_SET_I2);
+	V_LET = _operator("let", OP_LET);
+	V_LET2 = _operator("*let2*", OP_LET2);
+	V_LET3 = _operator("*let3*", OP_LET3);
+	V_LAMBDA = _operator("lambda", OP_LAMBDA);
+	V_MACRO = _operator("macro", OP_MACRO);
+	V_EXEC_MACRO = _operator("*exec-macro*", OP_EXEC_MACRO);
+	V_IF = _operator("if", OP_IF);
+	V_IF2 = _operator("*if2*", OP_IF2);
 }
 
 //********************************************************
 // Symbol
 //********************************************************
 
-static Symbol *_symbol_root = NULL;
-static int _gemsym_cur = 0;
+static Value _symbol_root = NULL;
+// static int _gensym_cur = 0;
 
 Value intern( const char *sym )
 {
-	for( Symbol *cur = _symbol_root; cur != NULL; cur = cur->next ){
-		if( strcmp( cur->str, sym ) == 0 ) return SYMBOL2V(cur);
+	for( Value cur = _symbol_root; cur != NIL; cur = SYMBOL_NEXT(cur) ){
+		if( strcmp( SYMBOL_STR(cur), sym ) == 0 ) return cur;
 	}
 	// not found, create new atom
-	Symbol *new_sym = malloc( sizeof(Symbol) );
-	assert( new_sym );
-	new_sym->str = malloc( strlen(sym)+1 );
-	assert( new_sym->str );
-	strcpy( new_sym->str, sym );
-	new_sym->next = _symbol_root;
-	_symbol_root = new_sym;
-	return SYMBOL2V(new_sym);
+	Value v = cell_new(TYPE_SYMBOL);
+	SYMBOL_STR(v) = malloc( strlen(sym)+1 );
+	assert( SYMBOL_STR(v) );
+	strcpy( SYMBOL_STR(v), sym );
+	SYMBOL_NEXT(v) = _symbol_root;
+	_symbol_root = v;
+	return v;
 }
-
-static Value _gemsym( Value args )
-{
-	Symbol *new_sym = malloc( sizeof(Symbol) );
-	assert( new_sym );
-	new_sym->str = malloc( 8 );
-	assert( new_sym->str );
-	sprintf( new_sym->str, "$%d", _gemsym_cur );
-	_gemsym_cur++;
-	new_sym->next = _symbol_root;
-	_symbol_root = new_sym;
-	return SYMBOL2V(new_sym);
-}
-
 
 //********************************************************
 // Bundle and Slot
 //********************************************************
 
-Bundle* bundle_cur = NULL;
+Value bundle_cur = NULL;
 
-Bundle* bundle_new( Bundle *upper )
+Value bundle_new( Value upper )
 {
-	Bundle *new_bundle = GC_MALLOC( Bundle );
-	assert( new_bundle );
-	new_bundle->head = NULL;
-	new_bundle->upper = upper;
-	return new_bundle;
+	Value v = cell_new(TYPE_BUNDLE);
+	BUNDLE_SLOT(v) = NIL;
+	BUNDLE_UPPER(v) = upper;
+	return v;
 }
 
-Slot* bundle_find_slot( Bundle *b, Value sym, bool find_upper )
+Value bundle_find_slot( Value b, Value sym, bool find_upper )
 {
-	for( Slot *cur = b->head; cur != NULL; cur = cur->next ){
-		if( cur->name == sym ) return cur;
+	for( Value cur = BUNDLE_SLOT(b); cur != NIL; cur = SLOT_NEXT(cur) ){
+		if( SLOT_SYM(cur) == sym ) return cur;
 	}
-	if( find_upper && b->upper ) return bundle_find_slot( b->upper, sym, find_upper );
+	if( find_upper && BUNDLE_UPPER(b) != NIL ) return bundle_find_slot( BUNDLE_UPPER(b), sym, find_upper );
 	return NULL;
 }
 
-bool bundle_set( Bundle *b, Value sym, Value v )
+bool bundle_set( Value b, Value sym, Value v )
 {
-	Slot *slot = bundle_find_slot( b, sym, true );
+	Value slot = bundle_find_slot( b, sym, true );
 	assert( slot );
-	slot->val = v;
+	SLOT_VAL(slot) = v;
 	return true;
 }
 
-void bundle_define( Bundle *b, Value sym, Value v )
+void bundle_define( Value b, Value sym, Value v )
 {
 	assert( !bundle_find_slot( b, sym, false ) );
 	// not found, create new entry
-	Slot *slot = GC_MALLOC(Slot);
+	Value slot = cell_new(TYPE_SLOT);
 	assert( slot );
-	slot->name = sym;
-	slot->val = v;
-	slot->next = b->head;
-	b->head = slot;
+	SLOT_SYM(slot) = sym;
+	SLOT_VAL(slot) = v;
+	SLOT_NEXT(slot) = BUNDLE_SLOT(b);
+	BUNDLE_SLOT(b) = slot;
 }
 
-bool bundle_find( Bundle *b, Value sym, Value *result )
+bool bundle_find( Value b, Value sym, Value *result )
 {
-	Slot *slot = bundle_find_slot( b, sym, true );
+	Value slot = bundle_find_slot( b, sym, true );
 	if( slot ){
-		*result = slot->val;
+		if( result ) *result = SLOT_VAL(slot);
 		return true;
 	}else{
 		return false;
 	}
+}
+
+Value bundle_get( Value b, Value sym )
+{
+	Value slot = bundle_find_slot( b, sym, true );
+	if( slot ){
+		return SLOT_VAL(slot);
+	}else{
+		return NIL;
+	}
+}
+
+//********************************************************
+// Continuation
+//********************************************************
+
+Value continuation_new( Value code, Value bundle, Value next )
+{
+	Value v = cell_new( TYPE_CONTINUATION );
+	CONTINUATION_CODE(v) = code;
+	CONTINUATION_BUNDLE(v) = bundle;
+	CONTINUATION_NEXT(v) = next;
+	return v;
 }
 
 //********************************************************
@@ -292,6 +382,9 @@ void _skip_space( ParseState *state )
 		switch( c ){
 		case ' ': case '\t': case '\n':
 			break;
+		case ';':
+			while( *state->cur != '\n' && *state->cur != '\0' ) state->cur++;
+			break;
 		default:
 			return;
 		}
@@ -312,8 +405,10 @@ int _parse_list( ParseState *state, Value *result )
 	default:
 		{
 			Value cdr;
-			_parse( state, &val );
-			_parse_list( state, &cdr );
+			int err = _parse( state, &val );
+			if( err ) return err;
+			err = _parse_list( state, &cdr );
+			if( err ) return err;
 			*result = cons( val, cdr );
 			return 0;
 		}
@@ -348,15 +443,16 @@ int _parse( ParseState *state, Value *result )
 	_skip_space( state );
 	switch( *state->cur ){
 	case '\0':
-		return 1;
+		return 0;
 	case '(':
 		state->cur++;
 		err = _parse_list( state, result );
+		if( err ) return err;
 		assert( *state->cur == ')' );
 		state->cur++;
 		return err;
 	case ')':
-		assert(0);
+		assert(!"paren not matched");
 	case '#':
 		state->cur++;
 		if( *state->cur == 't' ){
@@ -374,19 +470,19 @@ int _parse( ParseState *state, Value *result )
 		state->cur++;
 		err = _parse( state, result );
 		if( err ) return err;
-		*result = cons( intern("quote"), cons(*result,NIL) );
+		*result = cons( V_QUOTE, cons(*result,NIL) );
 		return err;
 	case '`':
 		state->cur++;
 		err = _parse( state, result );
 		if( err ) return err;
-		*result = cons( intern("quasi-quote"), cons(*result,NIL) );
+		*result = cons( SYM_QUASIQUOTE, cons(*result,NIL) );
 		return err;
 	case ',':
 		state->cur++;
 		err = _parse( state, result );
 		if( err ) return err;
-		*result = cons( intern("unquote"), cons(*result,NIL) );
+		*result = cons( SYM_UNQUOTE, cons(*result,NIL) );
 		return err;
 	default:
 		{
@@ -408,7 +504,10 @@ Value parse( char *src )
 	state.line = 0;
 	Value val;
 	int err = _parse( &state, &val );
-	err = 0;
+	if( err ){
+		printf( "parse error!\n %s\n", state.cur );
+		exit(1);
+	}
 	return val;
 }
 
@@ -420,253 +519,257 @@ Value parse_list( char *src )
 	state.line = 0;
 	Value val;
 	int err = _parse_list( &state, &val );
-	err = 0;
+	if( err ){
+		printf( "parse error!\n %s\n", state.cur );
+		exit(1);
+	}
+	if( *state.cur != '\0' ){
+		printf( "parse error!\n %s\n", state.cur );
+		exit(1);
+	}
 	return val;
 }
 
 void register_cfunc( char *sym, LambdaType type, CFunction func )
 {
-	Lambda* cfunc = lambda_new();
-	assert( cfunc );
-	cfunc->func = func;
-	cfunc->type = type;
-	bundle_define( bundle_cur, intern(sym), LAMBDA2V(cfunc) );
+	Value v = lambda_new();
+	LAMBDA_FUNC(v) = func;
+	LAMBDA_KIND(v) = type;
+	bundle_define( bundle_cur, intern(sym), v );
+}
+
+void defun( char *sym, CFunction func )
+{
+	return register_cfunc( sym, LAMBDA_TYPE_CFUNC, func );
+}
+
+void defmacro( char *sym, CFunction func )
+{
+	return register_cfunc( sym, LAMBDA_TYPE_CMACRO, func );
 }
 
 //********************************************************
-// Evaluatin
+// Evaluation
 //********************************************************
 
-Value call( Lambda *func, Value vals, bool as_macro )
-{
-	Bundle *bundle = bundle_new( func->bundle );
-	Value args = func->args;
-	for( int i=0; i<func->arity; ++i ){
-		Value val;
-		if( as_macro ){
-			val = CAR(vals);
-		}else{
-			val = eval( CAR(vals) );
-		}
-		bundle_define( bundle, CAR(args), val );
-		args = CDR(args);
-		vals = CDR(vals);
-	}
-	Bundle *old_bundle = bundle_cur;
-	bundle_cur = bundle;
-	Value result = begin( func->body );
-	bundle_cur = old_bundle;
-	return result;
-}
+Value nthcdr( int n, Value v ){ for(;n>0;n--){ v = CDR(v); } return v; }
+Value nth( int n, Value v ){ return CAR(nthcdr(n,v)); }
 
-Value _macro_expand( Value v );
+#define NEXT(_cont,_v) do{ Value r = _v; cont = _cont; result = (r); goto _loop; }while(0)
 
-Value _macro_expand_args( Value v )
-{
-	if( v ){
-		return cons( _macro_expand(CAR(v)), _macro_expand_args(CDR(v)) );
-	}else{
-		return v;
-	}
-}
+#define CONT continuation_new
+#define CONT_OP(op,a,b,c) continuation_new(cons(op,a),b,c)
 
-Value _macro_expand( Value v )
+Value call( Value lmd, Value vals, Value cont, Value *result )
 {
-	if( V_IS_PAIR(v) ){
-		Value car = CAR(v);
-		if( V_IS_SYMBOL(car) ){
-			Value lmd_val = eval(car);
-			if( V_IS_LAMBDA(lmd_val) ){
-				Lambda *lmd = V2LAMBDA(lmd_val);
-				Value vals = CDR(v);
-				switch( lmd->type ){
-				case LAMBDA_TYPE_MACRO:
-					return call( lmd, vals, true );
-				case LAMBDA_TYPE_SPECIAL:
-					if( car == intern("if") || car == intern("macro") || car == intern("define")){
-						return cons( CAR(v), _macro_expand_args( CDR(v) ) );
-					}else if( car == intern("lambda") ){
-						return cons( CAR(v), cons( CDAR(v), _macro_expand_args( CDDR(v) ) ) );
-					}else if( car == intern("quote") || car == intern("quasi-quote") || car == intern("unquote") ){
-						return v;
-					}else{
-						assert(0);
-					}
-				default:
+	switch( LAMBDA_KIND(lmd) ){
+	case LAMBDA_TYPE_LAMBDA:
+	case LAMBDA_TYPE_MACRO:
+		{
+			Value bundle = bundle_new( LAMBDA_BUNDLE(lmd) );
+			for( Value cur=LAMBDA_ARGS(lmd); cur != NIL; cur=CDR(cur), vals=CDR(vals) ){
+				if( V_IS_PAIR(cur) ){
+					bundle_define( bundle, CAR(cur), CAR(vals) );
+				}else{
+					bundle_define( bundle, cur, vals );
 					break;
 				}
 			}
+			return continuation_new( cons(V_BEGIN, LAMBDA_BODY(lmd)), bundle, CONTINUATION_NEXT(cont) );
 		}
-		return cons( CAR(v), _macro_expand_args( CDR(v) ) );
-	}else{
-		return v;
+	case LAMBDA_TYPE_CFUNC:
+	case LAMBDA_TYPE_CMACRO:
+		{
+			Value next = ((CFunction)LAMBDA_FUNC(lmd))( vals, cont, result );
+			return next;
+		}
 	}
+	assert(0);
 }
 
-Value macro_expand( Value args )
+Value compile( Value code )
 {
-	return _macro_expand( CAR(args) );
+	Value compile_hook = bundle_get( bundle_cur, SYM_A_COMPILE_HOOK_A );
+	if( compile_hook != NIL ){
+		// display_val( "src:", code );
+		code = eval_loop( cons( cons3( compile_hook, cons3( V_QUOTE, code, NIL ), NIL ), NIL) );
+		// display_val( "src:", code );
+	}
+	return code;
 }
 
-Value eval( Value v )
+#define C_BUNDLE CONTINUATION_BUNDLE
+#define C_NEXT CONTINUATION_NEXT
+#define C_CODE CONTINUATION_CODE
+
+Value eval_loop( Value code )
 {
-	switch( TYPE_OF(v) ){
+	Value result = NIL;
+	Value cont = CONT_OP( V_BEGIN, code, bundle_cur, NIL );
+ _loop:
+	if( cont == NIL ) return result;
+	Value debug = bundle_get( C_BUNDLE(cont), SYM_A_DEBUG_A );
+	if( debug != NIL ) display_val( "> ", C_CODE(cont) );
+	// display_val( "=> ", result );
+	switch( TYPE_OF(C_CODE(cont)) ){
 	case TYPE_NIL:
 	case TYPE_INT:
 	case TYPE_LAMBDA:
 	case TYPE_BOOL:
-		return v;
+	case TYPE_BUNDLE:
+	case TYPE_CONTINUATION:
+	case TYPE_SPECIAL:
+	case TYPE_SLOT:
+		NEXT( C_NEXT(cont), C_CODE(cont) );
 	case TYPE_SYMBOL:
 		{
 			Value val;
-			bool found = bundle_find( bundle_cur, v, &val );
+			bool found = bundle_find( C_BUNDLE(cont), C_CODE(cont), &val );
 			if( !found ){
-				display_val( "symbol not found: ", v );
+				display_val( "symbol not found: ", C_CODE(cont) );
 				assert(0);
 			}
-			return val;
+			NEXT( C_NEXT(cont), val );
 		}
 	case TYPE_PAIR:
-		{
-			Value car = eval(CAR(v));
-			Value cdr = CDR(v);
-			switch( TYPE_OF(car) ){
-			case TYPE_LAMBDA:
+		if( !V_IS_SPECIAL(CAR(C_CODE(cont))) ){
+			NEXT( CONT( CAR(C_CODE(cont)), C_BUNDLE(cont), 
+						CONT_OP( V_CALL0, CDR(C_CODE(cont)), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+		}else{
+			Value code = CDR(C_CODE(cont));
+			Operator op = SPECIAL_OP(CAR(C_CODE(cont)));
+			switch( op ){
+			case OP_BEGIN:
 				{
-					Lambda *func = V2LAMBDA(car);
-					switch( func->type ){
-					case LAMBDA_TYPE_LAMBDA:
-						return call( func, cdr, false );
-					case LAMBDA_TYPE_MACRO:
-						return eval( call( func, cdr, true ) );
-					case LAMBDA_TYPE_CFUNC:
-						return func->func( eval_list(cdr) );
-					case LAMBDA_TYPE_SPECIAL:
-						return func->func( cdr );
-					default:
-						assert(0);
+					// display_val( "OP_BEGIN: ", code );
+					if( code == NIL ){
+						NEXT( C_NEXT(cont), result );
+					}else if( CDR(code) == NIL ){
+						NEXT( CONT( CAR(code), C_BUNDLE(cont), C_NEXT(cont)), result );
+					}else{
+						NEXT( CONT( CAR(code), C_BUNDLE(cont),
+									CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
 					}
 				}
-			default:
-				assert(0);
-			}
-		}
-	default:
-		assert(0);
-	}
-	return NIL;
-}
-
-Value eval_list( Value v )
-{
-	if( v ){
-		return cons( eval(CAR(v)), eval_list(CDR(v)) );
-	}else{
-		return NIL;
-	}
-}
-
-Value begin( Value v )
-{
-	Value result;
-	for( Value cur=v; cur != NIL; cur = CDR(cur) ){
-		result = eval( CAR(cur) );
-	}
-	return result;
-}
-
-Value let( Value v )
-{
-	// display( v );
-	Bundle *bundle = bundle_new( bundle_cur );
-	for( Value cur=CAR(v); cur != NIL; cur = CDR(cur) ){
-		Value sym = first(CAR(cur));
-		Value val = eval( second(CAR(cur)) );
-		bundle_define( bundle, sym, val );
-	}
-	Bundle *old_bundle = bundle_cur;
-	bundle_cur = bundle;
-	Value result = begin( CDR(v) );
-	bundle_cur = old_bundle;
-	return result;
-}
-
-Value lambda( Value v )
-{
-	Lambda *new_lambda = lambda_new();
-	new_lambda->type = LAMBDA_TYPE_LAMBDA;
-	new_lambda->args = first(v);
-	new_lambda->arity = value_length( new_lambda->args );
-	new_lambda->body = _macro_expand_args(CDR(v));
-	new_lambda->bundle = bundle_cur;
-	return LAMBDA2V(new_lambda);
-}
-
-Value macro( Value v )
-{
-	Lambda *new_lambda = lambda_new();
-	new_lambda->type = LAMBDA_TYPE_MACRO;
-	new_lambda->args = first(v);
-	new_lambda->arity = value_length( new_lambda->args );
-	new_lambda->body = CDR(v);
-	new_lambda->bundle = bundle_cur;
-	return LAMBDA2V(new_lambda);
-}
-
-static jmp_buf *_loop_env = NULL;
-
-Value loop( Value args )
-{
-	jmp_buf env;
-	jmp_buf *old_env = _loop_env;
-	_loop_env = &env;
-	int ret = setjmp( env );
-	while( ret == 0 ){
-		begin( args );
-	}
-	_loop_env = old_env;
-	return NIL;
-}
-
-Value _break( Value args )
-{
-	assert( _loop_env );
-	longjmp( *_loop_env, 1 );
-	return NIL;
-}
-
-//********************************************************
-// Gabage collect
-//********************************************************
-
-Value retained = NIL;
-
-static void _mark_root()
-{
-	gc_mark( (void*)retained );
-	gc_mark( (void*)bundle_cur );
-}
-
-Value release( Value v ){
-	if( V_IS_POINTER(v) ){
-		for( Value *cur=&retained; *cur; cur = &CDR(*cur) ){
-			if( CAR(*cur) == v ){
-				if( CDR(*cur) ){
-					CAR(*cur) = CDAR(*cur);
-					CDR(*cur) = CDDR(*cur);
-				}else{
-					*cur = NIL;
+			case OP_QUOTE:
+				NEXT( C_NEXT(cont), CAR(code) );
+			case OP_CALL0:
+				// display_val( "OP_CALL0: ", C_CODE(cont) );
+				switch( TYPE_OF(result) ){
+				case TYPE_LAMBDA:
+					{
+						Value args = cons(result,NIL);
+						Value lmd = V2LAMBDA(result);
+						switch( LAMBDA_KIND(lmd) ){
+						case LAMBDA_TYPE_LAMBDA:
+						case LAMBDA_TYPE_CFUNC:
+							NEXT( CONT( CAR(code), C_BUNDLE(cont),
+										CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) ),
+								  NIL );
+						case LAMBDA_TYPE_MACRO:
+							{
+								Value cont2 = call( lmd, code, cont, NULL );
+								C_NEXT(cont2) = CONT_OP( V_EXEC_MACRO, NIL, C_BUNDLE(cont), C_NEXT(cont));
+								NEXT( cont2, NIL );
+							}
+						case LAMBDA_TYPE_CMACRO:
+							{
+								Value expanded;
+								Value next = call( lmd, code, cont, &expanded );
+								NEXT( CONT_OP( V_BEGIN, expanded, C_BUNDLE(cont), next ), NIL );
+							}
+						}
+					}
+				case TYPE_SPECIAL:
+					NEXT( CONT_OP( result, code, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+				default:
+					assert(0);
 				}
-				break;
+			case OP_CALL1:
+				{
+					Value rest, vals, tmp;
+					bind3(code,rest,vals,tmp);
+					CDR(tmp) = cons( result, NIL );
+					if( rest != NIL ){
+						NEXT( CONT( CAR(rest), C_BUNDLE(cont),
+									CONT_OP( V_CALL1, cons4( CDR(rest), vals, CDR(tmp), NIL ), C_BUNDLE(cont), C_NEXT(cont) ) ),
+							  NIL );
+					}else{
+						Value lmd = V2LAMBDA(CAR(vals));
+						switch( LAMBDA_KIND(lmd) ){
+						case LAMBDA_TYPE_LAMBDA:
+							NEXT( call( lmd, CDR(vals), cont, NULL ), NIL );
+						case LAMBDA_TYPE_CFUNC:
+							{
+								Value val = NIL;
+								Value next = ((CFunction)LAMBDA_FUNC(lmd))( CDR(vals), cont, &val );
+								NEXT( next, val );
+							}
+						default:
+							assert(0);
+						}
+					}
+				}
+			case OP_DEFINE:
+				NEXT( CONT( CAR(CDR(code)), C_BUNDLE(cont),
+							CONT_OP( V_DEFINE2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) ), NIL );
+				
+			case OP_DEFINE2:
+				bundle_define( C_BUNDLE(cont), code, result );
+				NEXT( C_NEXT(cont), NIL );
+				
+			case OP_SET_I:
+				NEXT( CONT( CAR(CDR(code)), C_BUNDLE(cont),
+							CONT_OP( V_SET_I2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) ), NIL );
+				
+			case OP_SET_I2:
+				bundle_set( C_BUNDLE(cont), code, result );
+				NEXT( C_NEXT(cont), NIL );
+
+			case OP_LET:
+				NEXT( CONT_OP( V_LET2, code, bundle_new( C_BUNDLE(cont) ), C_NEXT(cont)), NIL );
+				
+			case OP_LET2:
+				if( CAR(code) != NIL ){
+					Value args = CAR(code);
+					NEXT( CONT( CAR(CDR(CAR(args))), C_BUNDLE(cont),
+								CONT_OP( V_LET3, cons3( CAR(CAR(args)), CDR(args), CDR(code) ), C_BUNDLE(cont), C_NEXT(cont) )), NIL);
+				}else{
+					NEXT( CONT_OP( V_BEGIN, nthcdr(1,code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+				}
+				
+			case OP_LET3:
+				bundle_define( C_BUNDLE(cont), CAR(code), result );
+				NEXT( CONT_OP( V_LET2, CDR(code), C_BUNDLE(cont), C_NEXT(cont)), NIL );
+				
+			case OP_LAMBDA:
+			case OP_MACRO:
+				{
+					// display_val( "lambda2:", result );
+					Value lmd = lambda_new();
+					LAMBDA_KIND(lmd) = (op==OP_LAMBDA)?LAMBDA_TYPE_LAMBDA:LAMBDA_TYPE_MACRO;
+					LAMBDA_BUNDLE(lmd) = C_BUNDLE(cont);
+					bind2cdr( code, LAMBDA_ARGS(lmd), LAMBDA_BODY(lmd) );
+					NEXT( C_NEXT(cont), LAMBDA2V(lmd) );
+				}
+
+			case OP_EXEC_MACRO:
+				// display_val( "EXEC_MACRO :", result );
+				NEXT( CONT( result, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+				
+			case OP_IF:
+				NEXT( CONT( CAR(code), C_BUNDLE(cont),
+							CONT_OP( V_IF2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+			case OP_IF2:
+				if( result != VALUE_F ){
+					NEXT( CONT( CAR(code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+				}else{
+					NEXT( CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+				}
 			}
 		}
 	}
-	return v;
-}
-
-void gc()
-{
-	gc_run();
+	assert(0);
 }
 
 // print backtrace
@@ -688,22 +791,26 @@ static void handler(int sig) {
 
 void init()
 {
-	gc_init( _mark_root );
-	
-	bundle_cur = bundle_new( NULL );
-
 	signal( SIGABRT, handler );
 	signal( SIGSEGV, handler );
+	
+	gc_init( _mark_root );
 
-	defspecial( "let", let );
-	defspecial( "lambda", lambda );
-	defspecial( "macro", macro );
-	defspecial( "macro-expand", macro_expand );
-	defspecial( "loop", loop );
-	defspecial( "break", _break );
+	NIL = cell_new(TYPE_NIL);
+	VALUE_T = cell_new(TYPE_BOOL);
+	VALUE_F = cell_new(TYPE_BOOL);
 	
-	defun( "gemsym", _gemsym );
+	bundle_cur = bundle_new( NIL );
+	retained = NIL;
+	_symbol_root = NIL;
+
+	_special_init();
 	
+	SYM_A_DEBUG_A = intern("*debug*");
+	SYM_A_COMPILE_HOOK_A = intern("*compile-hook*");
+	SYM_QUASIQUOTE = intern("quasiquote");
+	SYM_UNQUOTE = intern("unquote");
+								  
 	cfunc_init();
 }
 

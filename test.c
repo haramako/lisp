@@ -6,8 +6,8 @@
 void eval_str( char *str )
 {
 	Value src = parse_list(str);
-	display( src );
-	begin(src);
+	display_val( "", src );
+	eval_loop(src);
 }
 
 int main( int argc, char **argv )

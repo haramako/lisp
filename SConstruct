@@ -1,8 +1,8 @@
 import os
 
-env = DefaultEnvironment(ENV=os.environ)
+env = DefaultEnvironment(**os.environ)
 env.AppendUnique(
-    CCFLAGS=['-Wall', '-O2', '-std=c99', '-g'],
+    CCFLAGS=['-Wall', '-O0', '-std=c99', '-g'],
     LIBS=['m'] )
 
 LISP_LIBS = ['lisp.c', 'cfunc.c', 'gc.c']
