@@ -95,13 +95,19 @@ typedef Value (*CFunction)( Value args, Value cont, Value *result );
 extern Value NIL;
 extern Value VALUE_T;
 extern Value VALUE_F;
+extern Value V_BEGIN;
+extern Value V_CALL0;
+extern Value V_CALL1;
+extern Value V_QUOTE;
+extern Value V_DEFINE, V_DEFINE2;
+extern Value V_SET_I, V_SET_I2;
+extern Value V_LET, V_LET2, V_LET3;
+extern Value V_LAMBDA, V_MACRO, V_EXEC_MACRO;
+extern Value V_IF, V_IF2;
 
 Value int_new( int i );
 
 #define TYPE_OF(v) (v->type)
-
-#define V_IS_CELL(v) 1
-#define V2CELL(v) (v)
 
 #define V_IS_INT(v) (v->type==TYPE_INT)
 #define V_IS_SYMBOL(v) ((v)->type==TYPE_SYMBOL)
@@ -115,19 +121,12 @@ Value int_new( int i );
 #define V2INT(v) (assert(V_IS_INT(v)),v->d.number)
 #define INT2V(v) (int_new(v))
 #define V2SYMBOL(v) (assert(V_IS_SYMBOL(v)),v)
-#define SYMBOL2V(v) (v)
 #define V2PAIR(v) (assert(V_IS_PAIR(v)),v)
-#define PAIR2V(v) (v)
 #define V2LAMBDA(v) (assert(V_IS_LAMBDA(v)),v)
-#define LAMBDA2V(v) (v)
 #define V2SLOT(v) (assert(V_IS_SLOT(v)),v)
-#define SLOT2V(v) (v)
 #define V2BUNDLE(v) (assert(V_IS_BUNDLE(v)),v)
-#define BUNDLE2V(v) (v)
 #define V2CONTINUATION(v) (assert(V_IS_CONTINUATION(v)),v)
-#define CONTINUATION2V(v) (v)
 #define V2SPECIAL(v) (assert(V_IS_SPECIAL(v)),v)
-#define SPECIAL2V(v) (v)
 
 #define CAR(v) (V2PAIR(v)->d.pair.car)
 #define CDR(v) (V2PAIR(v)->d.pair.cdr)
@@ -197,7 +196,7 @@ Value continuation_new( Value code, Value bundle, Value next );
 // Parsing
 
 Value parse( char *src );
-Value parse_list( char *src );
+Value parse_list( char *src, char *file );
 
 void register_cfunc( char *sym, LambdaType type, CFunction func );
 void defun( char *sym, CFunction func );
@@ -216,3 +215,4 @@ void gc();
 
 void init();
 void cfunc_init();
+void finalize();

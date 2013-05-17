@@ -5,7 +5,7 @@
 
 void eval_str( char *str )
 {
-	Value src = parse_list(str);
+	Value src = parse_list(str,"(unknown)");
 	display_val( "", src );
 	eval_loop(src);
 }

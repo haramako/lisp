@@ -6,11 +6,13 @@
 #include <setjmp.h>
 #include "gc.h"
 
+static Value _symbol_root = NULL;
+
 //********************************************************
 // Garbage collection
 //********************************************************
 
-static void _Cell_mark( void *p )
+static void _mark( void *p )
 {
 	// display_val( "mark: ", (Value)p );
 	Value v = (Cell*)p;
@@ -55,7 +57,7 @@ static void _free( void *p )
 	// printf( "free: %p\n", p );
 }
 
-gc_vtbl Cell_vtbl = { _Cell_mark, _free };
+gc_vtbl Cell_vtbl = { _mark, _free };
 
 Value retained = NULL;
 
@@ -63,6 +65,7 @@ static void _mark_root()
 {
 	gc_mark( (void*)retained );
 	gc_mark( (void*)bundle_cur );
+	gc_mark( (void*)_symbol_root );
 }
 
 Value retain( Value v ){
@@ -71,7 +74,6 @@ Value retain( Value v ){
 
 Value release( Value v )
 {
-	assert( V_IS_PAIR(v) );
 	for( Value *cur=&retained; *cur != NIL; cur = &CDR(*cur) ){
 		if( CAR(*cur) == v ){
 			if( CDR(*cur) ){
@@ -88,7 +90,7 @@ Value release( Value v )
 
 void gc()
 {
-	gc_run();
+	gc_run( true );
 }
 
 //********************************************************
@@ -129,7 +131,6 @@ Value cons( Value car, Value cdr )
 
 size_t value_length( Value v )
 {
-	assert( V_IS_PAIR(v) );
 	size_t len = 0;
 	for( Value cur=v; cur != NIL; cur = CDR(cur) ) len++;
 	return len;
@@ -159,16 +160,16 @@ size_t value_to_str( char *buf, Value v )
 		{
 			switch( LAMBDA_KIND(v) ){
 			case LAMBDA_TYPE_LAMBDA:
-				buf += sprintf( buf, "(LAMBDA:%p)", V2LAMBDA(v) );
+				buf += sprintf( buf, "(LAMBDA:%p)", v );
 				break;
 			case LAMBDA_TYPE_MACRO:
-				buf += sprintf( buf, "(MACRO:%p)", V2LAMBDA(v) );
+				buf += sprintf( buf, "(MACRO:%p)", v );
 				break;
 			case LAMBDA_TYPE_CFUNC:
-				buf += sprintf( buf, "(CFUNCTION:%p)", V2LAMBDA(v) );
+				buf += sprintf( buf, "(CFUNCTION:%p)", v );
 				break;
 			case LAMBDA_TYPE_CMACRO:
-				buf += sprintf( buf, "(CMACRO:%p)", V2LAMBDA(v) );
+				buf += sprintf( buf, "(CMACRO:%p)", v );
 				break;
 			default:
 				assert(0);
@@ -200,10 +201,10 @@ size_t value_to_str( char *buf, Value v )
 		buf += sprintf( buf, ")" );
 		break;
 	case TYPE_BUNDLE:
-		buf += sprintf( buf, "(BUNDLE:%p)", V2BUNDLE(v) );
+		buf += sprintf( buf, "(BUNDLE:%p)", v );
 		break;
 	case TYPE_CONTINUATION:
-		buf += sprintf( buf, "(CONTINUATION:%p)", V2CONTINUATION(v) );
+		buf += sprintf( buf, "(CONTINUATION:%p)", v );
 		break;
 	case TYPE_SPECIAL:
 		buf += sprintf( buf, "%s", SPECIAL_STR(v) );
@@ -268,8 +269,7 @@ static void _special_init()
 // Symbol
 //********************************************************
 
-static Value _symbol_root = NULL;
-// static int _gensym_cur = 0;
+//static Value _symbol_root = NULL;
 
 Value intern( const char *sym )
 {
@@ -319,7 +319,10 @@ bool bundle_set( Value b, Value sym, Value v )
 
 void bundle_define( Value b, Value sym, Value v )
 {
-	assert( !bundle_find_slot( b, sym, false ) );
+	if( bundle_find_slot( b, sym, false ) ){
+		printf( "%s already defined\n", SYMBOL_STR(sym) );
+		assert(0);
+	}
 	// not found, create new entry
 	Value slot = cell_new(TYPE_SLOT);
 	assert( slot );
@@ -370,20 +373,23 @@ Value continuation_new( Value code, Value bundle, Value next )
 typedef struct {
 	char *src;
 	char *cur;
+	char *file;
 	int line;
 } ParseState;
-
-int _parse( ParseState *state, Value *result );
 
 void _skip_space( ParseState *state )
 {
 	char c;
 	while( (c = *state->cur) ){
 		switch( c ){
-		case ' ': case '\t': case '\n':
+		case '\n':
+			state->line++;
+			break;
+		case ' ': case '\t': 
 			break;
 		case ';':
 			while( *state->cur != '\n' && *state->cur != '\0' ) state->cur++;
+			if( *state->cur == '\n' ) state->line++;
 			break;
 		default:
 			return;
@@ -392,6 +398,7 @@ void _skip_space( ParseState *state )
 	}
 }
 
+int _parse( ParseState *state, Value *result );
 
 int _parse_list( ParseState *state, Value *result )
 {
@@ -454,17 +461,31 @@ int _parse( ParseState *state, Value *result )
 	case ')':
 		assert(!"paren not matched");
 	case '#':
-		state->cur++;
-		if( *state->cur == 't' ){
+		{
 			state->cur++;
-			*result = VALUE_T;
+			char *end = state->cur;
+			while( _is_val_char(*end) ) end++;
+			char backup = *end;
+			*end = '\0';
+			// printf( "#:%s\n", state->cur );
+			if( strcmp(state->cur,"t") == 0 ){
+				*result = VALUE_T;
+			}else if( strcmp(state->cur, "f") == 0 ){
+				*result = VALUE_F;
+			}else if( strcmp(state->cur, "FILE") == 0 ){
+				*result = intern(state->file);
+			}else if( strcmp(state->cur, "LINE") == 0 ){
+				*result = INT2V(state->line);
+			}else if( strcmp(state->cur, "FILE:LINE") == 0 ){
+				char *file_line = malloc(64);
+				sprintf( file_line, "%s:%d:", state->file, state->line );
+				*result = intern(file_line);
+			}else{
+				assert(0);
+			}
+			*end = backup;
+			state->cur = end;
 			return 0;
-		}else if( *state->cur == 'f' ){
-			state->cur++;
-			*result = VALUE_F;
-			return 0;
-		}else{
-			assert(0);
 		}
 	case '\'':
 		state->cur++;
@@ -511,12 +532,13 @@ Value parse( char *src )
 	return val;
 }
 
-Value parse_list( char *src )
+Value parse_list( char *src, char *file )
 {
 	ParseState state;
 	state.src = src;
 	state.cur = src;
-	state.line = 0;
+	state.line = 1;
+	state.file = file;
 	Value val;
 	int err = _parse_list( &state, &val );
 	if( err ){
@@ -604,9 +626,20 @@ Value compile( Value code )
 
 Value eval_loop( Value code )
 {
+	int gc_count = 10000;
 	Value result = NIL;
 	Value cont = CONT_OP( V_BEGIN, code, bundle_cur, NIL );
  _loop:
+	
+	if( gc_count-- <= 0 ){
+		retain( cont );
+		retain( result );
+		gc_run( 0 );
+		release( result );
+		release( cont );
+		gc_count = 10000;
+	}
+	
 	if( cont == NIL ) return result;
 	Value debug = bundle_get( C_BUNDLE(cont), SYM_A_DEBUG_A );
 	if( debug != NIL ) display_val( "> ", C_CODE(cont) );
@@ -659,13 +692,19 @@ Value eval_loop( Value code )
 				case TYPE_LAMBDA:
 					{
 						Value args = cons(result,NIL);
-						Value lmd = V2LAMBDA(result);
+						Value lmd = result;
 						switch( LAMBDA_KIND(lmd) ){
 						case LAMBDA_TYPE_LAMBDA:
 						case LAMBDA_TYPE_CFUNC:
-							NEXT( CONT( CAR(code), C_BUNDLE(cont),
-										CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) ),
-								  NIL );
+							if( code != NIL ){
+								NEXT( CONT( CAR(code), C_BUNDLE(cont),
+											CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) ),
+									  NIL );
+							}else{
+								Value res = NIL;
+								Value next = call( lmd, NIL, cont, &res);
+								NEXT( next, res );
+							}
 						case LAMBDA_TYPE_MACRO:
 							{
 								Value cont2 = call( lmd, code, cont, NULL );
@@ -687,6 +726,7 @@ Value eval_loop( Value code )
 				}
 			case OP_CALL1:
 				{
+					// display_val( "OP_CALL1: ", C_CODE(cont) );
 					Value rest, vals, tmp;
 					bind3(code,rest,vals,tmp);
 					CDR(tmp) = cons( result, NIL );
@@ -695,7 +735,7 @@ Value eval_loop( Value code )
 									CONT_OP( V_CALL1, cons4( CDR(rest), vals, CDR(tmp), NIL ), C_BUNDLE(cont), C_NEXT(cont) ) ),
 							  NIL );
 					}else{
-						Value lmd = V2LAMBDA(CAR(vals));
+						Value lmd = CAR(vals);
 						switch( LAMBDA_KIND(lmd) ){
 						case LAMBDA_TYPE_LAMBDA:
 							NEXT( call( lmd, CDR(vals), cont, NULL ), NIL );
@@ -750,7 +790,7 @@ Value eval_loop( Value code )
 					LAMBDA_KIND(lmd) = (op==OP_LAMBDA)?LAMBDA_TYPE_LAMBDA:LAMBDA_TYPE_MACRO;
 					LAMBDA_BUNDLE(lmd) = C_BUNDLE(cont);
 					bind2cdr( code, LAMBDA_ARGS(lmd), LAMBDA_BODY(lmd) );
-					NEXT( C_NEXT(cont), LAMBDA2V(lmd) );
+					NEXT( C_NEXT(cont), lmd );
 				}
 
 			case OP_EXEC_MACRO:
@@ -814,3 +854,8 @@ void init()
 	cfunc_init();
 }
 
+void finalize()
+{
+	retained = NULL;
+	_symbol_root = NULL;
+}

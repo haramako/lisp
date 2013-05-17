@@ -2,37 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 
-/*
-static Value _if( Value args )
-{
-	Value cond = eval( CAR(args) );
-	if( cond != VALUE_F ){
-		return eval( CAR(CDR(args)) );
-	}else{
-		return begin( CDR(CDR(args)) );
-	}
-}
-
-static Value _quasi_quote_inner( Value args )
-{
-	switch( TYPE_OF(args) ){
-	case TYPE_PAIR:
-		if( CAR(args) == intern("unquote") ){
-			return eval( CAR( CDR(args) ) );
-		}else{
-			return cons( _quasi_quote_inner(CAR(args)), _quasi_quote_inner(CDR(args)) );
-		}
-	default:
-		return args;
-	}
-}
-
-static Value _quasi_quote( Value args )
-{
-	return _quasi_quote_inner( CAR(args) );
-}
-*/
-
 void display_val( char* str, Value args )
 {
 	char buf[10240];
@@ -225,7 +194,7 @@ static Value _get_closure_code( Value args, Value cont, Value *result )
 	LAMBDA_ARGS(new_lmd) = LAMBDA_ARGS(lmd);
 	LAMBDA_BODY(new_lmd) = LAMBDA_BODY(lmd);
 	LAMBDA_FUNC(new_lmd) = LAMBDA_FUNC(lmd);
-	*result = LAMBDA2V(new_lmd);
+	*result = new_lmd;
 	return CONTINUATION_NEXT(cont);
 }
 
@@ -242,13 +211,23 @@ static Value _eval( Value args, Value cont, Value *result )
 	return c;
 }
 
+static Value _backtrace( Value args, Value cont, Value *result )
+{
+	Value res = NIL;
+	printf( "backtrace:\n" );
+	for( Value cur=CONTINUATION_NEXT(cont); cur != NIL; cur = CONTINUATION_NEXT(cur) ){
+		Value code = CONTINUATION_CODE(cur);
+		if( CAR(code) == V_BEGIN ){
+			display_val( "  ", CADR(code) );
+		}
+		res = cons( CONTINUATION_CODE(cur), res );
+	}
+	*result = NIL;
+	return CONTINUATION_NEXT(cont);
+}
 
 void cfunc_init()
 {
-	//defspecial( "begin", begin );
-	//defspecial( "if", _if );
-	//defspecial( "quasi-quote", _quasi_quote );
-
 	defun( "display", _display );
 	defun( "value", _value );
 	defun( "+", _add );
@@ -276,5 +255,5 @@ void cfunc_init()
 	defun( "get-closure-code", _get_closure_code );
 
 	defun( "eval", _eval );
-	
+	defun( "backtrace", _backtrace );
 }

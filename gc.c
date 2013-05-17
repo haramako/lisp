@@ -39,7 +39,7 @@ void gc_mark( void *p )
 	}
 }
 
-void gc_run()
+int gc_run( int verbose )
 {
 	// init
 	// printf( "start gc\n" );
@@ -67,7 +67,8 @@ void gc_run()
 		
 		prev = prev->next;
 	}
-	printf( "finish gc. %d - %d => %d\n", all, kill, all-kill );
+	if( verbose ) printf( "finish gc. %d - %d => %d\n", all, kill, all-kill );
+	return all-kill;
 }
 
 

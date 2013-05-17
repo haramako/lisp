@@ -16,7 +16,7 @@ typedef struct gc_tag {
 void gc_init( void (*f)(void) );
 void* gc_malloc( size_t size, gc_vtbl *vtbl );
 void gc_mark( void *p );
-void gc_run();
+int gc_run( int verbose );
 void gc_null( void *p );
 
 #define GC_MALLOC( type ) (type*)gc_malloc(sizeof(type), &type##_vtbl );
