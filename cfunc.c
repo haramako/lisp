@@ -199,6 +199,13 @@ static Value _backtrace( Value args, Value cont, Value *result )
 	return CONTINUATION_NEXT(cont);
 }
 
+static Value _call_cc( Value args, Value cont, Value *result )
+{
+	*result = CAR(args);
+	return continuation_new( cons3( V_CALL0, CONTINUATION_NEXT(cont), NIL ),
+							 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
+}
+
 static Value _display( Value args, Value cont, Value *result )
 {
 	char buf[10240];
@@ -264,6 +271,8 @@ void cfunc_init()
 
 	defun( "eval", _eval );
 	defun( "backtrace", _backtrace );
+	defun( "call/cc", _call_cc );
+	defun( "call-with-current-continuation", _call_cc );
 
 	defun( "display", _display );
 	defun( "write", _write );

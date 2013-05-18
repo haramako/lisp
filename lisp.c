@@ -645,6 +645,8 @@ Value eval_loop( Value code )
 					}
 				case TYPE_SPECIAL:
 					NEXT( CONT_OP( result, code, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+				case TYPE_CONTINUATION:
+					NEXT( result, CAR(code) );
 				default:
 					assert(0);
 				}
