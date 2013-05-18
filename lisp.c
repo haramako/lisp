@@ -4,135 +4,21 @@
 #include <string.h>
 #include <ctype.h>
 #include <setjmp.h>
-#include "gc.h"
-
-static Value _symbol_root = NULL;
-
-//********************************************************
-// Garbage collection
-//********************************************************
-
-static void _mark( void *p )
-{
-	// display_val( "mark: ", (Value)p );
-	Value v = p;
-	switch( TYPE_OF(v) ){
-	case TYPE_NIL:
-	case TYPE_INT:
-	case TYPE_BOOL:
-		break;
-	case TYPE_SYMBOL:
-		gc_mark( SYMBOL_NEXT(v) );
-		break;
-	case TYPE_STRING:
-		break;
-	case TYPE_SPECIAL:
-		break;
-	case TYPE_PAIR:
-		gc_mark( CAR(v) );
-		gc_mark( CDR(v) );
-		break;
-	case TYPE_SLOT:
-		gc_mark( SLOT_SYM(v) );
-		gc_mark( SLOT_VAL(v) );
-		gc_mark( SLOT_NEXT(v) );
-		break;
-	case TYPE_LAMBDA:
-		gc_mark( LAMBDA_ARGS(v) );
-		gc_mark( LAMBDA_BODY(v) );
-		gc_mark( LAMBDA_BUNDLE(v) );
-		break;
-	case TYPE_BUNDLE:
-		gc_mark( BUNDLE_SLOT(v) );
-		gc_mark( BUNDLE_UPPER(v) );
-		break;
-	case TYPE_CONTINUATION:
-		gc_mark( CONTINUATION_BUNDLE(v) );
-		gc_mark( CONTINUATION_CODE(v) );
-		gc_mark( CONTINUATION_NEXT(v) );
-		break;
-	case TYPE_STREAM:
-		break;
-	}
-}
-
-static void _free( void *p )
-{
-	Value v = p;
-	switch( TYPE_OF(v) ){
-	case TYPE_STRING:
-		free( STRING_STR(v) );
-		break;
-	case TYPE_STREAM:
-		if( STREAM_CLOSE(v) ){
-			// display_val( "_free: close ", v );
-			fclose( STREAM_FD(v) );
-		}
-		break;
-	default:
-		break;
-	}
-}
-
-gc_vtbl Cell_vtbl = { _mark, _free };
-
-Value retained = NULL;
-
-static void _mark_root()
-{
-	gc_mark( (void*)retained );
-	gc_mark( (void*)bundle_cur );
-	gc_mark( (void*)_symbol_root );
-}
-
-Value retain( Value v ){
-	retained = cons( v, retained ); return v;
-}
-
-Value release( Value v )
-{
-	for( Value *cur=&retained; *cur != NIL; cur = &CDR(*cur) ){
-		if( CAR(*cur) == v ){
-			if( CDR(*cur) ){
-				CAR(*cur) = CADR(*cur);
-				CDR(*cur) = CDDR(*cur);
-			}else{
-				*cur = NIL;
-			}
-			break;
-		}
-	}
-	return v;
-}
-
-void gc()
-{
-	gc_run( true );
-}
 
 //********************************************************
 // Utility
 //********************************************************
 
-Value cell_new( Type type )
-{
-	Cell *cell = GC_MALLOC(Cell);
-	assert(cell);
-	cell->type = type;
-	return cell;
-}
-
 Value int_new( int i )
 {
-	Cell *cell = GC_MALLOC(Cell);
-	cell->type = TYPE_INT;
-	cell->d.number = i;
-	return cell;
+	Value v = gc_new(TYPE_INT);
+	v->d.number = i;
+	return v;
 }
 
 Value cons( Value car, Value cdr )
 {
-	Value v = cell_new(TYPE_PAIR);
+	Value v = gc_new(TYPE_PAIR);
 	CAR(v) = car;
 	CDR(v) = cdr;
 	return v;
@@ -154,6 +40,8 @@ size_t value_to_str( char *buf, Value v )
 	}
 	// printf( "%d\n", TYPE_OF(v) );
 	switch( TYPE_OF(v) ){
+	case TYPE_UNUSED:
+		assert(0);
 	case TYPE_NIL:
 		buf += sprintf( buf, "'()" );
 		break;
@@ -233,7 +121,7 @@ size_t value_to_str( char *buf, Value v )
 
 Value lambda_new()
 {
-	Value v = cell_new(TYPE_LAMBDA);
+	Value v = gc_new(TYPE_LAMBDA);
 	LAMBDA_ARGS(v) = NIL;
 	LAMBDA_BODY(v) = NIL;
 	LAMBDA_BUNDLE(v) = NIL;
@@ -257,7 +145,7 @@ Value V_IF, V_IF2;
 Value V_READ_EVAL, V_READ_EVAL2;
 
 Value _operator( char *sym, Operator op ){
-	Value v = cell_new(TYPE_SPECIAL);
+	Value v = gc_new(TYPE_SPECIAL);
 	SPECIAL_OP(v) = op;
 	SPECIAL_STR(v) = sym;
 	bundle_define( bundle_cur, intern(sym), v );
@@ -290,20 +178,20 @@ static void _special_init()
 // Symbol
 //********************************************************
 
-//static Value _symbol_root = NULL;
+Value symbol_root = NULL;
 
 Value intern( const char *sym )
 {
-	for( Value cur = _symbol_root; cur != NIL; cur = SYMBOL_NEXT(cur) ){
+	for( Value cur = symbol_root; cur != NIL; cur = SYMBOL_NEXT(cur) ){
 		if( strcmp( SYMBOL_STR(cur), sym ) == 0 ) return cur;
 	}
 	// not found, create new atom
-	Value v = cell_new(TYPE_SYMBOL);
+	Value v = gc_new(TYPE_SYMBOL);
 	SYMBOL_STR(v) = malloc( strlen(sym)+1 );
 	assert( SYMBOL_STR(v) );
 	strcpy( SYMBOL_STR(v), sym );
-	SYMBOL_NEXT(v) = _symbol_root;
-	_symbol_root = v;
+	SYMBOL_NEXT(v) = symbol_root;
+	symbol_root = v;
 	return v;
 }
 
@@ -313,7 +201,7 @@ Value intern( const char *sym )
 
 Value string_new( char *str )
 {
-	Value v = cell_new(TYPE_STRING);
+	Value v = gc_new(TYPE_STRING);
 	char *s = malloc(strlen(str)+1);
 	assert( s );
 	strcpy( s, str );
@@ -329,7 +217,7 @@ Value bundle_cur = NULL;
 
 Value bundle_new( Value upper )
 {
-	Value v = cell_new(TYPE_BUNDLE);
+	Value v = gc_new(TYPE_BUNDLE);
 	BUNDLE_SLOT(v) = NIL;
 	BUNDLE_UPPER(v) = upper;
 	return v;
@@ -359,7 +247,7 @@ void bundle_define( Value b, Value sym, Value v )
 		assert(0);
 	}
 	// not found, create new entry
-	Value slot = cell_new(TYPE_SLOT);
+	Value slot = gc_new(TYPE_SLOT);
 	assert( slot );
 	SLOT_SYM(slot) = sym;
 	SLOT_VAL(slot) = v;
@@ -394,7 +282,7 @@ Value bundle_get( Value b, Value sym )
 
 Value continuation_new( Value code, Value bundle, Value next )
 {
-	Value v = cell_new( TYPE_CONTINUATION );
+	Value v = gc_new( TYPE_CONTINUATION );
 	CONTINUATION_CODE(v) = code;
 	CONTINUATION_BUNDLE(v) = bundle;
 	CONTINUATION_NEXT(v) = next;
@@ -407,7 +295,7 @@ Value continuation_new( Value code, Value bundle, Value next )
 
 Value stream_new( FILE *fd, bool close, char *filename )
 {
-	Value v = cell_new( TYPE_STREAM );
+	Value v = gc_new( TYPE_STREAM );
 	STREAM_FD(v) = fd;
 	char *str = malloc(strlen(filename)+1);
 	assert( str );
@@ -456,7 +344,8 @@ void _skip_space( Value s )
 int _parse_list( Value s, Value *result )
 {
 	_skip_space(s);
-	int c;
+	int c, err;
+	Value val, cdr;
 	switch( c = stream_getc(s) ){
 	case -1:
 	case ')':
@@ -464,17 +353,24 @@ int _parse_list( Value s, Value *result )
 		stream_ungetc(c,s);
 		*result = NIL;
 		return 0;
+	case '.':
+		err = _parse( s, &val );
+		if( err ) return err;
+		*result = val;
+		
+		_skip_space(s);
+		c = stream_getc(s);
+		if( c != ')' ) return -3;
+		stream_ungetc(c,s);
+		return 0;
 	default:
-		{
-			stream_ungetc(c,s);
-			Value cdr, val;
-			int err = _parse( s, &val );
-			if( err ) return err;
-			err = _parse_list( s, &cdr );
-			if( err ) return err;
-			*result = cons( val, cdr );
-			return 0;
-		}
+		stream_ungetc(c,s);
+		err = _parse( s, &val );
+		if( err ) return err;
+		err = _parse_list( s, &cdr );
+		if( err ) return err;
+		*result = cons( val, cdr );
+		return 0;
 	}
 }
 
@@ -719,7 +615,7 @@ Value eval_loop( Value code )
 	if( gc_count-- <= 0 ){
 		retain( cont );
 		retain( result );
-		gc_run( 0 );
+		gc_run( 1 );
 		release( result );
 		release( cont );
 		gc_count = 10000;
@@ -730,6 +626,8 @@ Value eval_loop( Value code )
 	if( debug != NIL ) display_val( "> ", C_CODE(cont) );
 	// display_val( "=> ", result );
 	switch( TYPE_OF(C_CODE(cont)) ){
+	case TYPE_UNUSED:
+		assert(0);
 	case TYPE_NIL:
 	case TYPE_INT:
 	case TYPE_LAMBDA:
@@ -838,8 +736,19 @@ Value eval_loop( Value code )
 					}
 				}
 			case OP_DEFINE:
-				NEXT( CONT( CAR(CDR(code)), C_BUNDLE(cont),
-							CONT_OP( V_DEFINE2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) ), NIL );
+				{
+					if( V_IS_SYMBOL(CAR(code)) ){
+						// (define sym val) の形
+						NEXT( CONT( CADR(code), C_BUNDLE(cont),
+									CONT_OP( V_DEFINE2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) ), NIL );
+					}else if( V_IS_PAIR(CAR(code)) ){
+						// (define (sym args ... ) の形
+						NEXT( CONT( cons3( V_LAMBDA, CDAR(code), CDR(code) ), C_BUNDLE(cont),
+									CONT_OP( V_DEFINE2, CAAR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+					}else{
+						assert(0);
+					}
+				}
 				
 			case OP_DEFINE2:
 				bundle_define( C_BUNDLE(cont), code, result );
@@ -959,19 +868,19 @@ void init()
 	signal( SIGABRT, handler );
 	signal( SIGSEGV, handler );
 	
-	gc_init( _mark_root );
+	gc_init();
 
-	NIL = cell_new(TYPE_NIL);
-	VALUE_T = cell_new(TYPE_BOOL);
-	VALUE_F = cell_new(TYPE_BOOL);
-	V_EOF = cell_new(TYPE_SPECIAL);
+	NIL = gc_new(TYPE_NIL);
+	VALUE_T = gc_new(TYPE_BOOL);
+	VALUE_F = gc_new(TYPE_BOOL);
+	V_EOF = gc_new(TYPE_SPECIAL);
 	V_STDIN = stream_new(stdin, false, "stdin" );
 	V_STDOUT = stream_new(stdout, false, "stdout" );
 	V_END_OF_LINE = string_new("\n");
 	
 	bundle_cur = bundle_new( NIL );
 	retained = NIL;
-	_symbol_root = NIL;
+	symbol_root = NIL;
 
 	_special_init();
 
@@ -987,12 +896,18 @@ void init()
 	bundle_define( bundle_cur, SYM_CURRENT_OUTPUT_PORT, V_STDOUT );
 	bundle_define( bundle_cur, SYM_END_OF_LINE, V_END_OF_LINE );
 
-								  
 	cfunc_init();
+
+	FILE *fd = fopen( "prelude.sch", "r" );
+	if( !fd ){
+		printf( "cannot open prelude.sch\n" );
+		exit(1);
+	}
+	eval_loop( stream_new(fd,true,"prelude.sch") );
 }
 
 void finalize()
 {
 	retained = NULL;
-	_symbol_root = NULL;
+	symbol_root = NULL;
 }

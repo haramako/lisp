@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdint.h>
 #include <stddef.h>
 #include <assert.h>
@@ -5,7 +7,8 @@
 #include <stdio.h>
 
 typedef enum {
-	TYPE_NIL = 0,
+	TYPE_UNUSED = 0,
+	TYPE_NIL,
 	TYPE_BOOL,
 	TYPE_INT,
 	TYPE_SYMBOL,
@@ -52,9 +55,13 @@ typedef enum {
 
 
 typedef struct Cell {
-	Type type;
+	char type;
+	char marked;
 	union {
 		int64_t number;
+		struct {
+			struct Cell *next;
+		} unused;
 		struct {
 			struct Cell *car;
 			struct Cell *cdr;
@@ -102,8 +109,20 @@ typedef struct Cell {
 
 typedef Cell* Value;
 
-typedef Value (*CFunction)( Value args, Value cont, Value *result );
+#define ARENA_SIZE ((64*1024-8)/sizeof(Cell))
+typedef struct Arena {
+	struct Arena *next;
+	Cell cells[ARENA_SIZE];
+} Arena;
 
+typedef struct {
+	int size;
+	int use;
+	int alloc_count;
+} GcStat;
+extern GcStat gc_stat;
+
+typedef Value (*CFunction)( Value args, Value cont, Value *result );
 
 extern Value NIL;
 extern Value VALUE_T;
@@ -124,8 +143,6 @@ extern Value V_READ_EVAL, V_READ_EVAL2;
 
 extern Value SYM_A_DEBUG_A, SYM_A_COMPILE_HOOK_A, SYM_QUASIQUOTE, SYM_UNQUOTE,
 	SYM_CURRENT_INPUT_PORT, SYM_CURRENT_OUTPUT_PORT, SYM_END_OF_LINE;
-
-Value int_new( int i );
 
 #define TYPE_OF(v) (v->type)
 
@@ -178,7 +195,17 @@ Value lambda_new();
 #define BINDX(v) if(V_IS_PAIR(_)){v=CAR(_);_=CDR(_);}else{v=NULL;}
 #define bind2arg(list,v1,v2) do{Value _=(list);BINDX(v1);BINDX(v2);}while(0);
 
+// Gabage collection
+Value gc_new( Type type );
+void gc_init();
+void gc_run( int verbose );
+
+// Int
+
+Value int_new( int i );
+
 // Symbol
+extern Value symbol_root;
 
 #define SYMBOL_STR(v) (V2SYMBOL(v)->d.symbol.str)
 #define SYMBOL_NEXT(v) (V2SYMBOL(v)->d.symbol.next)
