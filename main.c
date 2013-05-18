@@ -22,6 +22,8 @@ int main( int argc, char **argv )
 			show_help(0);
 		}else if( strcmp("-g",argv[n]) == 0 || strcmp("--gc-debug",argv[n]) == 0 ){
 			opt_debug = 1;
+		}else if( strcmp("--trace",argv[n]) == 0 ){
+			opt_trace = true;
 		}else if( strcmp("-",argv[n]) == 0 ){
 			break;
 		}else if( strcmp("--",argv[n]) == 0 ){
@@ -36,6 +38,7 @@ int main( int argc, char **argv )
 	if( n >= argc ) show_help(0);
 	
 	init();
+	// init_prelude(false);
 
 	// make *argv*
 	Value args = cons(NIL,NIL);

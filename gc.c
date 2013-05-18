@@ -61,6 +61,19 @@ Value release( Value v )
 	return v;
 }
 
+static void _mark( Value v );
+
+static void _mark_dict( Dict *d )
+{
+	for( int i=0; i<d->size; i++ ){
+		for( DictEntry *cur = (&d->entry)[i]; cur; cur = cur->next ){
+			// display_val( "mark_dict: ", cons( cur->key, cur->val ) );
+			_mark( cur->key );
+			_mark( cur->val );
+		}
+	}
+}
+
 static void _mark( Value v )
 {
 	if( !v ) return;
@@ -79,7 +92,7 @@ static void _mark( Value v )
 	case TYPE_BOOL:
 		break;
 	case TYPE_SYMBOL:
-		_mark( SYMBOL_NEXT(v) );
+		_mark( SYMBOL_STR(v) );
 		break;
 	case TYPE_STRING:
 		break;
@@ -100,7 +113,7 @@ static void _mark( Value v )
 		_mark( LAMBDA_BUNDLE(v) );
 		break;
 	case TYPE_BUNDLE:
-		_mark( BUNDLE_SLOT(v) );
+		_mark_dict( BUNDLE_DICT(v) );
 		_mark( BUNDLE_UPPER(v) );
 		break;
 	case TYPE_CONTINUATION:
@@ -119,6 +132,9 @@ static void _free( void *p )
 	switch( TYPE_OF(v) ){
 	case TYPE_STRING:
 		free( STRING_STR(v) );
+		break;
+	case TYPE_BUNDLE:
+		free( BUNDLE_DICT(v) );
 		break;
 	case TYPE_STREAM:
 		if( STREAM_CLOSE(v) ){

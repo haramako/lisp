@@ -76,7 +76,7 @@ static Value _equal_p( Value args, Value cont, Value *result )
 
 static Value _define_p( Value args, Value cont, Value *result )
 {
-	if( bundle_find( CONTINUATION_BUNDLE(cont), CAR(args), NULL ) ){
+	if( bundle_find( CONTINUATION_BUNDLE(cont), CAR(args), true, false ) ){
 		*result = VALUE_T;
 	}else{
 		*result = VALUE_F;

@@ -53,6 +53,19 @@ typedef enum {
 	LAMBDA_TYPE_CMACRO,
 } LambdaType;
 
+typedef struct DictEntry {
+	struct Cell *key;
+	struct Cell *val;
+	struct DictEntry *next;
+} DictEntry;
+
+typedef struct Dict {
+	int size;
+	int use;
+	DictEntry *entry;
+} Dict;
+
+typedef struct Cell* (*CFunction)( struct Cell *args, struct Cell *cont, struct Cell **result );
 
 typedef struct Cell {
 	char type;
@@ -67,9 +80,7 @@ typedef struct Cell {
 			struct Cell *cdr;
 		} pair;
 		struct {
-			char *str;
-			struct Cell *val;
-			struct Cell *next;
+			struct Cell *str;
 		} symbol;
 		struct {
 			char *str;
@@ -80,15 +91,15 @@ typedef struct Cell {
 			struct Cell *next;
 		} slot;
 		struct {
-			struct Cell *slot;
 			struct Cell *upper;
+			Dict *dict;
 		} bundle;
 		struct {
 			LambdaType type;
 			struct Cell *args;
 			struct Cell *body;
 			struct Cell *bundle;
-			void *func;
+			CFunction func;
 		} lambda;
 		struct {
 			Operator op;
@@ -116,7 +127,6 @@ typedef struct {
 } Profile;
 extern Profile prof;
 
-typedef Value (*CFunction)( Value args, Value cont, Value *result );
 
 extern Value NIL;
 extern Value VALUE_T;
@@ -172,7 +182,7 @@ extern Value SYM_A_DEBUG_A, SYM_A_COMPILE_HOOK_A, SYM_QUASIQUOTE, SYM_UNQUOTE,
 
 Value cons( Value car, Value cdr );
 size_t value_to_str( char *buf, Value v );
-Value intern( const char *sym );
+Value intern( char *sym );
 size_t value_length( Value v );
 Value lambda_new();
 
@@ -193,6 +203,14 @@ Value lambda_new();
 Value gc_new( Type type );
 void gc_init();
 void gc_run( int verbose );
+
+// Dictionary ( Hash Map )
+
+Dict* dict_new();
+DictEntry* dict_find( Dict *d, Value key, bool create );
+void dict_set( Dict *d, Value key, Value val );
+Value dict_get( Dict *d, Value key );
+Dict* dict_rehash( Dict *d );
 
 // Int
 
@@ -223,14 +241,14 @@ Value string_new( char *str );
 #define SLOT_VAL(v) (V2SLOT(v)->d.slot.val)
 #define SLOT_NEXT(v) (V2SLOT(v)->d.slot.next)
 
-#define BUNDLE_SLOT(v) (V2BUNDLE(v)->d.bundle.slot)
+#define BUNDLE_DICT(v) (V2BUNDLE(v)->d.bundle.dict)
 #define BUNDLE_UPPER(v) (V2BUNDLE(v)->d.bundle.upper)
 
 extern Value bundle_cur;
 Value bundle_new( Value upper );
-bool bundle_set( Value b, Value sym, Value v );
+DictEntry* bundle_find( Value b, Value sym, bool find_upper, bool create );
+void bundle_set( Value b, Value sym, Value v );
 void bundle_define( Value b, Value sym, Value v );
-bool bundle_find( Value b, Value sym, Value *result );
 Value bundle_get( Value b, Value sym );
 
 // Continuation
@@ -278,7 +296,10 @@ extern Value retained;
 Value retain( Value v );
 Value release( Value v );
 
+extern bool opt_trace;
+
 void init();
+void init_prelude( bool with_prelude );
 void cfunc_init();
 void finalize();
 void show_prof();

@@ -54,7 +54,7 @@ size_t value_to_str( char *buf, Value v )
 		buf += sprintf( buf, "%lld", V2INT(v) );
 		break;
 	case TYPE_SYMBOL:
-		buf += sprintf( buf, "%s", SYMBOL_STR(v) );
+		buf += sprintf( buf, "%s", STRING_STR(SYMBOL_STR(v)) );
 		break;
 	case TYPE_STRING:
 		buf += sprintf( buf, "\"%s\"", STRING_STR(v) );
@@ -182,19 +182,16 @@ static void _special_init()
 
 Value symbol_root = NULL;
 
-Value intern( const char *sym )
+Value intern( char *sym )
 {
-	for( Value cur = symbol_root; cur != NIL; cur = SYMBOL_NEXT(cur) ){
-		if( strcmp( SYMBOL_STR(cur), sym ) == 0 ) return cur;
+	Value str = string_new(sym);
+	DictEntry *entry = bundle_find( symbol_root, str, false, true );
+	if( entry->val == NIL ){
+		Value val = gc_new(TYPE_SYMBOL);
+		SYMBOL_STR(val) = str;
+		entry->val = val;
 	}
-	// not found, create new atom
-	Value v = gc_new(TYPE_SYMBOL);
-	SYMBOL_STR(v) = malloc( strlen(sym)+1 );
-	assert( SYMBOL_STR(v) );
-	strcpy( SYMBOL_STR(v), sym );
-	SYMBOL_NEXT(v) = symbol_root;
-	symbol_root = v;
-	return v;
+	return entry->val;
 }
 
 //********************************************************
@@ -220,59 +217,62 @@ Value bundle_cur = NULL;
 Value bundle_new( Value upper )
 {
 	Value v = gc_new(TYPE_BUNDLE);
-	BUNDLE_SLOT(v) = NIL;
+	BUNDLE_DICT(v) = dict_new();
 	BUNDLE_UPPER(v) = upper;
 	return v;
 }
 
-Value bundle_find_slot( Value b, Value sym, bool find_upper )
+DictEntry* bundle_find( Value b, Value sym, bool find_upper, bool create )
 {
-	for( Value cur = BUNDLE_SLOT(b); cur != NIL; cur = SLOT_NEXT(cur) ){
-		if( SLOT_SYM(cur) == sym ) return cur;
+	if( find_upper && BUNDLE_UPPER(b) != NIL ){
+		// 自分のを探す
+		DictEntry *entry = dict_find( BUNDLE_DICT(b), sym, false );
+		if( entry ) return entry;
+		
+		// 親のを探す
+		entry = bundle_find( BUNDLE_UPPER(b), sym, find_upper, false );
+		if( entry ) return entry;
+
+		// 新しく作る
+		if( create ){
+			return bundle_find( b, sym, find_upper, true );
+		}else{
+			return NULL;
+		}
+	}else{
+		return dict_find( BUNDLE_DICT(b), sym, create );
 	}
-	if( find_upper && BUNDLE_UPPER(b) != NIL ) return bundle_find_slot( BUNDLE_UPPER(b), sym, find_upper );
-	return NULL;
 }
 
-bool bundle_set( Value b, Value sym, Value v )
+void bundle_set( Value b, Value sym, Value v )
 {
-	Value slot = bundle_find_slot( b, sym, true );
-	assert( slot );
-	SLOT_VAL(slot) = v;
-	return true;
+	DictEntry *entry = bundle_find( b, sym, true, false );
+	if( !entry ){
+		display_val( "bundle_set: ", sym );
+		assert( !"cannot set" );
+	}
+	entry->val = v;
 }
 
 void bundle_define( Value b, Value sym, Value v )
 {
-	if( bundle_find_slot( b, sym, false ) ){
-		printf( "%s already defined\n", SYMBOL_STR(sym) );
-		assert(0);
+	// サイズが大きいならリサイズ
+	Dict *d = BUNDLE_DICT(b);
+	if( d->use >= d->size ) BUNDLE_DICT(b) = dict_rehash(d);
+	
+	DictEntry *entry = bundle_find( b, sym, false, true );
+	if( entry->val != NIL ){
+		display_val( "bundle_define: ", sym );
+		assert( !"already set" );
 	}
-	// not found, create new entry
-	Value slot = gc_new(TYPE_SLOT);
-	assert( slot );
-	SLOT_SYM(slot) = sym;
-	SLOT_VAL(slot) = v;
-	SLOT_NEXT(slot) = BUNDLE_SLOT(b);
-	BUNDLE_SLOT(b) = slot;
-}
-
-bool bundle_find( Value b, Value sym, Value *result )
-{
-	Value slot = bundle_find_slot( b, sym, true );
-	if( slot ){
-		if( result ) *result = SLOT_VAL(slot);
-		return true;
-	}else{
-		return false;
-	}
+	entry->val = v;
 }
 
 Value bundle_get( Value b, Value sym )
 {
-	Value slot = bundle_find_slot( b, sym, true );
-	if( slot ){
-		return SLOT_VAL(slot);
+	DictEntry *entry = bundle_find( b, sym, true, false );
+	if( entry ){
+		return entry->val;
 	}else{
 		return NIL;
 	}
@@ -289,32 +289,6 @@ Value continuation_new( Value code, Value bundle, Value next )
 	CONTINUATION_BUNDLE(v) = bundle;
 	CONTINUATION_NEXT(v) = next;
 	return v;
-}
-
-//********************************************************
-// Stream
-//********************************************************
-
-Value stream_new( FILE *fd, bool close, char *filename )
-{
-	Value v = gc_new( TYPE_STREAM );
-	STREAM_FD(v) = fd;
-	char *str = malloc(strlen(filename)+1);
-	assert( str );
-	strcpy( str, filename );
-	STREAM_CLOSE(v) = close;
-	STREAM_FILENAME(v) = str;
-	return v;
-}
-
-int stream_getc( Value s )
-{
-	return fgetc( STREAM_FD(s) );
-}
-
-void stream_ungetc( int c, Value s )
-{
-	ungetc( c, STREAM_FD(s) );
 }
 
 //********************************************************
@@ -474,6 +448,32 @@ int _parse( Value s, Value *result )
 	assert(0);
 }
 
+//********************************************************
+// Stream
+//********************************************************
+
+Value stream_new( FILE *fd, bool close, char *filename )
+{
+	Value v = gc_new( TYPE_STREAM );
+	STREAM_FD(v) = fd;
+	char *str = malloc(strlen(filename)+1);
+	assert( str );
+	strcpy( str, filename );
+	STREAM_CLOSE(v) = close;
+	STREAM_FILENAME(v) = str;
+	return v;
+}
+
+int stream_getc( Value s )
+{
+	return fgetc( STREAM_FD(s) );
+}
+
+void stream_ungetc( int c, Value s )
+{
+	ungetc( c, STREAM_FD(s) );
+}
+
 Value stream_read( Value s )
 {
 	Value val = V_EOF;
@@ -512,16 +512,19 @@ bool eq( Value a, Value b )
 
 bool eqv( Value a, Value b )
 {
+	if( eq(a,b) ) return true;
 	switch( TYPE_OF(a) ){
 	case TYPE_STRING:
+		if( !V_IS_STRING(b) ) return false;
 		return ( strcmp(STRING_STR(a),STRING_STR(b)) == 0 );
 	default:
-		return eq( a, b );
+		return false;
 	}
 }
 
 bool equal( Value a, Value b )
 {
+	if( eqv(a,b) ) return true;
 	switch( TYPE_OF(a) ){
 	case TYPE_PAIR:
 		if( !V_IS_PAIR(b) ) return false;
@@ -531,7 +534,7 @@ bool equal( Value a, Value b )
 			return false;
 		}
 	default:
-		return eqv( a, b );
+		return false;
 	}
 }
 
@@ -560,11 +563,6 @@ void defmacro( char *sym, CFunction func )
 Value nthcdr( int n, Value v ){ for(;n>0;n--){ v = CDR(v); } return v; }
 Value nth( int n, Value v ){ return CAR(nthcdr(n,v)); }
 
-#define NEXT(_cont,_v) do{ Value r = _v; cont = _cont; result = (r); goto _loop; }while(0)
-
-#define CONT continuation_new
-#define CONT_OP(op,a,b,c) continuation_new(cons(op,a),b,c)
-
 Value call( Value lmd, Value vals, Value cont, Value *result )
 {
 	switch( LAMBDA_KIND(lmd) ){
@@ -585,24 +583,16 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 	case LAMBDA_TYPE_CFUNC:
 	case LAMBDA_TYPE_CMACRO:
 		{
-			Value next = ((CFunction)LAMBDA_FUNC(lmd))( vals, cont, result );
+			Value next = LAMBDA_FUNC(lmd)( vals, cont, result );
 			return next;
 		}
 	}
 	assert(0);
 }
 
-Value compile( Value code )
-{
-	Value compile_hook = bundle_get( bundle_cur, SYM_A_COMPILE_HOOK_A );
-	if( compile_hook != NIL ){
-		// display_val( "src:", code );
-		code = eval_loop( cons( cons3( compile_hook, cons3( V_QUOTE, code, NIL ), NIL ), NIL) );
-		// display_val( "src:", code );
-	}
-	return code;
-}
-
+#define NEXT(_cont,_v) do{ Value r = _v; cont = _cont; result = (r); goto _loop; }while(0)
+#define CONT continuation_new
+#define CONT_OP(op,a,b,c) continuation_new(cons(op,a),b,c)
 #define C_BUNDLE CONTINUATION_BUNDLE
 #define C_NEXT CONTINUATION_NEXT
 #define C_CODE CONTINUATION_CODE
@@ -643,13 +633,12 @@ Value eval_loop( Value code )
 		NEXT( C_NEXT(cont), C_CODE(cont) );
 	case TYPE_SYMBOL:
 		{
-			Value val;
-			bool found = bundle_find( C_BUNDLE(cont), C_CODE(cont), &val );
+			DictEntry *found = bundle_find( C_BUNDLE(cont), C_CODE(cont), true, false );
 			if( !found ){
 				display_val( "symbol not found: ", C_CODE(cont) );
 				assert(0);
 			}
-			NEXT( C_NEXT(cont), val );
+			NEXT( C_NEXT(cont), found->val );
 		}
 	case TYPE_PAIR:
 		if( !V_IS_SPECIAL(CAR(C_CODE(cont))) ){
@@ -674,7 +663,7 @@ Value eval_loop( Value code )
 			case OP_QUOTE:
 				NEXT( C_NEXT(cont), CAR(code) );
 			case OP_CALL0:
-				// display_val( "OP_CALL0: ", C_CODE(cont) );
+				// display_val( "OP_CALL0: ", cons( result, C_CODE(cont) ) );
 				switch( TYPE_OF(result) ){
 				case TYPE_LAMBDA:
 					{
@@ -729,7 +718,7 @@ Value eval_loop( Value code )
 						case LAMBDA_TYPE_CFUNC:
 							{
 								Value val = NIL;
-								Value next = ((CFunction)LAMBDA_FUNC(lmd))( CDR(vals), cont, &val );
+								Value next = LAMBDA_FUNC(lmd)( CDR(vals), cont, &val );
 								NEXT( next, val );
 							}
 						default:
@@ -808,13 +797,13 @@ Value eval_loop( Value code )
 			case OP_READ_EVAL:
 				{
 					Value stat = stream_read( code );
-					// display_val( "READ_EVAL :", stat );
+					if( opt_trace ) display_val( "READ_EVAL :", stat );
 					if( stat != V_EOF ){
 						Value compile_hook = bundle_get( bundle_cur, SYM_A_COMPILE_HOOK_A );
 						if( compile_hook != NIL ){
 							// *compile-hook* があればコンパイルする
 							stat = cons3( compile_hook, cons3( V_QUOTE, stat, NIL ), NIL );
-							// display_val( "src:", code );
+							// display_val( "READ_EVAL: ", stat );
 						}
 						NEXT( CONT( stat, C_BUNDLE(cont),
 									CONT_OP( V_READ_EVAL2, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
@@ -865,7 +854,14 @@ Value SYM_CURRENT_INPUT_PORT = NULL;
 Value SYM_CURRENT_OUTPUT_PORT = NULL;
 Value SYM_END_OF_LINE = NULL;
 
+bool opt_trace = false;
+
 void init()
+{
+	init_prelude(true);
+}
+
+void init_prelude( bool with_prelude )
 {
 	signal( SIGABRT, handler );
 	signal( SIGSEGV, handler );
@@ -882,7 +878,7 @@ void init()
 	
 	bundle_cur = bundle_new( NIL );
 	retained = NIL;
-	symbol_root = NIL;
+	symbol_root = bundle_new( NIL );
 
 	_special_init();
 
@@ -900,12 +896,14 @@ void init()
 
 	cfunc_init();
 
-	FILE *fd = fopen( "prelude.sch", "r" );
-	if( !fd ){
-		printf( "cannot open prelude.sch\n" );
-		exit(1);
+	if( with_prelude ){
+		FILE *fd = fopen( "prelude.sch", "r" );
+		if( !fd ){
+			printf( "cannot open prelude.sch\n" );
+			exit(1);
+		}
+		eval_loop( stream_new(fd,true,"prelude.sch") );
 	}
-	eval_loop( stream_new(fd,true,"prelude.sch") );
 }
 
 void finalize()
