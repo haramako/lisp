@@ -38,6 +38,8 @@ typedef enum {
 	OP_EXEC_MACRO,
 	OP_IF,
 	OP_IF2,
+	OP_READ_EVAL,
+	OP_READ_EVAL2,
 } Operator;
 
 typedef enum {
@@ -88,6 +90,7 @@ typedef struct Cell {
 		} continuation;
 		struct {
 			FILE *fd;
+			bool close;
 			char *filename;
 		} stream;
 	} d;
@@ -101,6 +104,9 @@ typedef Value (*CFunction)( Value args, Value cont, Value *result );
 extern Value NIL;
 extern Value VALUE_T;
 extern Value VALUE_F;
+extern Value V_EOF;
+extern Value V_STDOUT, V_STDIN, V_END_OF_LINE;
+
 extern Value V_BEGIN;
 extern Value V_CALL0;
 extern Value V_CALL1;
@@ -110,6 +116,10 @@ extern Value V_SET_I, V_SET_I2;
 extern Value V_LET, V_LET2, V_LET3;
 extern Value V_LAMBDA, V_MACRO, V_EXEC_MACRO;
 extern Value V_IF, V_IF2;
+extern Value V_READ_EVAL, V_READ_EVAL2;
+
+extern Value SYM_A_DEBUG_A, SYM_A_COMPILE_HOOK_A, SYM_QUASIQUOTE, SYM_UNQUOTE,
+	SYM_CURRENT_INPUT_PORT, SYM_CURRENT_OUTPUT_PORT, SYM_END_OF_LINE;
 
 Value int_new( int i );
 
@@ -159,6 +169,8 @@ Value lambda_new();
 #define bind2(list,v1,v2) do{bind2cdr(list,v1,v2);v2=CAR(v2);}while(0);
 #define bind3(list,v1,v2,v3) do{bind3cdr(list,v1,v2,v3);v3=CAR(v3);}while(0);
 #define bind4(list,v1,v2,v3,v4) do{bind4cdr(list,v1,v2,v3,v4);v4=CAR(v4);}while(0);
+#define BINDX(v) if(V_IS_PAIR(_)){v=CAR(_);_=CDR(_);}else{v=NULL;}
+#define bind2arg(list,v1,v2) do{Value _=(list);BINDX(v1);BINDX(v2);}while(0);
 
 // Symbol
 
@@ -187,6 +199,7 @@ Value bundle_new( Value upper );
 bool bundle_set( Value b, Value sym, Value v );
 void bundle_define( Value b, Value sym, Value v );
 bool bundle_find( Value b, Value sym, Value *result );
+Value bundle_get( Value b, Value sym );
 
 // Continuation
 
@@ -203,12 +216,15 @@ Value continuation_new( Value code, Value bundle, Value next );
 
 // Stream
 #define STREAM_FD(v) (V2STREAM(v)->d.stream.fd)
+#define STREAM_CLOSE(v) (V2STREAM(v)->d.stream.close)
 #define STREAM_FILENAME(v) (V2STREAM(v)->d.stream.filename)
 
-Value stream_new( FILE *fd, char *filename );
+Value stream_new( FILE *fd, bool close, char *filename );
 int stream_getc( Value s );
 void stream_ungetc( int c, Value s );
 int stream_peekc( Value s );
+Value stream_read( Value s );
+Value stream_write( Value s, Value v );
 	
 // Parsing
 
@@ -216,9 +232,6 @@ bool eq( Value a, Value b );
 bool eqv( Value a, Value b );
 bool equal( Value a, Value b );
 	
-Value parse( Value stream );
-Value parse_list( Value stream );
-
 void register_cfunc( char *sym, LambdaType type, CFunction func );
 void defun( char *sym, CFunction func );
 void defmacro( char *sym, CFunction func );

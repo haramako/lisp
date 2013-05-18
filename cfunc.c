@@ -9,19 +9,6 @@ void display_val( char* str, Value args )
 	printf( "%s%s\n", str, buf );
 }
 
-static Value _display( Value args, Value cont, Value *result )
-{
-	char buf[10240];
-	value_to_str(buf, args);
-	if( V_IS_PAIR(args) ){
-		buf[ strlen(buf) - 1 ] = '\0';
-		printf( "%s\n", buf+1 );
-	}else{
-		printf( "%s\n", buf );
-	}
-	return CONTINUATION_NEXT(cont);
-}
-
 static Value _value( Value args, Value cont, Value *result )
 {
 	*result = CAR(args);
@@ -219,9 +206,43 @@ static Value _backtrace( Value args, Value cont, Value *result )
 	return CONTINUATION_NEXT(cont);
 }
 
+static Value _display( Value args, Value cont, Value *result )
+{
+	char buf[10240];
+	Value v, port;
+	bind2arg( args, v, port );
+	if( !port ) port = bundle_get( CONTINUATION_BUNDLE(cont), SYM_CURRENT_OUTPUT_PORT );
+	if( v == V_END_OF_LINE ){
+		printf( "\n" );
+		return CONTINUATION_NEXT(cont);
+	}
+	switch( TYPE_OF(v) ){
+	default:
+		value_to_str(buf, v);
+		fputs( buf, STREAM_FD(port) );
+	}
+	return CONTINUATION_NEXT(cont);
+}
+
+static Value _write( Value args, Value cont, Value *result )
+{
+	Value v, port;
+	bind2arg( args, v, port );
+	if( !port ) port = bundle_get( CONTINUATION_BUNDLE(cont), SYM_CURRENT_OUTPUT_PORT );
+	stream_write( port, v );
+	return CONTINUATION_NEXT(cont);
+}
+
+static Value _read( Value args, Value cont, Value *result )
+{
+	Value port = CAR(args);
+	printf( "read\n" );
+	*result = stream_read(port);
+	return CONTINUATION_NEXT(cont);
+}
+
 void cfunc_init()
 {
-	defun( "display", _display );
 	defun( "value", _value );
 	defun( "+", _add );
 	defun( "-", _sub );
@@ -250,4 +271,9 @@ void cfunc_init()
 
 	defun( "eval", _eval );
 	defun( "backtrace", _backtrace );
+
+	defun( "display", _display );
+	defun( "write", _write );
+	defun( "read", _read );
+
 }

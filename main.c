@@ -13,10 +13,7 @@ Value run( char *filename )
 		exit(1);
 	}
 
-	Value src = parse_list(stream_new(f,filename));
-	src = compile( src );
-	Value r = eval_loop( src );
-	return r;
+	return eval_loop( stream_new(f,true,filename) );
 }
 
 int main( int argc, char **argv )
@@ -29,15 +26,15 @@ int main( int argc, char **argv )
 	}
 
 	run( "prelude.lisp" );
-	run( "prelude2.lisp" );
-	run( "prelude3.lisp" );
 	run( argv[1] );
-	
+
+	/*
 	gc();
 	
 	bundle_cur = NULL;
 	finalize();
 	gc();
+	*/
 
 	// display_val( "retained: ", retained );
 	
