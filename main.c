@@ -11,12 +11,6 @@ void show_help(int err)
 	exit(err);
 }
 
-void gc_show_stat()
-{
-	printf( "size: %d / %d (%3.2f%%) total: %d\n",
-			gc_stat.use, gc_stat.size, (100.0*gc_stat.use/gc_stat.size), gc_stat.alloc_count );
-}
-
 int main( int argc, char **argv )
 {
 	// parse command line options
@@ -39,6 +33,8 @@ int main( int argc, char **argv )
 		}
 	}
 
+	if( n >= argc ) show_help(0);
+	
 	init();
 
 	// make *argv*
@@ -64,11 +60,11 @@ int main( int argc, char **argv )
 	}
 
 	if( opt_debug ){
-		gc_show_stat();
-		gc();
+		show_prof();
+		gc_run(1);
 		bundle_cur = NULL;
 		finalize();
-		gc();
+		gc_run(1);
 		// display_val( "retained: ", retained );
 	}
 	

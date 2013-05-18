@@ -109,18 +109,12 @@ typedef struct Cell {
 
 typedef Cell* Value;
 
-#define ARENA_SIZE ((64*1024-8)/sizeof(Cell))
-typedef struct Arena {
-	struct Arena *next;
-	Cell cells[ARENA_SIZE];
-} Arena;
-
 typedef struct {
 	int size;
 	int use;
 	int alloc_count;
-} GcStat;
-extern GcStat gc_stat;
+} Profile;
+extern Profile prof;
 
 typedef Value (*CFunction)( Value args, Value cont, Value *result );
 
@@ -283,8 +277,9 @@ extern Value retained;
 
 Value retain( Value v );
 Value release( Value v );
-void gc();
 
 void init();
 void cfunc_init();
 void finalize();
+void show_prof();
+

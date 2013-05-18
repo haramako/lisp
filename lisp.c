@@ -5,6 +5,8 @@
 #include <ctype.h>
 #include <setjmp.h>
 
+Profile prof;
+
 //********************************************************
 // Utility
 //********************************************************
@@ -615,7 +617,7 @@ Value eval_loop( Value code )
 	if( gc_count-- <= 0 ){
 		retain( cont );
 		retain( result );
-		gc_run( 1 );
+		gc_run( 0 );
 		release( result );
 		release( cont );
 		gc_count = 10000;
@@ -911,3 +913,10 @@ void finalize()
 	retained = NULL;
 	symbol_root = NULL;
 }
+
+void show_prof()
+{
+	printf( "size: %d / %d (%3.2f%%) total: %d\n",
+			prof.use, prof.size, (100.0*prof.use/prof.size), prof.alloc_count );
+}
+

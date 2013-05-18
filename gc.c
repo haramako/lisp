@@ -4,11 +4,16 @@
 #include <stdint.h>
 #include "lisp.h"
 
+#define ARENA_SIZE ((64*1024-8)/sizeof(Cell))
+typedef struct Arena {
+	struct Arena *next;
+	Cell cells[ARENA_SIZE];
+} Arena;
+
 static int _color = 0;
 static Arena *_arena_root = NULL;
 static Value _cell_next = NULL;
-
-GcStat gc_stat;
+Value retained = NULL;
 
 Value gc_new( Type type )
 {
@@ -22,21 +27,41 @@ Value gc_new( Type type )
 		_cell_next = &arena->cells[0];
 		arena->next = _arena_root;
 		_arena_root = arena;
-		gc_stat.size += ARENA_SIZE;
+		prof.size += ARENA_SIZE;
 	}
-	
+
+	// cellのallocate
 	Cell *cell = _cell_next;
 	assert( cell->type == TYPE_UNUSED );
 	_cell_next = cell->d.unused.next;
 	cell->type = type;
 	cell->marked = -1;
-	// printf( "cell: %p\n", cell );
-	gc_stat.use++;
-	gc_stat.alloc_count++;
+	prof.use++;
+	prof.alloc_count++;
 	return cell;
 }
 
-void gc_mark( Value v )
+Value retain( Value v )
+{
+	retained = cons( v, retained );
+	return v;
+}
+
+Value release( Value v )
+{
+	for( Value *cur=&retained; *cur != NIL; cur = &CDR(*cur) ){
+		if( CAR(*cur) != v ) continue;
+		if( CDR(*cur) ){
+			CAR(*cur) = CADR(*cur);
+			CDR(*cur) = CDDR(*cur);
+		}else{
+			*cur = NIL;
+		}
+	}
+	return v;
+}
+
+static void _mark( Value v )
 {
 	if( !v ) return;
 	
@@ -54,34 +79,34 @@ void gc_mark( Value v )
 	case TYPE_BOOL:
 		break;
 	case TYPE_SYMBOL:
-		gc_mark( SYMBOL_NEXT(v) );
+		_mark( SYMBOL_NEXT(v) );
 		break;
 	case TYPE_STRING:
 		break;
 	case TYPE_SPECIAL:
 		break;
 	case TYPE_PAIR:
-		gc_mark( CAR(v) );
-		gc_mark( CDR(v) );
+		_mark( CAR(v) );
+		_mark( CDR(v) );
 		break;
 	case TYPE_SLOT:
-		gc_mark( SLOT_SYM(v) );
-		gc_mark( SLOT_VAL(v) );
-		gc_mark( SLOT_NEXT(v) );
+		_mark( SLOT_SYM(v) );
+		_mark( SLOT_VAL(v) );
+		_mark( SLOT_NEXT(v) );
 		break;
 	case TYPE_LAMBDA:
-		gc_mark( LAMBDA_ARGS(v) );
-		gc_mark( LAMBDA_BODY(v) );
-		gc_mark( LAMBDA_BUNDLE(v) );
+		_mark( LAMBDA_ARGS(v) );
+		_mark( LAMBDA_BODY(v) );
+		_mark( LAMBDA_BUNDLE(v) );
 		break;
 	case TYPE_BUNDLE:
-		gc_mark( BUNDLE_SLOT(v) );
-		gc_mark( BUNDLE_UPPER(v) );
+		_mark( BUNDLE_SLOT(v) );
+		_mark( BUNDLE_UPPER(v) );
 		break;
 	case TYPE_CONTINUATION:
-		gc_mark( CONTINUATION_BUNDLE(v) );
-		gc_mark( CONTINUATION_CODE(v) );
-		gc_mark( CONTINUATION_NEXT(v) );
+		_mark( CONTINUATION_BUNDLE(v) );
+		_mark( CONTINUATION_CODE(v) );
+		_mark( CONTINUATION_NEXT(v) );
 		break;
 	case TYPE_STREAM:
 		break;
@@ -107,45 +132,8 @@ static void _free( void *p )
 	v->type = TYPE_UNUSED;
 	v->d.unused.next = _cell_next;
 	_cell_next = v;
-	gc_stat.use--;
+	prof.use--;
 }
-
-Value retained = NULL;
-
-static void _root_mark()
-{
-	gc_mark( (void*)retained );
-	gc_mark( (void*)bundle_cur );
-	gc_mark( (void*)symbol_root );
-}
-
-Value retain( Value v ){
-	retained = cons( v, retained ); return v;
-}
-
-Value release( Value v )
-{
-	for( Value *cur=&retained; *cur != NIL; cur = &CDR(*cur) ){
-		if( CAR(*cur) == v ){
-			if( CDR(*cur) ){
-				CAR(*cur) = CADR(*cur);
-				CDR(*cur) = CDDR(*cur);
-			}else{
-				*cur = NIL;
-			}
-			break;
-		}
-	}
-	return v;
-}
-
-
-
-void gc()
-{
-	gc_run( true );
-}
-
 
 void gc_init()
 {
@@ -154,7 +142,11 @@ void gc_init()
 void gc_run( int verbose )
 {
 	_color = 1 - _color;
-	_root_mark();
+	
+	// root mark
+	_mark( (void*)retained );
+	_mark( (void*)bundle_cur );
+	_mark( (void*)symbol_root );
 
 	// sweep
 	int all = 0, kill = 0;
@@ -165,7 +157,6 @@ void gc_run( int verbose )
 			all++;
 
 			if( cur->marked != _color ){
-				// printf( "sweep %p\n", cur );
 				_free( cur );
 				kill++;
 			}
