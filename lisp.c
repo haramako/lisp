@@ -24,6 +24,8 @@ static void _mark( void *p )
 	case TYPE_SYMBOL:
 		gc_mark( SYMBOL_NEXT(v) );
 		break;
+	case TYPE_STRING:
+		break;
 	case TYPE_SPECIAL:
 		break;
 	case TYPE_PAIR:
@@ -58,6 +60,9 @@ static void _free( void *p )
 {
 	Value v = p;
 	switch( TYPE_OF(v) ){
+	case TYPE_STRING:
+		free( STRING_STR(v) );
+		break;
 	case TYPE_STREAM:
 		if( STREAM_CLOSE(v) ){
 			// display_val( "_free: close ", v );
@@ -160,6 +165,9 @@ size_t value_to_str( char *buf, Value v )
 		break;
 	case TYPE_SYMBOL:
 		buf += sprintf( buf, "%s", SYMBOL_STR(v) );
+		break;
+	case TYPE_STRING:
+		buf += sprintf( buf, "\"%s\"", STRING_STR(v) );
 		break;
 	case TYPE_SLOT:
 		buf += sprintf( buf, "(SLOT:%p)", v );
@@ -296,6 +304,20 @@ Value intern( const char *sym )
 	strcpy( SYMBOL_STR(v), sym );
 	SYMBOL_NEXT(v) = _symbol_root;
 	_symbol_root = v;
+	return v;
+}
+
+//********************************************************
+// String
+//********************************************************
+
+Value string_new( char *str )
+{
+	Value v = cell_new(TYPE_STRING);
+	char *s = malloc(strlen(str)+1);
+	assert( s );
+	strcpy( s, str );
+	STRING_STR(v) = s;
 	return v;
 }
 
@@ -491,6 +513,7 @@ static Value _parse_token( char *str )
 
 int _parse( Value s, Value *result )
 {
+	char buf[1024];
 	int err;
 	_skip_space( s );
 	int c;
@@ -507,7 +530,6 @@ int _parse( Value s, Value *result )
 		assert(!"paren not matched");
 	case '#':
 		{
-			char buf[1024];
 			_read_token( s, buf );
 			// printf( "#:%s\n", buf );
 			if( strcmp(buf,"t") == 0 ){
@@ -517,6 +539,14 @@ int _parse( Value s, Value *result )
 			}else{
 				assert(0);
 			}
+			return 0;
+		}
+	case '"':
+		{
+			int i = 0;
+			while( (c = stream_getc(s)) != '"') buf[i++] = c;
+			buf[i] = '\0';
+			*result = string_new(buf);
 			return 0;
 		}
 	case '\'':
@@ -571,7 +601,7 @@ Value stream_write( Value s, Value v )
 
 bool eq( Value a, Value b )
 {
-	if( TYPE_OF(a) != TYPE_OF(a) ) return false;
+	if( TYPE_OF(a) != TYPE_OF(b) ) return false;
 	switch( TYPE_OF(a) ){
 	case TYPE_NIL:
 		return true;
@@ -584,33 +614,26 @@ bool eq( Value a, Value b )
 
 bool eqv( Value a, Value b )
 {
-	if( TYPE_OF(a) != TYPE_OF(a) ) return false;
 	switch( TYPE_OF(a) ){
-	case TYPE_NIL:
-		return true;
-	case TYPE_INT:
-		return ( V2INT(a) == V2INT(b) );
+	case TYPE_STRING:
+		return ( strcmp(STRING_STR(a),STRING_STR(b)) == 0 );
 	default:
-		return ( a == b );
+		return eq( a, b );
 	}
 }
 
 bool equal( Value a, Value b )
 {
-	if( TYPE_OF(a) != TYPE_OF(a) ) return false;
 	switch( TYPE_OF(a) ){
-	case TYPE_NIL:
-		return true;
-	case TYPE_INT:
-		return ( V2INT(a) == V2INT(b) );
 	case TYPE_PAIR:
+		if( !V_IS_PAIR(b) ) return false;
 		if( equal( CAR(a), CAR(b) ) ){
 			return equal(CDR(a), CDR(b));
 		}else{
 			return false;
 		}
 	default:
-		return ( a == b );
+		return eqv( a, b );
 	}
 }
 
@@ -711,6 +734,7 @@ Value eval_loop( Value code )
 	case TYPE_INT:
 	case TYPE_LAMBDA:
 	case TYPE_BOOL:
+	case TYPE_STRING:
 	case TYPE_BUNDLE:
 	case TYPE_CONTINUATION:
 	case TYPE_SPECIAL:
@@ -943,7 +967,7 @@ void init()
 	V_EOF = cell_new(TYPE_SPECIAL);
 	V_STDIN = stream_new(stdin, false, "stdin" );
 	V_STDOUT = stream_new(stdout, false, "stdout" );
-	V_END_OF_LINE = INT2V('\n');
+	V_END_OF_LINE = string_new("\n");
 	
 	bundle_cur = bundle_new( NIL );
 	retained = NIL;

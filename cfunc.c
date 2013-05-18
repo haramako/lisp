@@ -212,11 +212,10 @@ static Value _display( Value args, Value cont, Value *result )
 	Value v, port;
 	bind2arg( args, v, port );
 	if( !port ) port = bundle_get( CONTINUATION_BUNDLE(cont), SYM_CURRENT_OUTPUT_PORT );
-	if( v == V_END_OF_LINE ){
-		printf( "\n" );
-		return CONTINUATION_NEXT(cont);
-	}
 	switch( TYPE_OF(v) ){
+	case TYPE_STRING:
+		fputs( STRING_STR(v), STREAM_FD(port) );
+		break;
 	default:
 		value_to_str(buf, v);
 		fputs( buf, STREAM_FD(port) );
@@ -235,8 +234,9 @@ static Value _write( Value args, Value cont, Value *result )
 
 static Value _read( Value args, Value cont, Value *result )
 {
-	Value port = CAR(args);
-	printf( "read\n" );
+	Value v, port;
+	bind2arg( args, v, port );
+	if( !port ) port = bundle_get( CONTINUATION_BUNDLE(cont), SYM_CURRENT_INPUT_PORT );
 	*result = stream_read(port);
 	return CONTINUATION_NEXT(cont);
 }

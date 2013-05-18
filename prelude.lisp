@@ -1,8 +1,4 @@
 ;; macro-expand-all, quasi-quote に必要な物は早めに
-(define caar (lambda (x) (car (car x))))
-(define cadr (lambda (x) (car (cdr x))))
-(define cdar (lambda (x) (cdr (car x))))
-(define cddr (lambda (x) (cdr (cdr x))))
 
 (define cond
   (macro code
@@ -18,22 +14,16 @@
 (define zero? (macro (x) (list 'eqv? x 0)))
 
 (define and
-  (macro code
-	(define one
-	  (lambda (x)
-		(if (null? (cdr x))
-			(car x)
-		  (list 'if (car x) (one (cdr x)) #f))))
-	(one code)))
+  (macro form
+		 (if (null? (cdr form))
+			 (car form)
+		   (list 'if (car form) (apply and (cdr form)) #f))))
 
 (define or
-  (macro code
-	(define one
-	  (lambda (x)
-		(if (null? (cdr x))
-			(car x)
-		  (list 'if (car x) #t (one (cdr x))))))
-	(one code)))
+  (macro form
+		 (if (null? (cdr form))
+			 (car form)
+		   (list 'if (car form) #t (apply or (cdr form))))))
 
 ;;; macro expander
 (define macro-form?
@@ -128,6 +118,11 @@
 		 (foo 0 l)))
 
 ;; utilities
+(define caar (macro (x) `(car (car ,x))))
+(define cadr (macro (x) `(car (cdr ,x))))
+(define cdar (macro (x) `(cdr (car ,x))))
+(define cddr (macro (x) `(cdr (cdr ,x))))
+
 (define map (lambda (x f)
 			  (if (pair? x)
 				  (cons (car x) (f (cdr x)))
@@ -141,7 +136,7 @@
 	(if (not-pair? x)
 		(display end-of-line)
 	  (display (car x))
-	  (display '_ )
+	  (display " ")
 	  (apply puts (cdr x)))))
 
 ;;; unit-test
@@ -149,4 +144,4 @@
   (macro (_eq _test _expect)
 		 `(let ((test ,_test)
 				(expect ,_expect))
-			(if (,_eq test expect) #t (display (list 'test-failed: ',_test 'expect expect 'but test))))))
+			(if (,_eq test expect) #t (puts "FAILED:" ',_test "expect" expect "but" test)))))

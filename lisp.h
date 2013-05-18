@@ -5,17 +5,18 @@
 #include <stdio.h>
 
 typedef enum {
-	TYPE_NIL  = 0,
-	TYPE_BOOL = 1,
-	TYPE_INT  = 2,
-	TYPE_SYMBOL = 3,
-	TYPE_PAIR = 4,
-	TYPE_LAMBDA = 5,
-	TYPE_BUNDLE = 6,
-	TYPE_CONTINUATION = 7,
-	TYPE_SPECIAL = 8,
-	TYPE_SLOT = 9,
-	TYPE_STREAM = 10,
+	TYPE_NIL = 0,
+	TYPE_BOOL,
+	TYPE_INT,
+	TYPE_SYMBOL,
+	TYPE_STRING,
+	TYPE_PAIR,
+	TYPE_LAMBDA,
+	TYPE_BUNDLE,
+	TYPE_CONTINUATION,
+	TYPE_SPECIAL,
+	TYPE_SLOT,
+	TYPE_STREAM,
 } Type;
 
 #define TYPE_MASK_INT 1
@@ -63,6 +64,9 @@ typedef struct Cell {
 			struct Cell *val;
 			struct Cell *next;
 		} symbol;
+		struct {
+			char *str;
+		} string;
 		struct {
 			struct Cell *sym;
 			struct Cell *val;
@@ -127,6 +131,7 @@ Value int_new( int i );
 
 #define V_IS_INT(v) (v->type==TYPE_INT)
 #define V_IS_SYMBOL(v) ((v)->type==TYPE_SYMBOL)
+#define V_IS_STRING(v) ((v)->type==TYPE_STRING)
 #define V_IS_PAIR(v) ((v)->type==TYPE_PAIR)
 #define V_IS_LAMBDA(v) ((v)->type==TYPE_LAMBDA)
 #define V_IS_SLOT(v) ((v)->type==TYPE_SLOT)
@@ -138,6 +143,7 @@ Value int_new( int i );
 #define V2INT(v) (assert(V_IS_INT(v)),v->d.number)
 #define INT2V(v) (int_new(v))
 #define V2SYMBOL(v) (assert(V_IS_SYMBOL(v)),v)
+#define V2STRING(v) (assert(V_IS_STRING(v)),v)
 #define V2PAIR(v) (assert(V_IS_PAIR(v)),v)
 #define V2LAMBDA(v) (assert(V_IS_LAMBDA(v)),v)
 #define V2SLOT(v) (assert(V_IS_SLOT(v)),v)
@@ -176,6 +182,11 @@ Value lambda_new();
 
 #define SYMBOL_STR(v) (V2SYMBOL(v)->d.symbol.str)
 #define SYMBOL_NEXT(v) (V2SYMBOL(v)->d.symbol.next)
+
+// String
+
+#define STRING_STR(v) (V2STRING(v)->d.string.str)
+Value string_new( char *str );
 
 // Lambda
 
