@@ -5,7 +5,7 @@
 
 Value run( char *filename )
 {
-	printf( "running %s\n", filename);
+	// printf( "running %s\n", filename);
 	
 	FILE *f = fopen( filename, "r" );
 	if( !f ){

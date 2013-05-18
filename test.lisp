@@ -13,34 +13,28 @@
 (assert eqv? (procedure? macro-expand) #t)
 (assert eqv? (procedure? 0) #f)
 
-;; (define a 'hoge)
-;; (display a #f)
+(define var 'hoge)
+(assert eqv? var 'hoge)
+(set! var 'fuga)
+(assert eqv? var 'fuga)
 
-;; (display (let ((a 1) (b 2))
-;; 		   (display a b) 1))
+(let ((var 1) (b (+ 1 1)))
+  (assert eqv? var 1)
+  (assert eqv? b 2))
 
-;; (define one 1)
-;; (display 'add1+2 (+ 1 2))
-;; (display (- 2 1))
-;; (display (eq? one 1))
-;; (display (car '(1 2)))
+(define one 1)
+(assert eqv? (+ one 1) 2)
+(assert eqv? (eq? one 1) #t)
 
-;; (set! a 'fuga)
-;; (display a #t)
+(assert eqv?(car '(1 2)) 1)
+(assert eqv?(cdr '(1 2)) 2)
 
-;; (if #t
-;;  	(display 1)
-;;   (display 2))
+(assert eqv? (if #t 1 2) 1)
+(assert eqv? (if #f 1 2) 2)
+(assert eqv? (if #f 1 2 3) 3)
 
-;; (if #f
-;;  	(display 1)
-;;   (display 2))
-
-;; (let ((a 1) (x (+ x 1)))
-;;   (display a x))
-
-;; (define +1 (lambda (x) (+ x 1)))
-;; (display (+1 3))
+(define +1 (lambda (x) (+ x 1)))
+(assert eqv? (+1 3) 4)
 
 ;; (define +n (lambda (x) (lambda (y) (+ x y))))
 ;; (define +3 (+n 3))
