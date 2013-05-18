@@ -15,7 +15,7 @@ static Value _symbol_root = NULL;
 static void _mark( void *p )
 {
 	// display_val( "mark: ", (Value)p );
-	Value v = (Cell*)p;
+	Value v = p;
 	switch( TYPE_OF(v) ){
 	case TYPE_NIL:
 	case TYPE_INT:
@@ -49,12 +49,22 @@ static void _mark( void *p )
 		gc_mark( CONTINUATION_CODE(v) );
 		gc_mark( CONTINUATION_NEXT(v) );
 		break;
+	case TYPE_STREAM:
+		break;
 	}
 }
 
 static void _free( void *p )
 {
-	// printf( "free: %p\n", p );
+	Value v = p;
+	switch( TYPE_OF(v) ){
+	case TYPE_STREAM:
+		display_val( "_free: close ", v );
+		fclose( STREAM_FD(v) );
+		break;
+	default:
+		break;
+	}
 }
 
 gc_vtbl Cell_vtbl = { _mark, _free };
@@ -209,6 +219,8 @@ size_t value_to_str( char *buf, Value v )
 	case TYPE_SPECIAL:
 		buf += sprintf( buf, "%s", SPECIAL_STR(v) );
 		break;
+	case TYPE_STREAM:
+		buf += sprintf( buf, "(STREAM:%s)", STREAM_FILENAME(v) );
 	}
 	return buf - orig_buf;
 }
@@ -367,20 +379,92 @@ Value continuation_new( Value code, Value bundle, Value next )
 }
 
 //********************************************************
+// Stream
+//********************************************************
+
+Value stream_new( FILE *fd, char *filename )
+{
+	Value v = cell_new( TYPE_STREAM );
+	STREAM_FD(v) = fd;
+	char *str = malloc(strlen(filename)+1);
+	assert( str );
+	strcpy( str, filename );
+	STREAM_FILENAME(v) = str;
+	return v;
+}
+
+int stream_getc( Value s )
+{
+	return fgetc( STREAM_FD(s) );
+}
+
+void stream_ungetc( int c, Value s )
+{
+	ungetc( c, STREAM_FD(s) );
+}
+
+//********************************************************
+// Parsing
+//********************************************************
+
+bool eq( Value a, Value b )
+{
+	if( TYPE_OF(a) != TYPE_OF(a) ) return false;
+	switch( TYPE_OF(a) ){
+	case TYPE_NIL:
+		return true;
+	case TYPE_INT:
+		return ( V2INT(a) == V2INT(b) );
+	default:
+		return ( a == b );
+	}
+}
+
+bool eqv( Value a, Value b )
+{
+	if( TYPE_OF(a) != TYPE_OF(a) ) return false;
+	switch( TYPE_OF(a) ){
+	case TYPE_NIL:
+		return true;
+	case TYPE_INT:
+		return ( V2INT(a) == V2INT(b) );
+	default:
+		return ( a == b );
+	}
+}
+
+bool equal( Value a, Value b )
+{
+	if( TYPE_OF(a) != TYPE_OF(a) ) return false;
+	switch( TYPE_OF(a) ){
+	case TYPE_NIL:
+		return true;
+	case TYPE_INT:
+		return ( V2INT(a) == V2INT(b) );
+	case TYPE_PAIR:
+		if( equal( CAR(a), CAR(b) ) ){
+			return equal(CDR(a), CDR(b));
+		}else{
+			return false;
+		}
+	default:
+		return ( a == b );
+	}
+}
+
+//********************************************************
 // Parsing
 //********************************************************
 
 typedef struct {
-	char *src;
-	char *cur;
-	char *file;
+	Value stream;
 	int line;
 } ParseState;
 
 void _skip_space( ParseState *state )
 {
-	char c;
-	while( (c = *state->cur) ){
+	for(;;){
+		int c = stream_getc(state->stream);
 		switch( c ){
 		case '\n':
 			state->line++;
@@ -388,13 +472,16 @@ void _skip_space( ParseState *state )
 		case ' ': case '\t': 
 			break;
 		case ';':
-			while( *state->cur != '\n' && *state->cur != '\0' ) state->cur++;
-			if( *state->cur == '\n' ) state->line++;
+			for(;;){
+				c = stream_getc(state->stream);
+				if( c == '\n' || c == '\0' || c == -1 ) break;
+			}
+			if( c == '\n' ) state->line++;
 			break;
 		default:
+			stream_ungetc(c, state->stream);
 			return;
 		}
-		state->cur++;
 	}
 }
 
@@ -404,13 +491,17 @@ int _parse_list( ParseState *state, Value *result )
 {
 	Value val;
 	_skip_space( state );
-	switch( *state->cur ){
+	int c;
+	switch( c = stream_getc(state->stream) ){
+	case -1:
 	case ')':
 	case '\0':
+		stream_ungetc(c,state->stream);
 		*result = NIL;
 		return 0;
 	default:
 		{
+			stream_ungetc(c,state->stream);
 			Value cdr;
 			int err = _parse( state, &val );
 			if( err ) return err;
@@ -422,7 +513,7 @@ int _parse_list( ParseState *state, Value *result )
 	}
 }
 
-static inline bool _is_val_char( char c )
+static inline bool _is_val_char( int c )
 {
 	switch( c ){
 	case ' ': case '\t': case '\n': case '(': case ')': case '\0':
@@ -432,15 +523,26 @@ static inline bool _is_val_char( char c )
 	}
 }
 
-static Value _parse_token( const char *start, const char *end )
+static int _read_token( ParseState *state, char *buf )
 {
-	if( isnumber(start[0]) || ( start[0] == '-' && isnumber(start[1]) ) ){
-		return INT2V(atoi(start));
+	int c;
+	int i = 0;
+	for(;;){
+		c = stream_getc(state->stream);
+		if( !_is_val_char(c) ) break;
+		buf[i++] = c;
+	}
+	buf[i] = '\0';
+	stream_ungetc( c, state->stream );
+	return 0;
+}
+
+static Value _parse_token( char *str )
+{
+	if( isnumber(str[0]) || ( str[0] == '-' && isnumber(str[1]) ) ){
+		return INT2V(atoi(str));
 	}else{
-		char tmp[32];
-		memcpy( tmp, start, end-start );
-		tmp[end-start] = '\0';
-		return intern( tmp );
+		return intern( str );
 	}
 }
 
@@ -448,106 +550,87 @@ int _parse( ParseState *state, Value *result )
 {
 	int err;
 	_skip_space( state );
-	switch( *state->cur ){
+	int c;
+	switch( c = stream_getc(state->stream) ){
+	case -1:
 	case '\0':
 		return 0;
 	case '(':
-		state->cur++;
 		err = _parse_list( state, result );
 		if( err ) return err;
-		assert( *state->cur == ')' );
-		state->cur++;
-		return err;
+		if( stream_getc(state->stream) != ')' ) return -2;
+		return 0;
 	case ')':
 		assert(!"paren not matched");
 	case '#':
 		{
-			state->cur++;
-			char *end = state->cur;
-			while( _is_val_char(*end) ) end++;
-			char backup = *end;
-			*end = '\0';
-			// printf( "#:%s\n", state->cur );
-			if( strcmp(state->cur,"t") == 0 ){
+			char buf[1024];
+			_read_token( state, buf );
+			// printf( "#:%s\n", buf );
+			if( strcmp(buf,"t") == 0 ){
 				*result = VALUE_T;
-			}else if( strcmp(state->cur, "f") == 0 ){
+			}else if( strcmp(buf, "f") == 0 ){
 				*result = VALUE_F;
-			}else if( strcmp(state->cur, "FILE") == 0 ){
-				*result = intern(state->file);
-			}else if( strcmp(state->cur, "LINE") == 0 ){
-				*result = INT2V(state->line);
-			}else if( strcmp(state->cur, "FILE:LINE") == 0 ){
-				char *file_line = malloc(64);
-				sprintf( file_line, "%s:%d:", state->file, state->line );
-				*result = intern(file_line);
 			}else{
 				assert(0);
 			}
-			*end = backup;
-			state->cur = end;
 			return 0;
 		}
 	case '\'':
-		state->cur++;
 		err = _parse( state, result );
 		if( err ) return err;
 		*result = cons( V_QUOTE, cons(*result,NIL) );
 		return err;
 	case '`':
-		state->cur++;
 		err = _parse( state, result );
 		if( err ) return err;
 		*result = cons( SYM_QUASIQUOTE, cons(*result,NIL) );
 		return err;
 	case ',':
-		state->cur++;
 		err = _parse( state, result );
 		if( err ) return err;
 		*result = cons( SYM_UNQUOTE, cons(*result,NIL) );
 		return err;
 	default:
 		{
-			char *end = state->cur+1;
-			while( _is_val_char(*end) ) end++;
-			*result = _parse_token( state->cur, end );
-			state->cur = end;
+			stream_ungetc( c, state->stream );
+			char buf[1024];
+			_read_token( state, buf );
+			*result = _parse_token( buf );
 			return 0;
 		}
 	}
 	assert(0);
 }
 
-Value parse( char *src )
+Value parse( Value stream )
 {
 	ParseState state;
-	state.src = src;
-	state.cur = src;
-	state.line = 0;
+	state.stream = stream;
+	state.line = 1;
 	Value val;
 	int err = _parse( &state, &val );
 	if( err ){
-		printf( "parse error!\n %s\n", state.cur );
-		exit(1);
+		printf( "parse error: err=%d\n", err );
+		assert(0);
 	}
 	return val;
 }
 
-Value parse_list( char *src, char *file )
+Value parse_list( Value stream )
 {
 	ParseState state;
-	state.src = src;
-	state.cur = src;
+	state.stream = stream;
 	state.line = 1;
-	state.file = file;
 	Value val;
 	int err = _parse_list( &state, &val );
 	if( err ){
-		printf( "parse error!\n %s\n", state.cur );
-		exit(1);
+		printf( "parse error: err=%d\n", err );
+		assert(0);
 	}
-	if( *state.cur != '\0' ){
-		printf( "parse error!\n %s\n", state.cur );
-		exit(1);
+	if( stream_getc(state.stream) != -1 ){
+		printf( "parse error: not match\n" );
+		assert(0);
 	}
 	return val;
 }
@@ -653,6 +736,7 @@ Value eval_loop( Value code )
 	case TYPE_CONTINUATION:
 	case TYPE_SPECIAL:
 	case TYPE_SLOT:
+	case TYPE_STREAM:
 		NEXT( C_NEXT(cont), C_CODE(cont) );
 	case TYPE_SYMBOL:
 		{

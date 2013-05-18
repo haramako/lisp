@@ -26,8 +26,9 @@
 (assert eqv? (+ one 1) 2)
 (assert eqv? (eq? one 1) #t)
 
-(assert eqv?(car '(1 2)) 1)
-(assert eqv?(cdr '(1 2)) 2)
+(assert eqv? (car '(1 2)) 1)
+(assert equal? (cdr '(1 2)) '(2))
+(assert eqv? (cdr '(1)) '())
 
 (assert eqv? (if #t 1 2) 1)
 (assert eqv? (if #f 1 2) 2)

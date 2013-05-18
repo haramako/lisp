@@ -12,11 +12,8 @@ Value run( char *filename )
 		printf( "cannot open %s\n", filename );
 		exit(1);
 	}
-	char buf[8192];
-	size_t len = fread( buf, 1, sizeof(buf), f );
-	buf[len] = '\0';
 
-	Value src = parse_list(buf,filename);
+	Value src = parse_list(stream_new(f,filename));
 	src = compile( src );
 	Value r = eval_loop( src );
 	return r;

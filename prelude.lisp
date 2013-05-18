@@ -1,5 +1,4 @@
 ;; macro-expand-all, quasi-quote に必要な物は早めに
-(define *lambda-hook* value)
 (define caar (lambda (x) (car (car x))))
 (define cadr (lambda (x) (car (cdr x))))
 (define cdar (lambda (x) (cdr (car x))))

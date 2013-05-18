@@ -5,17 +5,17 @@
 
 void eval_str( char *str )
 {
-	Value src = parse_list(str,"(unknown)");
-	display_val( "", src );
-	eval_loop(src);
+	//Value src = parse_list(str,"(unknown)");
+	//display_val( "", src );
+	//eval_loop(src);
 }
 
 int main( int argc, char **argv )
 {
-	init();
+	//init();
 	
-	eval_str("(display t)");
-	eval_str("(display (+ 1 (- 3 -1)))");
+	//eval_str("(display t)");
+	//eval_str("(display (+ 1 (- 3 -1)))");
 	
 	return 0;
 }

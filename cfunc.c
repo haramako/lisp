@@ -55,17 +55,7 @@ static Value _eq_p( Value args, Value cont, Value *result )
 		if( CDR(cur) == NIL ) break;
 		Value car, cdr;
 		bind2( cur, car, cdr );
-		if( TYPE_OF(car) != TYPE_OF(cdr) ) return CONTINUATION_NEXT(cont);
-		switch( TYPE_OF(car) ){
-		case TYPE_NIL:
-			break;
-		case TYPE_INT:
-			if( V2INT(car) != V2INT(cdr) ) return CONTINUATION_NEXT(cont);
-			break;
-		default:
-			if( car != cdr ) return CONTINUATION_NEXT(cont);
-			break;
-		}
+		if( !eq( car, cdr ) ) return CONTINUATION_NEXT(cont);
 	}
 	*result = VALUE_T;
 	return CONTINUATION_NEXT(cont);
@@ -78,17 +68,20 @@ static Value _eqv_p( Value args, Value cont, Value *result )
 		if( CDR(cur) == NIL ) break;
 		Value car, cdr;
 		bind2( cur, car, cdr );
-		if( TYPE_OF(car) != TYPE_OF(cdr) ) return CONTINUATION_NEXT(cont);
-		switch( TYPE_OF(car) ){
-		case TYPE_NIL:
-			break;
-		case TYPE_INT:
-			if( V2INT(car) != V2INT(cdr) ) return CONTINUATION_NEXT(cont);
-			break;
-		default:
-			if( car != cdr ) return CONTINUATION_NEXT(cont);
-			break;
-		}
+		if( !eqv( car, cdr ) ) return CONTINUATION_NEXT(cont);
+	}
+	*result = VALUE_T;
+	return CONTINUATION_NEXT(cont);
+}
+
+static Value _equal_p( Value args, Value cont, Value *result )
+{
+	*result = VALUE_F;
+	for( Value cur=args; cur != NIL; cur = CDR(cur) ){
+		if( CDR(cur) == NIL ) break;
+		Value car, cdr;
+		bind2( cur, car, cdr );
+		if( !equal( car, cdr ) ) return CONTINUATION_NEXT(cont);
 	}
 	*result = VALUE_T;
 	return CONTINUATION_NEXT(cont);
@@ -234,6 +227,7 @@ void cfunc_init()
 	defun( "-", _sub );
 	defun( "eq?", _eq_p );
 	defun( "eqv?", _eqv_p );
+	defun( "equal?", _equal_p );
 	defun( "define?", _define_p );
 	
 	defun( "car", _car );

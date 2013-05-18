@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <assert.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 typedef enum {
 	TYPE_NIL  = 0,
@@ -14,6 +15,7 @@ typedef enum {
 	TYPE_CONTINUATION = 7,
 	TYPE_SPECIAL = 8,
 	TYPE_SLOT = 9,
+	TYPE_STREAM = 10,
 } Type;
 
 #define TYPE_MASK_INT 1
@@ -84,6 +86,10 @@ typedef struct Cell {
 			struct Cell *code;
 			struct Cell *next;
 		} continuation;
+		struct {
+			FILE *fd;
+			char *filename;
+		} stream;
 	} d;
 } Cell;
 
@@ -117,6 +123,7 @@ Value int_new( int i );
 #define V_IS_BUNDLE(v) ((v)->type==TYPE_BUNDLE)
 #define V_IS_CONTINUATION(v) ((v)->type==TYPE_CONTINUATION)
 #define V_IS_SPECIAL(v) ((v)->type==TYPE_SPECIAL)
+#define V_IS_STREAM(v) ((v)->type==TYPE_STREAM)
 
 #define V2INT(v) (assert(V_IS_INT(v)),v->d.number)
 #define INT2V(v) (int_new(v))
@@ -127,6 +134,7 @@ Value int_new( int i );
 #define V2BUNDLE(v) (assert(V_IS_BUNDLE(v)),v)
 #define V2CONTINUATION(v) (assert(V_IS_CONTINUATION(v)),v)
 #define V2SPECIAL(v) (assert(V_IS_SPECIAL(v)),v)
+#define V2STREAM(v) (assert(V_IS_STREAM(v)),v)
 
 #define CAR(v) (V2PAIR(v)->d.pair.car)
 #define CDR(v) (V2PAIR(v)->d.pair.cdr)
@@ -193,10 +201,23 @@ Value continuation_new( Value code, Value bundle, Value next );
 #define SPECIAL_OP(v) (V2SPECIAL(v)->d.special.op)
 #define SPECIAL_STR(v) (V2SPECIAL(v)->d.special.str)
 
+// Stream
+#define STREAM_FD(v) (V2STREAM(v)->d.stream.fd)
+#define STREAM_FILENAME(v) (V2STREAM(v)->d.stream.filename)
+
+Value stream_new( FILE *fd, char *filename );
+int stream_getc( Value s );
+void stream_ungetc( int c, Value s );
+int stream_peekc( Value s );
+	
 // Parsing
 
-Value parse( char *src );
-Value parse_list( char *src, char *file );
+bool eq( Value a, Value b );
+bool eqv( Value a, Value b );
+bool equal( Value a, Value b );
+	
+Value parse( Value stream );
+Value parse_list( Value stream );
 
 void register_cfunc( char *sym, LambdaType type, CFunction func );
 void defun( char *sym, CFunction func );
