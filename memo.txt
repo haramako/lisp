@@ -1,5 +1,7 @@
-* gcをまともに
-* bundle を hashに
+
 * string関係の関数
 * string stream
 * intを埋め込みに
+
+- gcをまともに
+- bundle を hashに

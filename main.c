@@ -20,7 +20,7 @@ int main( int argc, char **argv )
 		if( argv[n][0] != '-' ) break;
 		if( strcmp("-h",argv[n]) == 0 || strcmp("--help",argv[n]) == 0 ){
 			show_help(0);
-		}else if( strcmp("-g",argv[n]) == 0 || strcmp("--gc-debug",argv[n]) == 0 ){
+		}else if( strcmp("-d",argv[n]) == 0 || strcmp("--debug",argv[n]) == 0 ){
 			opt_debug = 1;
 		}else if( strcmp("--trace",argv[n]) == 0 ){
 			opt_trace = true;
@@ -62,13 +62,11 @@ int main( int argc, char **argv )
 		eval_loop( stream_new(f,true,argv[n]) );
 	}
 
-	if( opt_debug ){
+	show_prof();
+	
+	if( opt_trace ){
 		show_prof();
-		gc_run(1);
-		bundle_cur = NULL;
 		finalize();
-		gc_run(1);
-		// display_val( "retained: ", retained );
 	}
 	
 	return 0;

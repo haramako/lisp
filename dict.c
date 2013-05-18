@@ -38,25 +38,34 @@ Dict* dict_new()
 	return dict_new_size(DICT_INIT_SIZE);
 }
 
+void dict_free( Dict *d )
+{
+	for( int i=0; i<d->size; i++ ){
+		for( DictEntry *cur = d->entry[i]; cur; cur = cur->next ){
+			free( cur );
+		}
+	}
+	free( d );
+}
+
 Dict* dict_rehash( Dict *d )
 {
 	// printf( "rehash %p size:%d\n", d, d->size );
 	Dict *new_dict = dict_new_size( d->size * 1.7 );
 	for( int i=0; i<d->size; i++ ){
-		for( DictEntry *cur = (&d->entry)[i]; cur; cur = cur->next ){
+		for( DictEntry *cur = d->entry[i]; cur; cur = cur->next ){
 			dict_set( new_dict, cur->key, cur->val );
 		}
 	}
-	free( d );
+	dict_free( d );
 	return new_dict;
 }
 
 DictEntry* dict_find( Dict *d, Value key, bool create )
 {
-	DictEntry **entry = &d->entry;
 	int idx = value_hash( key ) % d->size;
 	assert( idx < d->size );
-	for( DictEntry *cur = entry[idx]; cur; cur = cur->next ){
+	for( DictEntry *cur = d->entry[idx]; cur; cur = cur->next ){
 		// display_val( "dict_find: ", cons( cur->key, key ) );
 		if( eqv( cur->key, key ) ) return cur;
 	}
@@ -64,8 +73,8 @@ DictEntry* dict_find( Dict *d, Value key, bool create )
 		DictEntry *new_entry = malloc(sizeof(DictEntry));
 		new_entry->key = key;
 		new_entry->val = NIL;
-		new_entry->next = entry[idx];
-		entry[idx] = new_entry;
+		new_entry->next = d->entry[idx];
+		d->entry[idx] = new_entry;
 		d->use++;
 		return new_entry;
 	}else{

@@ -66,7 +66,7 @@ static void _mark( Value v );
 static void _mark_dict( Dict *d )
 {
 	for( int i=0; i<d->size; i++ ){
-		for( DictEntry *cur = (&d->entry)[i]; cur; cur = cur->next ){
+		for( DictEntry *cur = d->entry[i]; cur; cur = cur->next ){
 			// display_val( "mark_dict: ", cons( cur->key, cur->val ) );
 			_mark( cur->key );
 			_mark( cur->val );
@@ -101,11 +101,6 @@ static void _mark( Value v )
 	case TYPE_PAIR:
 		_mark( CAR(v) );
 		_mark( CDR(v) );
-		break;
-	case TYPE_SLOT:
-		_mark( SLOT_SYM(v) );
-		_mark( SLOT_VAL(v) );
-		_mark( SLOT_NEXT(v) );
 		break;
 	case TYPE_LAMBDA:
 		_mark( LAMBDA_ARGS(v) );

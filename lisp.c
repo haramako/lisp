@@ -11,28 +11,6 @@ Profile prof;
 // Utility
 //********************************************************
 
-Value int_new( int i )
-{
-	Value v = gc_new(TYPE_INT);
-	v->d.number = i;
-	return v;
-}
-
-Value cons( Value car, Value cdr )
-{
-	Value v = gc_new(TYPE_PAIR);
-	CAR(v) = car;
-	CDR(v) = cdr;
-	return v;
-}
-
-size_t value_length( Value v )
-{
-	size_t len = 0;
-	for( Value cur=v; cur != NIL; cur = CDR(cur) ) len++;
-	return len;
-}
-
 size_t value_to_str( char *buf, Value v )
 {
 	char *orig_buf = buf;
@@ -58,9 +36,6 @@ size_t value_to_str( char *buf, Value v )
 		break;
 	case TYPE_STRING:
 		buf += sprintf( buf, "\"%s\"", STRING_STR(v) );
-		break;
-	case TYPE_SLOT:
-		buf += sprintf( buf, "(SLOT:%p)", v );
 		break;
 	case TYPE_LAMBDA:
 		{
@@ -121,59 +96,63 @@ size_t value_to_str( char *buf, Value v )
 	return buf - orig_buf;
 }
 
-Value lambda_new()
+void display_val( char* str, Value args )
 {
-	Value v = gc_new(TYPE_LAMBDA);
-	LAMBDA_ARGS(v) = NIL;
-	LAMBDA_BODY(v) = NIL;
-	LAMBDA_BUNDLE(v) = NIL;
-	LAMBDA_FUNC(v) = NULL;
+	char buf[10240];
+	value_to_str(buf, args);
+	printf( "%s%s\n", str, buf );
+}
+
+bool eq( Value a, Value b )
+{
+	if( TYPE_OF(a) != TYPE_OF(b) ) return false;
+	switch( TYPE_OF(a) ){
+	case TYPE_NIL:
+		return true;
+	case TYPE_INT:
+		return ( V2INT(a) == V2INT(b) );
+	default:
+		return ( a == b );
+	}
+}
+
+bool eqv( Value a, Value b )
+{
+	if( eq(a,b) ) return true;
+	switch( TYPE_OF(a) ){
+	case TYPE_STRING:
+		if( !V_IS_STRING(b) ) return false;
+		return ( strcmp(STRING_STR(a),STRING_STR(b)) == 0 );
+	default:
+		return false;
+	}
+}
+
+bool equal( Value a, Value b )
+{
+	if( eqv(a,b) ) return true;
+	switch( TYPE_OF(a) ){
+	case TYPE_PAIR:
+		if( !V_IS_PAIR(b) ) return false;
+		if( equal( CAR(a), CAR(b) ) ){
+			return equal(CDR(a), CDR(b));
+		}else{
+			return false;
+		}
+	default:
+		return false;
+	}
+}
+
+//********************************************************
+// Int
+//********************************************************
+
+Value int_new( int i )
+{
+	Value v = gc_new(TYPE_INT);
+	v->d.number = i;
 	return v;
-}
-
-//********************************************************
-// Special forms
-//********************************************************
-
-Value V_BEGIN;
-Value V_CALL0;
-Value V_CALL1;
-Value V_QUOTE;
-Value V_DEFINE, V_DEFINE2;
-Value V_SET_I, V_SET_I2;
-Value V_LET, V_LET2, V_LET3;
-Value V_LAMBDA, V_MACRO, V_EXEC_MACRO;
-Value V_IF, V_IF2;
-Value V_READ_EVAL, V_READ_EVAL2;
-
-Value _operator( char *sym, Operator op ){
-	Value v = gc_new(TYPE_SPECIAL);
-	SPECIAL_OP(v) = op;
-	SPECIAL_STR(v) = sym;
-	bundle_define( bundle_cur, intern(sym), v );
-	return retain(v);
-}
-
-static void _special_init()
-{
-	V_BEGIN = _operator("begin", OP_BEGIN);
-	V_CALL0 = _operator("*call0*", OP_CALL0);
-	V_CALL1 = _operator("*call1*", OP_CALL1);
-	V_QUOTE = _operator("quote", OP_QUOTE);
-	V_DEFINE = _operator("define", OP_DEFINE);
-	V_DEFINE2 = _operator("*define2*", OP_DEFINE2);
-	V_SET_I = _operator("set!", OP_SET_I);
-	V_SET_I2 = _operator("*set!2*", OP_SET_I2);
-	V_LET = _operator("let", OP_LET);
-	V_LET2 = _operator("*let2*", OP_LET2);
-	V_LET3 = _operator("*let3*", OP_LET3);
-	V_LAMBDA = _operator("lambda", OP_LAMBDA);
-	V_MACRO = _operator("macro", OP_MACRO);
-	V_EXEC_MACRO = _operator("*exec-macro*", OP_EXEC_MACRO);
-	V_IF = _operator("if", OP_IF);
-	V_IF2 = _operator("*if2*", OP_IF2);
-	V_READ_EVAL = _operator("*read-eval*", OP_READ_EVAL);
-	V_READ_EVAL2 = _operator("*read-eval2*", OP_READ_EVAL2);
 }
 
 //********************************************************
@@ -209,7 +188,43 @@ Value string_new( char *str )
 }
 
 //********************************************************
-// Bundle and Slot
+// Lambda
+//********************************************************
+
+Value lambda_new()
+{
+	Value v = gc_new(TYPE_LAMBDA);
+	LAMBDA_ARGS(v) = NIL;
+	LAMBDA_BODY(v) = NIL;
+	LAMBDA_BUNDLE(v) = NIL;
+	LAMBDA_FUNC(v) = NULL;
+	return v;
+}
+
+//********************************************************
+// Pair
+//********************************************************
+
+Value nthcdr( int n, Value v ){ for(;n>0;n--){ v = CDR(v); } return v; }
+Value nth( int n, Value v ){ return CAR(nthcdr(n,v)); }
+
+Value cons( Value car, Value cdr )
+{
+	Value v = gc_new(TYPE_PAIR);
+	CAR(v) = car;
+	CDR(v) = cdr;
+	return v;
+}
+
+size_t value_length( Value v )
+{
+	size_t len = 0;
+	for( Value cur=v; cur != NIL; cur = CDR(cur) ) len++;
+	return len;
+}
+
+//********************************************************
+// Bundle
 //********************************************************
 
 Value bundle_cur = NULL;
@@ -494,74 +509,8 @@ Value stream_write( Value s, Value v )
 }
 
 //********************************************************
-// Equal
-//********************************************************
-
-bool eq( Value a, Value b )
-{
-	if( TYPE_OF(a) != TYPE_OF(b) ) return false;
-	switch( TYPE_OF(a) ){
-	case TYPE_NIL:
-		return true;
-	case TYPE_INT:
-		return ( V2INT(a) == V2INT(b) );
-	default:
-		return ( a == b );
-	}
-}
-
-bool eqv( Value a, Value b )
-{
-	if( eq(a,b) ) return true;
-	switch( TYPE_OF(a) ){
-	case TYPE_STRING:
-		if( !V_IS_STRING(b) ) return false;
-		return ( strcmp(STRING_STR(a),STRING_STR(b)) == 0 );
-	default:
-		return false;
-	}
-}
-
-bool equal( Value a, Value b )
-{
-	if( eqv(a,b) ) return true;
-	switch( TYPE_OF(a) ){
-	case TYPE_PAIR:
-		if( !V_IS_PAIR(b) ) return false;
-		if( equal( CAR(a), CAR(b) ) ){
-			return equal(CDR(a), CDR(b));
-		}else{
-			return false;
-		}
-	default:
-		return false;
-	}
-}
-
-void register_cfunc( char *sym, LambdaType type, CFunction func )
-{
-	Value v = lambda_new();
-	LAMBDA_FUNC(v) = func;
-	LAMBDA_KIND(v) = type;
-	bundle_define( bundle_cur, intern(sym), v );
-}
-
-void defun( char *sym, CFunction func )
-{
-	return register_cfunc( sym, LAMBDA_TYPE_CFUNC, func );
-}
-
-void defmacro( char *sym, CFunction func )
-{
-	return register_cfunc( sym, LAMBDA_TYPE_CMACRO, func );
-}
-
-//********************************************************
 // Evaluation
 //********************************************************
-
-Value nthcdr( int n, Value v ){ for(;n>0;n--){ v = CDR(v); } return v; }
-Value nth( int n, Value v ){ return CAR(nthcdr(n,v)); }
 
 Value call( Value lmd, Value vals, Value cont, Value *result )
 {
@@ -607,7 +556,7 @@ Value eval_loop( Value code )
 	if( gc_count-- <= 0 ){
 		retain( cont );
 		retain( result );
-		gc_run( 0 );
+		gc_run( opt_trace?1:0 );
 		release( result );
 		release( cont );
 		gc_count = 10000;
@@ -628,7 +577,6 @@ Value eval_loop( Value code )
 	case TYPE_BUNDLE:
 	case TYPE_CONTINUATION:
 	case TYPE_SPECIAL:
-	case TYPE_SLOT:
 	case TYPE_STREAM:
 		NEXT( C_NEXT(cont), C_CODE(cont) );
 	case TYPE_SYMBOL:
@@ -762,7 +710,7 @@ Value eval_loop( Value code )
 					NEXT( CONT( CAR(CDR(CAR(args))), C_BUNDLE(cont),
 								CONT_OP( V_LET3, cons3( CAR(CAR(args)), CDR(args), CDR(code) ), C_BUNDLE(cont), C_NEXT(cont) )), NIL);
 				}else{
-					NEXT( CONT_OP( V_BEGIN, nthcdr(1,code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+					NEXT( CONT_OP( V_BEGIN, CDDR(code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
 				}
 				
 			case OP_LET3:
@@ -821,6 +769,28 @@ Value eval_loop( Value code )
 	assert(0);
 }
 
+//********************************************************
+// Initialization
+//********************************************************
+
+void register_cfunc( char *sym, LambdaType type, CFunction func )
+{
+	Value v = lambda_new();
+	LAMBDA_FUNC(v) = func;
+	LAMBDA_KIND(v) = type;
+	bundle_define( bundle_cur, intern(sym), v );
+}
+
+void defun( char *sym, CFunction func )
+{
+	return register_cfunc( sym, LAMBDA_TYPE_CFUNC, func );
+}
+
+void defmacro( char *sym, CFunction func )
+{
+	return register_cfunc( sym, LAMBDA_TYPE_CMACRO, func );
+}
+
 // print backtrace
 // See: http://expcodes.com/12895
 // See: http://0xcc.net/blog/archives/000067.html
@@ -845,6 +815,16 @@ Value V_EOF = NULL;
 Value V_STDOUT = NULL;
 Value V_STDIN = NULL;
 Value V_END_OF_LINE = NULL;
+Value V_BEGIN;
+Value V_CALL0;
+Value V_CALL1;
+Value V_QUOTE;
+Value V_DEFINE, V_DEFINE2;
+Value V_SET_I, V_SET_I2;
+Value V_LET, V_LET2, V_LET3;
+Value V_LAMBDA, V_MACRO, V_EXEC_MACRO;
+Value V_IF, V_IF2;
+Value V_READ_EVAL, V_READ_EVAL2;
 
 Value SYM_A_DEBUG_A = NULL;
 Value SYM_A_COMPILE_HOOK_A = NULL;
@@ -853,6 +833,14 @@ Value SYM_UNQUOTE = NULL;
 Value SYM_CURRENT_INPUT_PORT = NULL;
 Value SYM_CURRENT_OUTPUT_PORT = NULL;
 Value SYM_END_OF_LINE = NULL;
+
+Value _operator( char *sym, Operator op ){
+	Value v = gc_new(TYPE_SPECIAL);
+	SPECIAL_OP(v) = op;
+	SPECIAL_STR(v) = sym;
+	bundle_define( bundle_cur, intern(sym), v );
+	return retain(v);
+}
 
 bool opt_trace = false;
 
@@ -871,16 +859,33 @@ void init_prelude( bool with_prelude )
 	NIL = gc_new(TYPE_NIL);
 	VALUE_T = gc_new(TYPE_BOOL);
 	VALUE_F = gc_new(TYPE_BOOL);
-	V_EOF = gc_new(TYPE_SPECIAL);
-	V_STDIN = stream_new(stdin, false, "stdin" );
-	V_STDOUT = stream_new(stdout, false, "stdout" );
-	V_END_OF_LINE = string_new("\n");
 	
 	bundle_cur = bundle_new( NIL );
 	retained = NIL;
 	symbol_root = bundle_new( NIL );
-
-	_special_init();
+	
+	V_EOF = gc_new(TYPE_SPECIAL);
+	V_STDIN = stream_new(stdin, false, "stdin" );
+	V_STDOUT = stream_new(stdout, false, "stdout" );
+	V_END_OF_LINE = string_new("\n");
+	V_BEGIN = _operator("begin", OP_BEGIN);
+	V_CALL0 = _operator("*call0*", OP_CALL0);
+	V_CALL1 = _operator("*call1*", OP_CALL1);
+	V_QUOTE = _operator("quote", OP_QUOTE);
+	V_DEFINE = _operator("define", OP_DEFINE);
+	V_DEFINE2 = _operator("*define2*", OP_DEFINE2);
+	V_SET_I = _operator("set!", OP_SET_I);
+	V_SET_I2 = _operator("*set!2*", OP_SET_I2);
+	V_LET = _operator("let", OP_LET);
+	V_LET2 = _operator("*let2*", OP_LET2);
+	V_LET3 = _operator("*let3*", OP_LET3);
+	V_LAMBDA = _operator("lambda", OP_LAMBDA);
+	V_MACRO = _operator("macro", OP_MACRO);
+	V_EXEC_MACRO = _operator("*exec-macro*", OP_EXEC_MACRO);
+	V_IF = _operator("if", OP_IF);
+	V_IF2 = _operator("*if2*", OP_IF2);
+	V_READ_EVAL = _operator("*read-eval*", OP_READ_EVAL);
+	V_READ_EVAL2 = _operator("*read-eval2*", OP_READ_EVAL2);
 
 	SYM_A_DEBUG_A = intern("*debug*");
 	SYM_A_COMPILE_HOOK_A = intern("*compile-hook*");
@@ -908,8 +913,10 @@ void init_prelude( bool with_prelude )
 
 void finalize()
 {
+	bundle_cur = NULL;
 	retained = NULL;
 	symbol_root = NULL;
+	gc_run(opt_trace);
 }
 
 void show_prof()

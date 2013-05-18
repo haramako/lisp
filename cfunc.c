@@ -2,13 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 
-void display_val( char* str, Value args )
-{
-	char buf[10240];
-	value_to_str(buf, args);
-	printf( "%s%s\n", str, buf );
-}
-
 static Value _value( Value args, Value cont, Value *result )
 {
 	*result = CAR(args);
