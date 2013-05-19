@@ -148,7 +148,7 @@ bool equal( Value a, Value b )
 // Int
 //********************************************************
 
-Value int_new( int i )
+Value int_new( int64_t i )
 {
 	Value v = gc_new(TYPE_INT);
 	v->d.number = i;
@@ -806,7 +806,7 @@ static void handler(int sig) {
 
 	// print out all the frames to stderr
 	fprintf(stderr, "Error: signal %d:\n", sig);
-	backtrace_symbols_fd(array+3, size-3, 2/*=stderr*/);
+	backtrace_symbols_fd(array+3, (int)size-3, 2/*=stderr*/);
 	exit(1);
 }
 
@@ -845,6 +845,7 @@ Value _operator( char *sym, Operator op ){
 }
 
 bool opt_trace = false;
+bool opt_debug = false;
 
 void init()
 {

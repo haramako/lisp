@@ -1,30 +1,11 @@
 #include "lisp.h"
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 
 static Value _value( Value args, Value cont, Value *result )
 {
 	*result = CAR(args);
-	return CONTINUATION_NEXT(cont);
-}
-
-static Value _add( Value args, Value cont, Value *result )
-{
-	int sum = 0;
-	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
-		sum += V2INT(CAR(cur));
-	}
-	*result = INT2V(sum);
-	return CONTINUATION_NEXT(cont);
-}
-
-static Value _sub( Value args, Value cont, Value *result )
-{
-	int sum = V2INT(CAR(args));
-	for( Value cur = CDR(args); cur != NIL; cur = CDR(cur) ){
-		sum -= V2INT(CAR(cur));
-	}
-	*result = INT2V(sum);
 	return CONTINUATION_NEXT(cont);
 }
 
@@ -74,6 +55,52 @@ static Value _define_p( Value args, Value cont, Value *result )
 	}else{
 		*result = VALUE_F;
 	}
+	return CONTINUATION_NEXT(cont);
+}
+
+static Value _add( Value args, Value cont, Value *result )
+{
+	int sum = 0;
+	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
+		sum += V2INT(CAR(cur));
+	}
+	*result = INT2V(sum);
+	return CONTINUATION_NEXT(cont);
+}
+
+static Value _sub( Value args, Value cont, Value *result )
+{
+	int64_t sum = V2INT(CAR(args));
+	for( Value cur = CDR(args); cur != NIL; cur = CDR(cur) ){
+		sum -= V2INT(CAR(cur));
+	}
+	*result = INT2V(sum);
+	return CONTINUATION_NEXT(cont);
+}
+
+static Value _less( Value args, Value cont, Value *result )
+{
+	int64_t last = INT64_MIN;
+	*result = VALUE_F;
+	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
+		int64_t n = V2INT(CAR(cur));
+		if( !(last < n) ) return CONTINUATION_NEXT(cont);
+		last = n;
+	}
+	*result = VALUE_T;
+	return CONTINUATION_NEXT(cont);
+}
+
+static Value _less_eq( Value args, Value cont, Value *result )
+{
+	int64_t last = INT64_MIN;
+	*result = VALUE_F;
+	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
+		int64_t n = V2INT(CAR(cur));
+		if( !(last <= n) ) return CONTINUATION_NEXT(cont);
+		last = n;
+	}
+	*result = VALUE_T;
 	return CONTINUATION_NEXT(cont);
 }
 
@@ -211,6 +238,7 @@ static Value _display( Value args, Value cont, Value *result )
 	char buf[10240];
 	Value v, port;
 	bind2arg( args, v, port );
+    assert( v );
 	if( !port ) port = bundle_get( CONTINUATION_BUNDLE(cont), SYM_CURRENT_OUTPUT_PORT );
 	switch( TYPE_OF(v) ){
 	case TYPE_STRING:
@@ -244,12 +272,15 @@ static Value _read( Value args, Value cont, Value *result )
 void cfunc_init()
 {
 	defun( "value", _value );
-	defun( "+", _add );
-	defun( "-", _sub );
 	defun( "eq?", _eq_p );
 	defun( "eqv?", _eqv_p );
 	defun( "equal?", _equal_p );
 	defun( "define?", _define_p );
+	
+	defun( "+", _add );
+	defun( "-", _sub );
+	defun( "<", _less );
+	defun( "<=", _less_eq );
 	
 	defun( "car", _car );
 	defun( "cdr", _cdr );

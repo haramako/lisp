@@ -166,7 +166,7 @@ Dict* dict_rehash( Dict *d );
 
 // Int
 
-Value int_new( int i );
+Value int_new( int64_t i );
 
 // Symbol
 
@@ -290,6 +290,7 @@ extern Value SYM_A_DEBUG_A, SYM_A_COMPILE_HOOK_A, SYM_QUASIQUOTE, SYM_UNQUOTE,
 	SYM_CURRENT_INPUT_PORT, SYM_CURRENT_OUTPUT_PORT, SYM_END_OF_LINE;
 
 extern bool opt_trace;
+extern bool opt_debug;
 
 void register_cfunc( char *sym, LambdaType type, CFunction func );
 void defun( char *sym, CFunction func );

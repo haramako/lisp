@@ -6,11 +6,11 @@ unsigned int value_hash( Value v )
 {
 	switch( TYPE_OF(v) ){
 	case TYPE_INT:
-		return V2INT(v);
+		return (unsigned int)V2INT(v);
 	case TYPE_STRING:
 		{
 			char *str = STRING_STR(v);
-			int len = strlen(str);
+			size_t len = strlen(str);
 			int hash = 0;
 			for( int i=0; i<len; i++ ){
 				hash = hash * 31 + str[i];
@@ -18,7 +18,7 @@ unsigned int value_hash( Value v )
 			return hash;
 		}
 	default:
-		return (((uintptr_t)v) >> 4) * 31;
+		return (unsigned int)(((uintptr_t)v) >> 4) * 31;
 	}
 }
 
@@ -41,8 +41,10 @@ Dict* dict_new()
 void dict_free( Dict *d )
 {
 	for( int i=0; i<d->size; i++ ){
-		for( DictEntry *cur = d->entry[i]; cur; cur = cur->next ){
-			free( cur );
+        for( DictEntry *cur = d->entry[i]; cur; ){
+            DictEntry *next = cur->next;
+            free( cur );
+            cur = next;
 		}
 	}
 	free( d );

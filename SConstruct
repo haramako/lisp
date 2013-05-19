@@ -1,6 +1,6 @@
 import os
 
-env = DefaultEnvironment(**os.environ)
+env = DefaultEnvironment(CC='cc', **os.environ)
 env.AppendUnique(
     CCFLAGS=['-Wall', '-O2', '-std=c99', '-g'],
     LIBS=['m'] )

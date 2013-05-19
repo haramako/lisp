@@ -14,7 +14,6 @@ void show_help(int err)
 int main( int argc, char **argv )
 {
 	// parse command line options
-	int opt_debug = 0;
 	int n = 1;
 	for( ; n<argc; n++ ){
 		if( argv[n][0] != '-' ) break;

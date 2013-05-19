@@ -3,3 +3,5 @@
 .sconsign.dblite
 test_mlisp
 mlisp
+.DS_Store
+xcuserdata
