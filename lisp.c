@@ -495,10 +495,19 @@ int _parse( Value s, Value *result )
 		*result = cons( SYM_QUASIQUOTE, cons(*result,NIL) );
 		return err;
 	case ',':
-		err = _parse( s, result );
-		if( err ) return err;
-		*result = cons( SYM_UNQUOTE, cons(*result,NIL) );
-		return err;
+		{
+			Value sym = SYM_UNQUOTE;
+			if( (c = stream_getc(s)) == '@' ){
+				sym = SYM_UNQUOTE_SPLICING;
+			}else{
+				stream_ungetc(c,s);
+			}
+			
+			err = _parse( s, result );
+			if( err ) return err;
+			*result = cons( sym, cons(*result,NIL) );
+			return err;
+		}
 	default:
 		{
 			stream_ungetc( c, s );
@@ -958,14 +967,15 @@ Value V_LAMBDA, V_MACRO, V_EXEC_MACRO;
 Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 Value V_READ_EVAL, V_READ_EVAL2;
 
-Value SYM_A_DEBUG_A = NULL;
-Value SYM_A_COMPILE_HOOK_A = NULL;
-Value SYM_QUASIQUOTE = NULL;
-Value SYM_UNQUOTE = NULL;
-Value SYM_CURRENT_INPUT_PORT = NULL;
-Value SYM_CURRENT_OUTPUT_PORT = NULL;
-Value SYM_END_OF_LINE = NULL;
-Value SYM_VALUES = NULL;
+Value SYM_A_DEBUG_A;
+Value SYM_A_COMPILE_HOOK_A;
+Value SYM_QUASIQUOTE;
+Value SYM_UNQUOTE;
+Value SYM_UNQUOTE_SPLICING;
+Value SYM_CURRENT_INPUT_PORT;
+Value SYM_CURRENT_OUTPUT_PORT;
+Value SYM_END_OF_LINE;
+Value SYM_VALUES;
 
 Value _operator( char *sym, Operator op ){
 	Value v = gc_new(TYPE_SPECIAL);
@@ -1030,6 +1040,7 @@ void init_prelude( bool with_prelude )
 	SYM_A_COMPILE_HOOK_A = intern("*compile-hook*");
 	SYM_QUASIQUOTE = intern("quasiquote");
 	SYM_UNQUOTE = intern("unquote");
+	SYM_UNQUOTE_SPLICING = intern("unquote-splicing");
 	SYM_CURRENT_INPUT_PORT = intern("current-input-port");
 	SYM_CURRENT_OUTPUT_PORT = intern("current-output-port");
 	SYM_END_OF_LINE = intern("end-of-line");

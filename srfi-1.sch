@@ -676,14 +676,15 @@
 					first)))))))
 
 ;;; APPEND is R4RS.
-(define (append . lists)
-  (if (pair? lists)
-	  (let recur ((list1 (car lists)) (lists (cdr lists)))
+(set! append
+	  (lambda lists
 		(if (pair? lists)
-			(let ((tail (recur (car lists) (cdr lists))))
-			  (fold-right cons tail list1)) ; Append LIST1 & TAIL.
-			list1))
-	  '()))
+			(let recur ((list1 (car lists)) (lists (cdr lists)))
+			  (if (pair? lists)
+				  (let ((tail (recur (car lists) (cdr lists))))
+					(fold-right cons tail list1)) ; Append LIST1 & TAIL.
+				  list1))
+			'())))
 
 ;; (define (append-reverse rev-head tail) (fold cons tail rev-head))
 
@@ -1420,7 +1421,8 @@
 ;;;;;;;;;;;
 
 ;;R4RS, so not defined here.
-(define (reverse lis) (fold cons '() lis))
+;; (define (reverse lis) (fold cons '() lis))
+(set! reverse (lambda (lis) (fold cons '() lis)))
 
 ;;(define (reverse! lis)
 ;;   (pair-fold (lambda (pair tail) (set-cdr! pair tail) pair) '() lis))

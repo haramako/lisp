@@ -9,7 +9,7 @@ env.AppendUnique(
 
 LISP_LIBS = ['lisp.c', 'gc.c', 'dict.c', 'cfunc.c']
 
-env.Default('mlisp', 'test_mlisp')
+env.Default('mlisp', 'test_mlisp', 'tags')
 env.Program('mlisp', ['main.c'] + LISP_LIBS)
 env.Program('test_mlisp', ['test.c'] + LISP_LIBS)
 
@@ -25,3 +25,4 @@ def do_test(target, source, env):
             print "="*80
 
 env.Command('test', ['test_mlisp','mlisp'], ['./test_mlisp', do_test])
+env.Command('tags', [], ['gtags'])

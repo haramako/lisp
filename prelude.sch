@@ -99,6 +99,29 @@
 
 (define *compile-hook* macro-expand-all)
 
+(define-macro (when c . t)
+  (list 'if c (cons 'begin t)))
+
+(define (reverse lis)
+  (let recur ((r '()) (lis lis))
+	(if (pair? lis)
+		(recur (cons (car lis) r) (cdr lis))
+		r)))
+
+(define (append . lists)
+  (let ((r '(#f)))
+	(define tail r)
+	(define (append1 lis)
+	  (when (pair? lis)
+		  (set-cdr! tail (cons (car lis) '()))
+		  (set! tail (cdr tail))
+		  (append1 (cdr lis))))
+	(let recur ((lists lists))
+	  (when (pair? lists)
+			(append1 (car lists))
+			(recur (cdr lists))))
+	(cdr r)))
+
 ;; copy from tinyscheme.
 ;;
 ;; The following quasiquote macro is due to Eric S. Tiedemann.
@@ -163,21 +186,17 @@
 ;(define-macro (not-pair? x) `(not (pair? ,x)))
 
 
-(define-macro (when c . t)
-  `(if ,c ,(cons 'begin t)))
 
 (define (mac form)
   (puts (macro-expand-all form)))
   
-
-
 (define-macro (do arg . body)
   (let ((arg-form (map (lambda (x) (list (car x) (cadr x))) arg))
 		(next-form (map caddr arg)))
 	`(let *loop* ,arg-form
-	   (if ,(caar body) ,(cons 'begin (cdar body))
-		   ,(cons 'begin (cdr body))
-		   ,(cons '*loop* next-form )))))
+	   (if ,(caar body) (begin ,@(cdar body))
+		   ,@(cdr body)
+		   (*loop* ,@next-form)))))
 
 (define (values . x)
   (if (null? (cdr x)) (car x) (cons 'VALUES x)))
@@ -188,14 +207,14 @@
 	  (f v)))
 
 (define-macro (receive args vals . body)
-  (list 'let `((*vals* (cdr ,vals)))
-		(let loop ((args args))
-		  (cond
-		   ((pair? args)
-			`(let ((,(car args) (car *vals*))
-				   (*vals* (cdr *vals*)))
-			   ,(loop (cdr args))))
-		   (#t (cons 'begin body))))))
+  `(let ((*vals* (cdr ,vals)))
+	 ,(let loop ((args args))
+		(cond
+		 ((pair? args)
+		  `(let ((,(car args) (car *vals*))
+				 (*vals* (cdr *vals*)))
+			 ,(loop (cdr args))))
+		 (#t (cons 'begin body))))))
 
 (define (zero? x) (eqv? x 0))
 (define (negative? x) (< x 0))
@@ -210,5 +229,7 @@
 (define (length li)
   (let loop ((li li) (n 0))
 	(if (null? li) n (loop (cdr li) (+ n 1)))))
+
+
 
 

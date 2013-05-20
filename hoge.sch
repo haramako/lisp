@@ -30,7 +30,7 @@
   (puts 1))
 
 (define (hoge x)
-  (puts (backtrace))
+  ;; (puts (backtrace))
   (puts 1))
 
 (fuga 1)
