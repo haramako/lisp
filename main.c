@@ -62,7 +62,7 @@ int main( int argc, char **argv )
 		eval_loop( V_SRC_FILE = stream_new(f,true,argv[n]) );
 	}
     
-	show_prof();
+	// show_prof();
 	
 	if( opt_trace ){
 		show_prof();
