@@ -12,8 +12,6 @@
 
 ; (puts (fib 29))
 
-(exit)
-
 (puts (xcons 1 2))
 
 '(begin
@@ -23,6 +21,19 @@
   (puts 'a)
   (puts 'c (call/cc (lambda (cont) (break 10))))
   (puts 'b))
+
+
+(define (fuga x)
+  (hoge x)
+  (puts 1))
+
+(define (hoge x)
+  (puts (backtrace))
+  (puts 1))
+
+(fuga 1)
+
+(puts 1)
 
 
 ;; (define (rec n)

@@ -39,21 +39,27 @@ size_t value_to_str( char *buf, Value v )
 		break;
 	case TYPE_LAMBDA:
 		{
+			char *type;
 			switch( LAMBDA_KIND(v) ){
 			case LAMBDA_TYPE_LAMBDA:
-				buf += sprintf( buf, "(LAMBDA:%p)", v );
+				type = "LAMBDA";
 				break;
 			case LAMBDA_TYPE_MACRO:
-				buf += sprintf( buf, "(MACRO:%p)", v );
+				type = "MACRO";
 				break;
 			case LAMBDA_TYPE_CFUNC:
-				buf += sprintf( buf, "(CFUNCTION:%p)", v );
+				type = "CFUNC";
 				break;
 			case LAMBDA_TYPE_CMACRO:
-				buf += sprintf( buf, "(CMACRO:%p)", v );
+				type = "CMACRO";
 				break;
 			default:
 				assert(0);
+			}
+			if( LAMBDA_NAME(v) != NIL ){
+				buf += sprintf( buf, "(%s:%s)", type, STRING_STR(SYMBOL_STR(LAMBDA_NAME(v))) );
+			}else{
+				buf += sprintf( buf, "(%s:%p)", type, v );
 			}
 		}
 		break;
@@ -97,11 +103,22 @@ size_t value_to_str( char *buf, Value v )
 	return buf - orig_buf;
 }
 
-void display_val( char* str, Value args )
+char* v2s( Value v )
+{
+	return v2s_limit( v, 10240-4 );
+}
+
+char* v2s_limit( Value v, int limit )
 {
 	char buf[10240];
-	value_to_str(buf, args);
-	printf( "%s%s\n", str, buf );
+	value_to_str(buf, v);
+	if( strlen(buf) > limit ) strcpy( buf+limit, "..." );
+	return STRING_STR(string_new(buf));
+}
+
+void vdump( Value v )
+{
+	printf( "%s\n", v2s(v) );
 }
 
 bool eq( Value a, Value b )
@@ -195,6 +212,7 @@ Value string_new( char *str )
 Value lambda_new()
 {
 	Value v = gc_new(TYPE_LAMBDA);
+	LAMBDA_NAME(v) = NIL;
 	LAMBDA_ARGS(v) = NIL;
 	LAMBDA_BODY(v) = NIL;
 	LAMBDA_BUNDLE(v) = NIL;
@@ -235,6 +253,7 @@ Value bundle_new( Value upper )
 	Value v = gc_new(TYPE_BUNDLE);
 	BUNDLE_DICT(v) = dict_new();
 	BUNDLE_UPPER(v) = upper;
+	BUNDLE_LAMBDA(v) = NIL;
 	return v;
 }
 
@@ -264,7 +283,7 @@ void bundle_set( Value b, Value sym, Value v )
 {
 	DictEntry *entry = bundle_find( b, sym, true, false );
 	if( !entry ){
-		display_val( "bundle_set: ", sym );
+		printf( "bundle_set: %s\n", v2s(sym) );
 		assert( !"cannot set" );
 	}
 	entry->val = v;
@@ -278,10 +297,12 @@ void bundle_define( Value b, Value sym, Value v )
 	
 	DictEntry *entry = bundle_find( b, sym, false, true );
 	if( entry->val != NIL ){
-		display_val( "bundle_define: ", sym );
+		printf( "bundle_define: %s\n", v2s(sym) );
 		assert( !"already set" );
 	}
 	entry->val = v;
+	
+	if( V_IS_LAMBDA(v) && LAMBDA_NAME(v) == NIL ) LAMBDA_NAME(v) = sym;
 }
 
 Value bundle_get( Value b, Value sym )
@@ -548,12 +569,11 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 	case LAMBDA_TYPE_MACRO:
 		{
 			Value bundle = bundle_new( LAMBDA_BUNDLE(lmd) );
+			BUNDLE_LAMBDA(bundle) = lmd;
 			for( Value cur=LAMBDA_ARGS(lmd); cur != NIL; cur=CDR(cur), vals=CDR(vals) ){
 				if( V_IS_PAIR(cur) ){
 					if( !V_IS_PAIR(vals) ){
-						display_val( "call: ", LAMBDA_BODY(lmd) );
-						display_val( "vals: ", orig_vals );
-						display_val( "args: ", LAMBDA_ARGS(lmd) );
+						printf( "call: %s orig_vals: %s lmd: %s\n", v2s(LAMBDA_BODY(lmd)), v2s(orig_vals), v2s(LAMBDA_ARGS(lmd)) );
 					}
 					bundle_define( bundle, CAR(cur), CAR(vals) );
 				}else{
@@ -616,7 +636,7 @@ Value eval_loop( Value code )
 		{
 			DictEntry *found = bundle_find( C_BUNDLE(cont), C_CODE(cont), true, false );
 			if( !found ){
-				display_val( "symbol not found: ", C_CODE(cont) );
+				printf( "symbol not found: %s\n", v2s(C_CODE(cont)) );
 				assert(0);
 			}
 			NEXT( C_NEXT(cont), found->val );
@@ -686,7 +706,7 @@ Value eval_loop( Value code )
 							  NIL );
 					}
 				default:
-					display_val( "OP_CALL0: ", cons( result, C_CODE(cont) ) );
+					printf( "OP_CALL0: result: %s code: %s\n", v2s(result), v2s(C_CODE(cont)) );
 					assert(0);
 				}
 			case OP_CALL1:
@@ -850,7 +870,7 @@ Value eval_loop( Value code )
 			case OP_READ_EVAL:
 				{
 					Value stat = stream_read( code );
-					if( opt_trace ) display_val( "READ_EVAL :", stat );
+					if( opt_trace ) printf( "trace: %s\n", v2s(stat) );
 					if( stat != V_EOF ){
 						Value compile_hook = bundle_get( bundle_cur, SYM_A_COMPILE_HOOK_A );
 						if( compile_hook != NIL ){

@@ -80,9 +80,11 @@ typedef struct Cell {
 		struct {
 			struct Cell *upper;
 			struct Dict *dict;
+			struct Cell *lambda;
 		} bundle;
 		struct {
 			LambdaType type;
+			struct Cell *name;
 			struct Cell *args;
 			struct Cell *body;
 			struct Cell *bundle;
@@ -132,7 +134,9 @@ typedef Cell* Value;
 #define V2STREAM(v) (assert(V_IS_STREAM(v)),v)
 
 size_t value_to_str( char *buf, Value v );
-void display_val( char *str, Value args );
+char* v2s( Value v );
+char* v2s_limit( Value v, int limit );
+void vdump( Value v );
 
 bool eq( Value a, Value b );
 bool eqv( Value a, Value b );
@@ -191,6 +195,7 @@ Value string_new( char *str );
 // Lambda
 
 #define LAMBDA_KIND(v) (V2LAMBDA(v)->d.lambda.type)
+#define LAMBDA_NAME(v) (V2LAMBDA(v)->d.lambda.name)
 #define LAMBDA_ARGS(v) (V2LAMBDA(v)->d.lambda.args)
 #define LAMBDA_BODY(v) (V2LAMBDA(v)->d.lambda.body)
 #define LAMBDA_FUNC(v) (V2LAMBDA(v)->d.lambda.func)
@@ -227,6 +232,7 @@ size_t value_length( Value v );
 
 #define BUNDLE_DICT(v) (V2BUNDLE(v)->d.bundle.dict)
 #define BUNDLE_UPPER(v) (V2BUNDLE(v)->d.bundle.upper)
+#define BUNDLE_LAMBDA(v) (V2BUNDLE(v)->d.bundle.lambda)
 
 extern Value bundle_cur;
 Value bundle_new( Value upper );

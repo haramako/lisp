@@ -110,6 +110,7 @@ static void _mark( Value v )
 	case TYPE_BUNDLE:
 		_mark_dict( BUNDLE_DICT(v) );
 		_mark( BUNDLE_UPPER(v) );
+		_mark( BUNDLE_LAMBDA(v) );
 		break;
 	case TYPE_CONTINUATION:
 		_mark( CONTINUATION_BUNDLE(v) );

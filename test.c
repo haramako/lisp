@@ -18,6 +18,7 @@ int main( int argc, char **argv )
 	printf( "%u\n", value_hash(intern("hoge")));
 	printf( "%u\n", value_hash(intern("fuga")));
 
+	/*
 	Dict *d1 = dict_new();
 	printf( "a\n" );
 	dict_set( d1, string_new("hoge"), INT2V(1) );
@@ -45,6 +46,7 @@ int main( int argc, char **argv )
 	for( int i=0; i<10; i++ ){
 		display_val( "d1: ", dict_get( d1, INT2V(i) ) );
 	}
+	*/
 	
 	return 0;
 }

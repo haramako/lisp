@@ -308,14 +308,12 @@ static Value _eval( Value args, Value cont, Value *result )
 
 static Value _backtrace( Value args, Value cont, Value *result )
 {
-	Value res = NIL;
 	printf( "backtrace:\n" );
 	for( Value cur=CONTINUATION_NEXT(cont); cur != NIL; cur = CONTINUATION_NEXT(cur) ){
 		Value code = CONTINUATION_CODE(cur);
-		if( CAR(code) == V_BEGIN ){
-			display_val( "  ", CADR(code) );
-		}
-		res = cons( CONTINUATION_CODE(cur), res );
+		printf( "  %s in %s\n",
+				v2s_limit(code, 60),
+				v2s(BUNDLE_LAMBDA(CONTINUATION_BUNDLE(cur))) );
 	}
 	*result = NIL;
 	return CONTINUATION_NEXT(cont);
