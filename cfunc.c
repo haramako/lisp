@@ -375,7 +375,8 @@ static Value _load( Value args, Value cont, Value *result )
 
 static Value _exit( Value args, Value cont, Value *result )
 {
-	assert(0);
+	bind1arg(args,*result);
+	if( !*result ) *result = NIL;
 	return NIL;
 }
 

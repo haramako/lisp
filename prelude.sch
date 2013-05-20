@@ -146,10 +146,14 @@
 	(apply puts (cdr x))))
 
 ;;; unit-test
-(define-macro (assert _eq _test _expect)
-  `(let ((test ,_test)
-		 (expect ,_expect))
-	 (if (,_eq test expect) #t (puts "FAILED:" ',_test "expect" expect "but" test))))
+(define *minitest-failed* #f)
+(define-macro (assert _expect _test . maybe-elt= )
+  (let ((elt= (if (pair? maybe-elt=) (car maybe-elt=) equal?)))
+	`(let ((*test* ,_test)
+		   (*expect* ,_expect))
+	   (if (,elt= *test* *expect*) #t
+		   (puts "FAILED:" ',_test "EXPECT" *expect* "BUT" *test*)
+		   (set! *minitest-failed* #t)))))
 
 (define-macro (when c . t)
   `(if ,c ,(cons 'begin t)))

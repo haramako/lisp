@@ -51,6 +51,7 @@ int main( int argc, char **argv )
 
 
 	// run script
+	int result = 0;
 	if( strcmp(argv[n],"-") == 0 ){
 		eval_loop( V_STDIN );
 	}else{
@@ -59,7 +60,8 @@ int main( int argc, char **argv )
 			printf( "cannot open %s\n", argv[n] );
 			exit(1);
 		}
-		eval_loop( V_SRC_FILE = stream_new(f,true,argv[n]) );
+		Value v = eval_loop( V_SRC_FILE = stream_new(f,true,argv[n]) );
+		if( V_IS_INT(v) ) result = V2INT(v);
 	}
     
 	// show_prof();
@@ -69,7 +71,7 @@ int main( int argc, char **argv )
 		finalize();
 	}
 	
-	return 0;
+	return result;
 }
 
 

@@ -1,79 +1,80 @@
 ;; test type operator
-(assert eqv? (symbol? 'a) #t)
-(assert eqv? (symbol? 0) #f)
-(assert eqv? (number? 0) #t)
-(assert eqv? (number? 'a) #f)
-(assert eqv? (pair? '(0)) #t)
-(assert eqv? (pair? 'a) #f)
-(assert eqv? (null? '()) #t)
-(assert eqv? (null? '(0)) #f)
-(assert eqv? (list? '(0)) #t)
-(assert eqv? (list? '()) #t)
-(assert eqv? (list? 0) #f)
-(assert eqv? (procedure? display) #t)
-(assert eqv? (procedure? macro-expand) #t)
-(assert eqv? (procedure? 0) #f)
+(assert #t (symbol? 'a))
+(assert #f (symbol? 0))
+(assert #t (number? 0))
+(assert #f (number? 'a))
+(assert #t (pair? '(0)))
+(assert #f (pair? 'a))
+(assert #t (null? '()))
+(assert #f (null? '(0)))
+(assert #t (list? '(0)))
+(assert #t (list? '()))
+(assert #f (list? 0))
+(assert #t (procedure? display))
+(assert #t (procedure? cddr))
+(assert #f (procedure? 0))
 
 ;; test define
-(define var 'hoge)
-(assert eqv? var 'hoge)
-(set! var 'fuga)
-(assert eqv? var 'fuga)
+(let ((var 'hoge))
+  (assert 'hoge var)
+  (set! var 'fuga)
+  (assert 'fuga var))
 
 ;; test eq? eqv?
-(set! var '(1))
-(assert eqv? (eq? '() '()) #t)
-(assert eqv? (eq? var '(1)) #f)
-(assert eqv? (eq? 1 1) #t)
-(assert eqv? (eq? 1 2) #f)
-(assert eqv? (eq? 'hoge 'hoge) #t)
-(assert eqv? (eq? 'hoge 'fuga) #f)
-(assert eqv? (eq? "a" "a") #f)
-(assert eqv? (eqv? "a" "a") #t)
-(assert eqv? (eqv? "a" "b") #f)
-(assert eqv? (eqv? var '(1)) #f)
-(assert eqv? (equal? var '(1)) #t)
-(assert eqv? (equal? var '(1 2)) #f)
-(assert eqv? (equal? '(1 2) '(1 3)) #f)
+(let ((var '(1)))
+  (assert #t (eq? '() '()))
+  (assert #f (eq? var '(1)))
+  (assert #t (eq? 1 1))
+  (assert #f (eq? 1 2))
+  (assert #t (eq? 'hoge 'hoge))
+  (assert #f (eq? 'hoge 'fuga))
+  (assert #f (eq? "a" "a"))
+  (assert #t (eqv? "a" "a"))
+  (assert #f (eqv? "a" "b"))
+  (assert #f (eqv? var '(1)))
+  (assert #t (equal? var '(1)))
+  (assert #f (equal? var '(1 2)))
+  (assert #f (equal? '(1 2) '(1 3))))
 
 ; test let
-(let ((var 1) (b (+ 1 1)))
-  (assert eqv? var 1)
-  (assert eqv? b 2))
-(assert eqv?
-		(let loop ((sum 0)
-				   (var 10))
-		  (if (<= var 0) sum
-			  (loop (+ sum var) (- var 1))))
-		55)
+(let ((a 0))
+  (let ((a 1) (b (+ 1 1)))
+	(assert 1 a)
+	(assert 2 b))
+
+  (assert 55
+		  (let loop ((sum 0)
+					 (var 10))
+			(if (<= var 0) sum
+				(loop (+ sum var) (- var 1))))))
 
 (define one 1)
-(assert eqv? (+ one 1) 2)
-(assert eqv? (eq? one 1) #t)
+(assert 2 (+ one 1))
+(assert #t (eq? one 1))
 
-(assert eqv? (car '(1 2)) 1)
-(assert equal? (cdr '(1 2)) '(2))
-(assert eqv? (cdr '(1)) '())
+(assert 1 (car '(1 2)))
+(assert '(2) (cdr '(1 2)) )
+(assert '() (cdr '(1)))
 
-(assert eqv? (if #t 1 2) 1)
-(assert eqv? (if #f 1 2) 2)
-(assert eqv? (if #f 1 2 3) 3)
+(assert 1 (if #t 1 2))
+(assert 2 (if #f 1 2))
+(assert 3 (if #f 1 2 3))
 
 (define +1 (lambda (x) (+ x 1)))
-(assert eqv? (+1 3) 4)
+(assert 4 (+1 3))
 
 (define +n (lambda (x) (lambda (y) (+ x y))))
 (define +3 (+n 3))
 (define +4 (+n 4))
-(assert eqv? (+3 1) 4)
-(assert eqv? (+3 (+4 0)) 7)
+(assert 4 (+3 1))
+(assert 7 (+3 (+4 0)))
 
 (define x 100)
-(assert equal? `(1 (2 ,x)) '(1 (2 100)))
+(assert '(1 (2 100)) `(1 (2 ,x)))
 
 (define m+1 (macro (x) (list '+ x 1)))
-(assert eqv? (m+1 3) 4)
-(assert equal? (macro-expand '(m+1 2)) '(+ 2 1))
+(assert 4 (m+1 3))
+(assert '(+ 2 1) (macro-expand '(m+1 2)))
 
 ;; (define n 0)
 ;; (loop
@@ -86,18 +87,18 @@
 ;; (define sym (gemsym))
 ;; (display (eq? sym sym))
 
-(assert eqv? (car '(1 2)) 1)
-(assert equal? (cdr '(1 2 3)) '(2 3))
+(assert 1 (car '(1 2)))
+(assert '(2 3) (cdr '(1 2 3)))
 
 (define apply-test (lambda (a b) (+ a b)))
-(assert eqv? (apply apply-test '(1 2)) 3)
-(assert eqv? (apply + '(1 2)) 3)
-(assert eqv? (apply + 1 '(2 3)) 6)
+(assert 3 (apply apply-test '(1 2)))
+(assert 3 (apply + '(1 2)))
+(assert 6 (apply + 1 '(2 3)))
 
-(assert eqv? (or #f #f 1) 1)
-(assert eqv? (or #f #f #f) #f)
-(assert eqv? (and 1 2 3) 3)
-(assert eqv? (and 1 #f 3) #f)
+(assert 1 (or #f #f 1))
+(assert #f (or #f #f #f))
+(assert 3 (and 1 2 3))
+(assert #f (and 1 #f 3))
 
 (define cond-test
   (lambda (x)
@@ -106,53 +107,52 @@
 	 ((eq? x 2) 'two)
 	 (x => (lambda (x) 'other))
 	 (#t 'other))))
-(assert eqv? (cond-test 1) 'one)
-(assert eqv? (cond-test 2) 'two)
-(assert eqv? (cond-test 3) 'other)
+(assert 'one (cond-test 1))
+(assert 'two (cond-test 2))
+(assert 'other (cond-test 3))
 
-(assert eqv? (eval '(+ 1 2)) 3)
+(assert 3 (eval '(+ 1 2)))
 
 ;; test list*
-(assert equal? (list*) '())
-(assert equal? (list* 1) 1)
-(assert equal? (list* 1 2) '(1 . 2))
-(assert equal? (list* 1 2 '(3 4)) '(1 2 3 4))
+(assert '() (list*))
+(assert 1 (list* 1))
+(assert '(1 . 2) (list* 1 2))
+(assert '(1 2 3 4) (list* 1 2 '(3 4)))
 
 ;; test do
-(assert eqv? 55
+(assert 55
 		(do ((sum 0 (+ sum i))
 			 (i 10 (- i 1)))
 			((<= i 0) sum)))
 
 ;; test receive
-(assert equal?
+(assert '(1 2)
 		(receive (a b) (values 1 2)
-				 (list a b))
-		'(1 2))
+				 (list a b)))
 
 ;; test call-with-values
-(assert equal? 3
-		(call-with-values (values 1 2) +))
-(assert equal? 1
-		(call-with-values 1 +))
+(assert 3 (call-with-values (values 1 2) +))
+(assert 1 (call-with-values 1 +))
 
 ;; test list-tail
-(assert equal? (list-tail '(1 2) 0) '(1 2))
-(assert equal? (list-tail '(1 2) 1) '(2))
-(assert equal? (list-tail '(1 2) 2) '())
+(assert '(1 2) (list-tail '(1 2) 0))
+(assert '(2) (list-tail '(1 2) 1))
+(assert '() (list-tail '(1 2) 2))
 
 ;; test length
-(assert equal? (length '() ) 0)
-(assert equal? (length '(1 2) ) 2)
+(assert 0 (length '() ))
+(assert 2 (length '(1 2)))
 
 (begin
-  (assert eqv? 1
+  (assert 1
 		  (call/cc
 		   (lambda (cont)
 			 (cont 1)
 			 (assert eqv? #t #f))))
-  (assert equal? (values 1 2)
+  (assert (values 1 2)
 		  (call/cc
 		   (lambda (cont)
 			 (cont 1 2)
 			 (assert eqv? #t #f)))))
+
+(exit (if *minitest-failed* 1 0))
