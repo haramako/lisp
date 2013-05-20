@@ -1,19 +1,29 @@
+(load "srfi-1.sch")
+
 (puts 'a)
 (puts '(1 2))
 
 (puts (call/cc (lambda (cont) (cont 1) 2)))
 
 (define (fib n)
-  (define (fib-r v n)
-	(if (<= n 1)
-		(+ v 1)
-		(fib-r (fib-r v (- n 2)) (- n 1))))
-  (fib-r 0 n))
+  (if (<= n 1)
+	  1
+	  (+ (fib (- n 1) (fib (- n 2))))))
 
-(puts (<= 1 3 3 5))
-(puts (<= 4 1))
-(puts (< 1 3 3 5))
-(puts (fib 20))
+; (puts (fib 29))
+
+(exit)
+
+(puts (xcons 1 2))
+
+'(begin
+  (define break #f)
+  (puts (call/cc (lambda (cont) (set! break cont))))
+
+  (puts 'a)
+  (puts 'c (call/cc (lambda (cont) (break 10))))
+  (puts 'b))
+
 
 ;; (define (rec n)
 ;;   (rec (+ 1 n)))

@@ -5,3 +5,6 @@ test_mlisp
 mlisp
 .DS_Store
 xcuserdata
+GPATH
+GRTAGS
+GTAGS

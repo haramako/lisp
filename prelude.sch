@@ -5,27 +5,15 @@
 			   (car (car form))
 			   (cons 'macro (cons (cdr (car form)) (cdr form))))))
 
-(define-macro (cond . code)
-  (define foo
-	(lambda (x)
-	  (if (not (pair? x))
-		  #f
-		(define c (car x))
-		(define rest (cdr x))
-		(list 'if (car c) (cons 'begin (cdr c)) (foo rest)))))
-  (foo code))
-
-(define-macro (zero? x) (list 'eqv? x 0))
-
-(define-macro (and . form)
-  (if (null? (cdr form))
-	  (car form)
-	(list 'if (car form) (apply and (cdr form)) #f)))
-
-(define-macro (or . form)
-  (if (null? (cdr form))
-	  (car form)
-	(list 'if (car form) #t (apply or (cdr form)))))
+(define-macro (cond . form)
+  (let recur ((form form))
+	(if (not (pair? form)) '(#f)
+		(let ((c (car form))
+			  (rest (cdr form)))
+		  (if (and (pair? c)
+				   (eq? (car (cdr c)) '=>))
+			  (list 'if (car c) (list (car (cdr (cdr c))) (car c)) (recur rest))
+			  (list 'if (car c) (cons 'begin (cdr c)) (recur rest)))))))
 
 ;;; macro expander
 (define (macro-form? form)
@@ -76,6 +64,7 @@
 	  (list 'cons l r)))
   (define (mappend f l r)
 	(if (or (null? (cdr f))
+			
 			(and (pair? r)
 				 (eq? (car r) 'quote)
 				 (eq? (car (cdr r)) '())))
@@ -90,7 +79,7 @@
 		   )
 		  ((eq? 'quasiquote (car form))
 		   (mcons form ''quasiquote (foo (+ level 1) (cdr form))))
-		  (#t (if (zero? level)
+		  (#t (if (eqv? level 0)
 				  (cond ((eq? (car form) 'unquote) (car (cdr form)))
 						((eq? (car form) 'unquote-splicing)
 						 (error "Unquote-splicing wasn't in a list:"
@@ -112,21 +101,45 @@
   (foo 0 l))
 
 ;; utilities
-(define-macro (caar x) `(car (car ,x)))
-(define-macro (cadr x) `(car (cdr ,x)))
-(define-macro (cdar x) `(cdr (car ,x)))
-(define-macro (cddr x) `(cdr (cdr ,x)))
+(define (caar x) (car (car x)))
+(define (cadr x) (car (cdr x)))
+(define (cdar x) (cdr (car x)))
+(define (cddr x) (cdr (cdr x)))
+(define (caaar x) (car (car (car x))))
+(define (caadr x) (car (car (cdr x))))
+(define (cadar x) (car (cdr (car x))))
+(define (caddr x) (car (cdr (cdr x))))
+(define (cdaar x) (cdr (car (car x))))
+(define (cdadr x) (cdr (car (cdr x))))
+(define (cddar x) (cdr (cdr (car x))))
+(define (cdddr x) (cdr (cdr (cdr x))))
+(define (caaaar x) (car (caaar x)))
+(define (caaadr x) (car (caadr x)))
+(define (caadar x) (car (cadar x)))
+(define (caaddr x) (car (caddr x)))
+(define (cadaar x) (car (cdaar x)))
+(define (cadadr x) (car (cdadr x)))
+(define (caddar x) (car (cddar x)))
+(define (cadddr x) (car (cdddr x)))
+(define (cdaaar x) (cdr (caaar x)))
+(define (cdaadr x) (cdr (caadr x)))
+(define (cdadar x) (cdr (cadar x)))
+(define (cdaddr x) (cdr (caddr x)))
+(define (cddaar x) (cdr (cdaar x)))
+(define (cddadr x) (cdr (cdadr x)))
+(define (cdddar x) (cdr (cddar x)))
+(define (cddddr x) (cdr (cdddr x)))
 
-(define (map x f)
-  (if (pair? x)
-	  (cons (car x) (f (cdr x)))
-	x))
+;(define-macro (not-pair? x) `(not (pair? ,x)))
 
-(define-macro (not-pair? x) `(not (pair? ,x)))
+(define (my-map f li)
+  (if (pair? li)
+	  (cons (f (car li)) (my-map f (cdr li)))
+	  li))
 
 ;; (puts obj1 ...)
 (define (puts . x)
-  (if (not-pair? x)
+  (if (not (pair? x))
 	  (display end-of-line)
 	(display (car x))
 	(display " ")
@@ -137,3 +150,75 @@
   `(let ((test ,_test)
 		 (expect ,_expect))
 	 (if (,_eq test expect) #t (puts "FAILED:" ',_test "expect" expect "but" test))))
+
+(define-macro (when c . t)
+  `(if ,c ,(cons 'begin t)))
+
+(define (mac form)
+  (puts (macro-expand-all form)))
+  
+(define (for-each f l)
+  (when (pair? l)
+		(f (car l))
+		(for-each f (cdr l))))
+
+(define (newline)
+  (display end-of-line))
+
+
+(define-macro (do arg . body)
+  (let ((arg-form (my-map (lambda (x) (list (car x) (cadr x))) arg))
+		(next-form (my-map caddr arg)))
+	`(let *loop* ,arg-form
+	   (if ,(caar body) ,(cons 'begin (cdar body))
+		   ,(cons 'begin (cdr body))
+		   ,(cons '*loop* next-form )))))
+
+(define (values . x)
+  (if (null? (cdr x)) (car x) (cons 'VALUES x)))
+
+(define (call-with-values v f)
+  (if (and (pair? v) (eq? 'VALUES (car v)))
+	  (apply f (cdr v))
+	  (f v)))
+
+(define-macro (receive args vals . body)
+  (list 'let `((*vals* (cdr ,vals)))
+		(let loop ((args args))
+		  (cond
+		   ((pair? args)
+			`(let ((,(car args) (car *vals*))
+				   (*vals* (cdr *vals*)))
+			   ,(loop (cdr args))))
+		   (#t (cons 'begin body))))))
+
+(define COMMENT quote)
+
+(define (zero? x) (eqv? x 0))
+(define (negative? x) (< x 0))
+(define (positive? x) (>= x 0))
+(define (even? x) (eqv? (modulo x 2) 0))
+(define (odd? x) (eqv? (modulo x 2) 1))
+
+(define (list-tail li n)
+  (let loop ((li li) (n n))
+	(if (zero? n) li (loop (cdr li) (- n 1)))))
+
+(define (length li)
+  (let loop ((li li) (n 0))
+	(if (null? li) n (loop (cdr li) (+ n 1)))))
+
+(define else #t)
+
+(define (error . mes)
+  (puts "error:" mes)
+  (exit 1))
+
+;; (do ((a 10 (- a 1)))
+;; 	((eq? a 0) a)
+;;   (puts a))
+
+;; (do ((a 10 (- a 1)))
+;; 	 ((eq? a 0) a)
+;;    (puts a)))
+

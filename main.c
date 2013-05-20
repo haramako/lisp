@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+#include <unistd.h>
 
 void show_help(int err)
 {
@@ -58,9 +59,9 @@ int main( int argc, char **argv )
 			printf( "cannot open %s\n", argv[n] );
 			exit(1);
 		}
-		eval_loop( stream_new(f,true,argv[n]) );
+		eval_loop( V_SRC_FILE = stream_new(f,true,argv[n]) );
 	}
-
+    
 	show_prof();
 	
 	if( opt_trace ){

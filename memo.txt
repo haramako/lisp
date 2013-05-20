@@ -1,7 +1,10 @@
 
+* let と let*の区別
+* SRFI-0 list library
 * string関係の関数
 * string stream
 * intを埋め込みに
 
+- 名前付きlet
 - gcをまともに
 - bundle を hashに

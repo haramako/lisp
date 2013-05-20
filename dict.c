@@ -52,6 +52,7 @@ void dict_free( Dict *d )
 
 Dict* dict_rehash( Dict *d )
 {
+    return d;
 	// printf( "rehash %p size:%d\n", d, d->size );
 	Dict *new_dict = dict_new_size( d->size * 1.7 );
 	for( int i=0; i<d->size; i++ ){

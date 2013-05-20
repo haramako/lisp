@@ -1,3 +1,4 @@
+;; test type operator
 (assert eqv? (symbol? 'a) #t)
 (assert eqv? (symbol? 0) #f)
 (assert eqv? (number? 0) #t)
@@ -13,11 +14,13 @@
 (assert eqv? (procedure? macro-expand) #t)
 (assert eqv? (procedure? 0) #f)
 
+;; test define
 (define var 'hoge)
 (assert eqv? var 'hoge)
 (set! var 'fuga)
 (assert eqv? var 'fuga)
 
+;; test eq? eqv?
 (set! var '(1))
 (assert eqv? (eq? '() '()) #t)
 (assert eqv? (eq? var '(1)) #f)
@@ -33,9 +36,16 @@
 (assert eqv? (equal? var '(1 2)) #f)
 (assert eqv? (equal? '(1 2) '(1 3)) #f)
 
+; test let
 (let ((var 1) (b (+ 1 1)))
   (assert eqv? var 1)
   (assert eqv? b 2))
+(assert eqv?
+		(let loop ((sum 0)
+				   (var 10))
+		  (if (<= var 0) sum
+			  (loop (+ sum var) (- var 1))))
+		55)
 
 (define one 1)
 (assert eqv? (+ one 1) 2)
@@ -82,6 +92,7 @@
 (define apply-test (lambda (a b) (+ a b)))
 (assert eqv? (apply apply-test '(1 2)) 3)
 (assert eqv? (apply + '(1 2)) 3)
+(assert eqv? (apply + 1 '(2 3)) 6)
 
 (assert eqv? (or #f #f 1) 1)
 (assert eqv? (or #f #f #f) #f)
@@ -93,9 +104,55 @@
 	(cond
 	 ((eq? x 1) 'one)
 	 ((eq? x 2) 'two)
+	 (x => (lambda (x) 'other))
 	 (#t 'other))))
 (assert eqv? (cond-test 1) 'one)
 (assert eqv? (cond-test 2) 'two)
 (assert eqv? (cond-test 3) 'other)
 
 (assert eqv? (eval '(+ 1 2)) 3)
+
+;; test list*
+(assert equal? (list*) '())
+(assert equal? (list* 1) 1)
+(assert equal? (list* 1 2) '(1 . 2))
+(assert equal? (list* 1 2 '(3 4)) '(1 2 3 4))
+
+;; test do
+(assert eqv? 55
+		(do ((sum 0 (+ sum i))
+			 (i 10 (- i 1)))
+			((<= i 0) sum)))
+
+;; test receive
+(assert equal?
+		(receive (a b) (values 1 2)
+				 (list a b))
+		'(1 2))
+
+;; test call-with-values
+(assert equal? 3
+		(call-with-values (values 1 2) +))
+(assert equal? 1
+		(call-with-values 1 +))
+
+;; test list-tail
+(assert equal? (list-tail '(1 2) 0) '(1 2))
+(assert equal? (list-tail '(1 2) 1) '(2))
+(assert equal? (list-tail '(1 2) 2) '())
+
+;; test length
+(assert equal? (length '() ) 0)
+(assert equal? (length '(1 2) ) 2)
+
+(begin
+  (assert eqv? 1
+		  (call/cc
+		   (lambda (cont)
+			 (cont 1)
+			 (assert eqv? #t #f))))
+  (assert equal? (values 1 2)
+		  (call/cc
+		   (lambda (cont)
+			 (cont 1 2)
+			 (assert eqv? #t #f)))))

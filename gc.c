@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "lisp.h"
 
-#define ARENA_SIZE ((64*1024-8)/sizeof(Cell))
+#define ARENA_SIZE ((64*1024-sizeof(void*))/sizeof(Cell))
 typedef struct Arena {
 	struct Arena *next;
 	Cell cells[ARENA_SIZE];
@@ -117,6 +117,7 @@ static void _mark( Value v )
 		_mark( CONTINUATION_NEXT(v) );
 		break;
 	case TYPE_STREAM:
+		_mark( STREAM_FILENAME(v) );
 		break;
 	}
 }
@@ -129,7 +130,7 @@ static void _free( void *p )
 		free( STRING_STR(v) );
 		break;
 	case TYPE_BUNDLE:
-		free( BUNDLE_DICT(v) );
+		dict_free( BUNDLE_DICT(v) );
 		break;
 	case TYPE_STREAM:
 		if( STREAM_CLOSE(v) ){
@@ -148,6 +149,16 @@ static void _free( void *p )
 
 void gc_init()
 {
+}
+
+void gc_finalize()
+{
+    while( _arena_root != NULL ){
+        Arena *cur = _arena_root;
+        _arena_root = _arena_root->next;
+        // printf( "free arena %p\n", cur );
+        free( cur );
+    }
 }
 
 void gc_run( int verbose )

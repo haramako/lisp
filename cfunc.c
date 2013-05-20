@@ -78,6 +78,36 @@ static Value _sub( Value args, Value cont, Value *result )
 	return CONTINUATION_NEXT(cont);
 }
 
+static Value _mul( Value args, Value cont, Value *result )
+{
+	int sum = 1;
+	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
+		sum *= V2INT(CAR(cur));
+	}
+	*result = INT2V(sum);
+	return CONTINUATION_NEXT(cont);
+}
+
+static Value _div( Value args, Value cont, Value *result )
+{
+	int sum = 1;
+	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
+		sum /= V2INT(CAR(cur));
+	}
+	*result = INT2V(sum);
+	return CONTINUATION_NEXT(cont);
+}
+
+static Value _modulo( Value args, Value cont, Value *result )
+{
+	int64_t sum = V2INT(CAR(args));
+	for( Value cur = CDR(args); cur != NIL; cur = CDR(cur) ){
+		sum %= V2INT(CAR(cur));
+	}
+	*result = INT2V(sum);
+	return CONTINUATION_NEXT(cont);
+}
+
 static Value _less( Value args, Value cont, Value *result )
 {
 	int64_t last = INT64_MIN;
@@ -104,6 +134,32 @@ static Value _less_eq( Value args, Value cont, Value *result )
 	return CONTINUATION_NEXT(cont);
 }
 
+static Value _greater( Value args, Value cont, Value *result )
+{
+	int64_t last = INT64_MAX;
+	*result = VALUE_F;
+	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
+		int64_t n = V2INT(CAR(cur));
+		if( !(last > n) ) return CONTINUATION_NEXT(cont);
+		last = n;
+	}
+	*result = VALUE_T;
+	return CONTINUATION_NEXT(cont);
+}
+
+static Value _greater_eq( Value args, Value cont, Value *result )
+{
+	int64_t last = INT64_MAX;
+	*result = VALUE_F;
+	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
+		int64_t n = V2INT(CAR(cur));
+		if( !(last >= n) ) return CONTINUATION_NEXT(cont);
+		last = n;
+	}
+	*result = VALUE_T;
+	return CONTINUATION_NEXT(cont);
+}
+
 static Value _car( Value args, Value cont, Value *result )
 {
 	*result = CAAR(args);
@@ -122,6 +178,18 @@ static Value _cons( Value args, Value cont, Value *result )
 	return CONTINUATION_NEXT(cont);
 }
 
+static Value _set_car_i( Value args, Value cont, Value *result )
+{
+	CAR(CAR(args)) = CADR(args);
+	return CONTINUATION_NEXT(cont);
+}
+
+static Value _set_cdr_i( Value args, Value cont, Value *result )
+{
+	CDR(CAR(args)) = CADR(args);
+	return CONTINUATION_NEXT(cont);
+}
+
 static Value _not( Value args, Value cont, Value *result )
 {
 	*result = (CAR(args)==VALUE_F)?VALUE_T:VALUE_F;
@@ -131,6 +199,22 @@ static Value _not( Value args, Value cont, Value *result )
 static Value _list( Value args, Value cont, Value *result )
 {
 	*result = args;
+	return CONTINUATION_NEXT(cont);
+}
+
+static Value _list_a( Value args, Value cont, Value *result )
+{
+	Value li = cons( NIL, NIL );
+	Value tail = li;
+	for( Value cur=args; cur != NIL; cur=CDR(cur) ){
+		if( CDR(cur) != NIL ){
+			CDR(tail) = cons( CAR(cur), NIL );
+			tail = CDR(tail);
+		}else{
+			CDR(tail) = CAR(cur);
+		}
+	}
+	*result = CDR(li);
 	return CONTINUATION_NEXT(cont);
 }
 
@@ -201,7 +285,18 @@ static Value _get_closure_code( Value args, Value cont, Value *result )
 static Value _apply( Value args, Value cont, Value *result )
 {
 	Value lmd = V2LAMBDA(CAR(args));
-	Value c = call( lmd, CADR(args), cont, result );
+	Value head = cons( NIL, NIL );
+	Value tail = head;
+	for( Value cur=CDR(args); cur != NIL; cur = CDR(cur) ){
+		if( CDR(cur) == NIL ){
+			for( Value v=CAR(cur); v != NIL; v = CDR(v) ){
+				tail = CDR(tail) = cons( CAR(v), NIL );
+			}
+		}else{
+			tail = CDR(tail) = cons( CAR(cur), NIL );
+		}
+	}
+	Value c = call( lmd, CDR(head), cont, result );
 	return c;
 }
 
@@ -269,27 +364,54 @@ static Value _read( Value args, Value cont, Value *result )
 	return CONTINUATION_NEXT(cont);
 }
 
+static Value _load( Value args, Value cont, Value *result )
+{
+	Value filename, port;
+	bind2arg( args, filename, port );
+	FILE *fd = fopen( STRING_STR(filename), "r" );
+	if( !fd ) assert(0);
+	Value file = stream_new( fd, true, STRING_STR(filename) );
+	return continuation_new( cons( V_READ_EVAL, file ),
+							 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
+}
+
+static Value _exit( Value args, Value cont, Value *result )
+{
+	assert(0);
+	return NIL;
+}
+
 void cfunc_init()
 {
 	defun( "value", _value );
 	defun( "eq?", _eq_p );
 	defun( "eqv?", _eqv_p );
+	defun( "=", _eqv_p );
 	defun( "equal?", _equal_p );
 	defun( "define?", _define_p );
 	
 	defun( "+", _add );
 	defun( "-", _sub );
+	defun( "*", _mul );
+	defun( "/", _div );
+	defun( "modulo", _modulo );
 	defun( "<", _less );
 	defun( "<=", _less_eq );
+	defun( ">", _greater );
+	defun( ">=", _greater_eq );
 	
 	defun( "car", _car );
 	defun( "cdr", _cdr );
 	defun( "cons", _cons );
+	defun( "set-car!", _set_car_i );
+	defun( "set-cdr!", _set_cdr_i );
 	defun( "list", _list );
+	defun( "list*", _list_a );
 
 	defun( "not", _not );
 
 	defun( "number?", _number_p );
+	defun( "integer?", _number_p );
 	defun( "symbol?", _symbol_p );
 	defun( "pair?", _pair_p );
 	defun( "null?", _null_p );
@@ -308,5 +430,7 @@ void cfunc_init()
 	defun( "display", _display );
 	defun( "write", _write );
 	defun( "read", _read );
+	defun( "load", _load );
+	defun( "exit", _exit );
 
 }

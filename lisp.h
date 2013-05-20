@@ -34,6 +34,7 @@ typedef enum {
 	OP_SET_I,
 	OP_SET_I2,
 	OP_LET,
+	OP_LET_A,
 	OP_LET2,
 	OP_LET3,
 	OP_LAMBDA,
@@ -41,6 +42,10 @@ typedef enum {
 	OP_EXEC_MACRO,
 	OP_IF,
 	OP_IF2,
+	OP_AND,
+	OP_AND2,
+	OP_OR,
+	OP_OR2,
 	OP_READ_EVAL,
 	OP_READ_EVAL2,
 } Operator;
@@ -95,7 +100,8 @@ typedef struct Cell {
 		struct {
 			FILE *fd;
 			bool close;
-			char *filename;
+            struct Cell *filename;
+			int line;
 		} stream;
 	} d;
 } Cell;
@@ -138,6 +144,7 @@ extern Value retained;
 
 Value gc_new( Type type );
 void gc_init();
+void gc_finalize();
 void gc_run( int verbose );
 
 Value retain( Value v );
@@ -246,6 +253,7 @@ Value continuation_new( Value code, Value bundle, Value next );
 #define STREAM_FD(v) (V2STREAM(v)->d.stream.fd)
 #define STREAM_CLOSE(v) (V2STREAM(v)->d.stream.close)
 #define STREAM_FILENAME(v) (V2STREAM(v)->d.stream.filename)
+#define STREAM_LINE(v) (V2STREAM(v)->d.stream.line)
 
 Value stream_new( FILE *fd, bool close, char *filename );
 int stream_getc( Value s );
@@ -273,7 +281,7 @@ extern Value NIL;
 extern Value VALUE_T;
 extern Value VALUE_F;
 extern Value V_EOF;
-extern Value V_STDOUT, V_STDIN, V_END_OF_LINE;
+extern Value V_STDOUT, V_STDIN, V_SRC_FILE, V_END_OF_LINE;
 
 extern Value V_BEGIN;
 extern Value V_CALL0;
@@ -281,13 +289,13 @@ extern Value V_CALL1;
 extern Value V_QUOTE;
 extern Value V_DEFINE, V_DEFINE2;
 extern Value V_SET_I, V_SET_I2;
-extern Value V_LET, V_LET2, V_LET3;
+extern Value V_LET, V_LET_A, V_LET2, V_LET3;
 extern Value V_LAMBDA, V_MACRO, V_EXEC_MACRO;
-extern Value V_IF, V_IF2;
+extern Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 extern Value V_READ_EVAL, V_READ_EVAL2;
 
 extern Value SYM_A_DEBUG_A, SYM_A_COMPILE_HOOK_A, SYM_QUASIQUOTE, SYM_UNQUOTE,
-	SYM_CURRENT_INPUT_PORT, SYM_CURRENT_OUTPUT_PORT, SYM_END_OF_LINE;
+	SYM_CURRENT_INPUT_PORT, SYM_CURRENT_OUTPUT_PORT, SYM_END_OF_LINE, SYM_VALUES;
 
 extern bool opt_trace;
 extern bool opt_debug;
