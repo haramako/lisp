@@ -9,6 +9,7 @@ int main( int argc, char **argv )
 {
 	init_prelude(false);
 
+	/*
 	printf( "%u\n", value_hash(string_new("hoge")) );
 	printf( "%u\n", value_hash(string_new("hoge")) );
 	printf( "%u\n", value_hash(string_new("fuga")) );
@@ -17,6 +18,7 @@ int main( int argc, char **argv )
 	printf( "%u\n", value_hash(intern("hoge")));
 	printf( "%u\n", value_hash(intern("hoge")));
 	printf( "%u\n", value_hash(intern("fuga")));
+	*/
 
 	/*
 	Dict *d1 = dict_new();

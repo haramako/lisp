@@ -1,3 +1,5 @@
+(load "minitest.sch")
+
 ;; test type operator
 (assert #t (symbol? 'a))
 (assert #f (symbol? 0))
@@ -155,4 +157,4 @@
 			 (cont 1 2)
 			 (assert eqv? #t #f)))))
 
-(exit (if *minitest-failed* 1 0))
+(minitest-finish)

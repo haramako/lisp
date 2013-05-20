@@ -584,13 +584,11 @@
 	  (lambda (result)
 		(equal? result '(olive orange osier palm papaw))))
 
-(COMMENT
 (test 'take:rear-of-list
 	  (take '(pecan persimmon pine pistachio plane plum pomegranite) 
 			-5)
 	  (lambda (result)
 		(equal? result '(pine pistachio plane plum pomegranite))))
-)
 
 (test 'take:none-of-list
 	  (take '(poplar quince redwood) 0)
@@ -612,11 +610,9 @@
 			5)
 	  (lambda (result) (equal? result '(tamarind tamarugo))))
 
-(COMMENT
 (test 'drop:rear-of-list
 	  (drop '(tangerine teak thuja torchwood upas walnut wandoo) -5)
 	  (lambda (result) (equal? result '(tangerine teak))))
-)
 
 (test 'drop:none-of-list
 	  (drop '(whitebeam whitethorn wicopy) 0)
@@ -646,7 +642,6 @@
 		(equal? result '(ylang-ylang zebrawood affenpinscher afghan
 									 airedale))))
 
-(COMMENT
 (test 'take!:rear-of-list
 	  (take! (list 'basenji 'basset 'beagle 'bloodhound 'boarhound
 				   'borzoi 'boxer) 
@@ -654,7 +649,6 @@
 	  (lambda (result)
 		(equal? result '(beagle bloodhound boarhound borzoi
 								boxer))))
-)
 
 (test 'take!:none-of-list
 	  (take! (list 'briard 'bulldog 'chihuahua) 0)
