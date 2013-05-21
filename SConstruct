@@ -4,7 +4,7 @@ import commands
 
 env = DefaultEnvironment(CC='cc', **os.environ)
 env.AppendUnique(
-    CCFLAGS=['-Wall', '-O2', '-std=c99', '-g'],
+    CCFLAGS=['-Wall', '-O0', '-std=c99', '-g'],
     LIBS=['m'] )
 
 LISP_LIBS = ['lisp.c', 'gc.c', 'dict.c', 'cfunc.c']

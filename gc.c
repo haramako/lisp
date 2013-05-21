@@ -38,6 +38,7 @@ Value gc_new( Type type )
 	cell->marked = -1;
 	prof.use++;
 	prof.alloc_count++;
+	prof.cell_count[type]++;
 	return cell;
 }
 

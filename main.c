@@ -61,7 +61,7 @@ int main( int argc, char **argv )
 			exit(1);
 		}
 		Value v = eval_loop( V_SRC_FILE = stream_new(f,true,argv[n]) );
-		if( V_IS_INT(v) ) result = V2INT(v);
+		if( IS_INT(v) ) result = V2INT(v);
 	}
     
 	// show_prof();

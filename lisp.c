@@ -7,112 +7,134 @@
 
 Profile prof;
 
+const char *TYPE_NAMES[] = {
+	"UNUSED",
+	"NIL",
+	"BOOL",
+	"INT",
+	"SYMBOL",
+	"STRING",
+	"PAIR",
+	"LAMBDA",
+	"BUNDLE",
+	"CONTINUATION",
+	"SPECIAL",
+	"STREAM",
+};
+
+const char* LAMBDA_TYPE_NAME[] = {
+	"LAMBDA",
+	"MACRO",
+	"CFUNC",
+	"CMACRO"
+};
+
 //********************************************************
 // Utility
 //********************************************************
 
-size_t value_to_str( char *buf, Value v )
+static size_t _value_to_str( char *buf, int len, Value v )
 {
-	char *orig_buf = buf;
+	if( len <= 0 ) return len;
+	
+	char n = 0;
 	if( !v ){
-		buf += sprintf( buf, "(NULL)" );
-		return buf - orig_buf;
+		n += snprintf( buf, len, "(NULL)" );
+		return n;
 	}
 	// printf( "%d\n", TYPE_OF(v) );
 	switch( TYPE_OF(v) ){
 	case TYPE_UNUSED:
 		assert(0);
 	case TYPE_NIL:
-		buf += sprintf( buf, "()" );
+		n += snprintf( buf, len,"()" );
 		break;
 	case TYPE_BOOL:
-		buf += sprintf( buf, (v==VALUE_T)?"#t":"#f" );
+		n += snprintf( buf, len, (v==VALUE_T)?"#t":"#f" );
 		break;
 	case TYPE_INT:
-		buf += sprintf( buf, "%lld", V2INT(v) );
+		n += snprintf( buf, len, "%lld", V2INT(v) );
 		break;
 	case TYPE_SYMBOL:
-		buf += sprintf( buf, "%s", STRING_STR(SYMBOL_STR(v)) );
+		n += snprintf( buf, len, "%s", STRING_STR(SYMBOL_STR(v)) );
 		break;
 	case TYPE_STRING:
-		buf += sprintf( buf, "\"%s\"", STRING_STR(v) );
+		n += snprintf( buf, len, "\"%s\"", STRING_STR(v) );
 		break;
 	case TYPE_LAMBDA:
 		{
-			char *type;
-			switch( LAMBDA_KIND(v) ){
-			case LAMBDA_TYPE_LAMBDA:
-				type = "LAMBDA";
-				break;
-			case LAMBDA_TYPE_MACRO:
-				type = "MACRO";
-				break;
-			case LAMBDA_TYPE_CFUNC:
-				type = "CFUNC";
-				break;
-			case LAMBDA_TYPE_CMACRO:
-				type = "CMACRO";
-				break;
-			default:
-				assert(0);
-			}
 			if( LAMBDA_NAME(v) != NIL ){
-				buf += sprintf( buf, "(%s:%s)", type, STRING_STR(SYMBOL_STR(LAMBDA_NAME(v))) );
+				n += snprintf( buf, len, "(%s:%s)", LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], STRING_STR(SYMBOL_STR(LAMBDA_NAME(v))) );
 			}else{
-				buf += sprintf( buf, "(%s:%p)", type, v );
+				n += snprintf( buf, len, "(%s:%p)", LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], v );
 			}
 		}
 		break;
 	case TYPE_PAIR:
-		buf += sprintf( buf, "(" );
+		n += snprintf( buf, len, "(" );
 		bool finished = false;
 		while( !finished ){
 			switch( TYPE_OF(CDR(v)) ){
 			case TYPE_NIL:
-				buf += value_to_str( buf, CAR(v) );
+				n += value_to_str( buf+n, len-n, CAR(v) );
+				if( n >= len ) return len;
 				finished = true;
 				break;
 			case TYPE_PAIR:
-				buf += value_to_str( buf, CAR(v) );
-				buf += sprintf( buf, " " );
+				n += value_to_str( buf+n, len-n, CAR(v) );
+				if( n >= len ) return len;
+				n += snprintf( buf+n, len-n, " " );
+				if( n >= len ) return len;
 				break;
 			default:
-				buf += value_to_str( buf, CAR(v) );
-				buf += sprintf( buf, " . " );
-				buf += value_to_str( buf, CDR(v) );
+				n += value_to_str( buf+n, len-n, CAR(v) );
+				if( n >= len ) return len;
+				n += snprintf( buf+n, len-n, " . " );
+				if( n >= len ) return len;
+				n += value_to_str( buf+n, len-n, CDR(v) );
+				if( n >= len ) return len;
 				finished = true;
 				break;
 			}
 			v = CDR(v);
 		}
-		buf += sprintf( buf, ")" );
+		n += snprintf( buf+n, len-n, ")" );
 		break;
 	case TYPE_BUNDLE:
-		buf += sprintf( buf, "(BUNDLE:%p)", v );
+		n += snprintf( buf+n, len-n, "(BUNDLE:%p)", v );
 		break;
 	case TYPE_CONTINUATION:
-		buf += sprintf( buf, "(CONTINUATION:%p)", v );
+		n += snprintf( buf+n, len-n, "(CONTINUATION:%p)", v );
 		break;
 	case TYPE_SPECIAL:
-		buf += sprintf( buf, "%s", SPECIAL_STR(v) );
+		n += snprintf( buf+n, len-n, "%s", SPECIAL_STR(v) );
 		break;
 	case TYPE_STREAM:
-		buf += sprintf( buf, "(STREAM:%s)", STRING_STR(STREAM_FILENAME(v)) );
+		n += snprintf( buf+n, len-n, "(STREAM:%s)", STRING_STR(STREAM_FILENAME(v)) );
 		break;
 	}
-	return buf - orig_buf;
+
+	return n;
+}
+
+size_t value_to_str( char *buf, int len, Value v )
+{
+	size_t n = _value_to_str( buf, len, v );
+	if( n >= len ) buf[len-1] = '\0'; // snprintf()が長さ以上に書き込むと終端してくれないので、念のため、終端させておく
+	return n;
 }
 
 char* v2s( Value v )
 {
-	return v2s_limit( v, 10240-4 );
+	return v2s_limit( v, 1024 );
 }
 
 char* v2s_limit( Value v, int limit )
 {
 	char buf[10240];
-	value_to_str(buf, v);
-	if( strlen(buf) > limit ) strcpy( buf+limit, "..." );
+	if( limit >= sizeof(buf) ) assert(0);
+	int len = value_to_str(buf, limit, v);
+	if( len >= limit ) strcpy( buf+limit-4, "..." );
 	return STRING_STR(string_new(buf));
 }
 
@@ -139,7 +161,7 @@ bool eqv( Value a, Value b )
 	if( eq(a,b) ) return true;
 	switch( TYPE_OF(a) ){
 	case TYPE_STRING:
-		if( !V_IS_STRING(b) ) return false;
+		if( !IS_STRING(b) ) return false;
 		return ( strcmp(STRING_STR(a),STRING_STR(b)) == 0 );
 	default:
 		return false;
@@ -151,7 +173,7 @@ bool equal( Value a, Value b )
 	if( eqv(a,b) ) return true;
 	switch( TYPE_OF(a) ){
 	case TYPE_PAIR:
-		if( !V_IS_PAIR(b) ) return false;
+		if( !IS_PAIR(b) ) return false;
 		if( equal( CAR(a), CAR(b) ) ){
 			return equal(CDR(a), CDR(b));
 		}else{
@@ -224,9 +246,6 @@ Value lambda_new()
 // Pair
 //********************************************************
 
-Value nthcdr( int n, Value v ){ for(;n>0;n--){ v = CDR(v); } return v; }
-Value nth( int n, Value v ){ return CAR(nthcdr(n,v)); }
-
 Value cons( Value car, Value cdr )
 {
 	Value v = gc_new(TYPE_PAIR);
@@ -235,7 +254,7 @@ Value cons( Value car, Value cdr )
 	return v;
 }
 
-size_t value_length( Value v )
+size_t list_length( Value v )
 {
 	size_t len = 0;
 	for( Value cur=v; cur != NIL; cur = CDR(cur) ) len++;
@@ -302,7 +321,7 @@ void bundle_define( Value b, Value sym, Value v )
 	}
 	entry->val = v;
 	
-	if( V_IS_LAMBDA(v) && LAMBDA_NAME(v) == NIL ) LAMBDA_NAME(v) = sym;
+	if( IS_LAMBDA(v) && LAMBDA_NAME(v) == NIL ) LAMBDA_NAME(v) = sym;
 }
 
 Value bundle_get( Value b, Value sym )
@@ -561,7 +580,7 @@ Value stream_read( Value s )
 Value stream_write( Value s, Value v )
 {
 	char buf[10240];
-	value_to_str(buf, v);
+	value_to_str(buf, sizeof(buf), v);
 	fputs( buf, STREAM_FD(s) );
 	return NIL;
 }
@@ -573,15 +592,15 @@ Value stream_write( Value s, Value v )
 Value call( Value lmd, Value vals, Value cont, Value *result )
 {
 	Value orig_vals = vals;
-	switch( LAMBDA_KIND(lmd) ){
+	switch( LAMBDA_TYPE(lmd) ){
 	case LAMBDA_TYPE_LAMBDA:
 	case LAMBDA_TYPE_MACRO:
 		{
 			Value bundle = bundle_new( LAMBDA_BUNDLE(lmd) );
 			BUNDLE_LAMBDA(bundle) = lmd;
 			for( Value cur=LAMBDA_ARGS(lmd); cur != NIL; cur=CDR(cur), vals=CDR(vals) ){
-				if( V_IS_PAIR(cur) ){
-					if( !V_IS_PAIR(vals) ){
+				if( IS_PAIR(cur) ){
+					if( !IS_PAIR(vals) ){
 						printf( "call: %s orig_vals: %s lmd: %s\n", v2s(LAMBDA_BODY(lmd)), v2s(orig_vals), v2s(LAMBDA_ARGS(lmd)) );
 					}
 					bundle_define( bundle, CAR(cur), CAR(vals) );
@@ -603,6 +622,11 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 }
 
 #define NEXT(_cont,_v) do{ Value r = _v; cont = _cont; result = (r); goto _loop; }while(0)
+#define ERROR(mes) do{													\
+		Value _code = C_CODE(cont);										\
+		NEXT( CONT( cons4( intern("error"), string_new(mes), cons3(V_QUOTE,_code,NIL), NIL ), \
+					C_BUNDLE(cont), C_NEXT(cont)), NIL); }while(0)
+
 #define CONT continuation_new
 #define CONT_OP(op,a,b,c) continuation_new(cons(op,a),b,c)
 #define C_BUNDLE CONTINUATION_BUNDLE
@@ -626,7 +650,7 @@ Value eval_loop( Value code )
 	}
 	
 	if( cont == NIL ) return result;
-	// display_val( "> ", C_CODE(cont) );
+	// printf( "> %s\n", v2s_limit(C_CODE(cont), 80) );
 	// display_val( "=> ", result );
 	switch( TYPE_OF(C_CODE(cont)) ){
 	case TYPE_UNUSED:
@@ -651,256 +675,249 @@ Value eval_loop( Value code )
 			NEXT( C_NEXT(cont), found->val );
 		}
 	case TYPE_PAIR:
-		if( !V_IS_SPECIAL(CAR(C_CODE(cont))) ){
+		if( !IS_SPECIAL(CAR(C_CODE(cont))) ){
 			NEXT( CONT( CAR(C_CODE(cont)), C_BUNDLE(cont), 
 						CONT_OP( V_CALL0, CDR(C_CODE(cont)), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-		}else{
-			Value code = CDR(C_CODE(cont));
-			Operator op = SPECIAL_OP(CAR(C_CODE(cont)));
-			switch( op ){
-			case OP_BEGIN:
+		}
+		
+		Value code = CDR(C_CODE(cont));
+		Operator op = SPECIAL_OP(CAR(C_CODE(cont)));
+		switch( op ){
+		case OP_BEGIN:
+			// display_val( "OP_BEGIN: ", code );
+			if( code == NIL ){
+				NEXT( C_NEXT(cont), result );
+			}else if( CDR(code) == NIL ){
+				NEXT( CONT( CAR(code), C_BUNDLE(cont), C_NEXT(cont)), result );
+			}else{
+				NEXT( CONT( CAR(code), C_BUNDLE(cont),
+							CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+			}
+			
+		case OP_QUOTE:
+			NEXT( C_NEXT(cont), CAR(code) );
+			
+		case OP_CALL0:
+			// display_val( "OP_CALL0: ", cons( result, C_CODE(cont) ) );
+			switch( TYPE_OF(result) ){
+			case TYPE_LAMBDA:
 				{
-					// display_val( "OP_BEGIN: ", code );
-					if( code == NIL ){
-						NEXT( C_NEXT(cont), result );
-					}else if( CDR(code) == NIL ){
-						NEXT( CONT( CAR(code), C_BUNDLE(cont), C_NEXT(cont)), result );
-					}else{
-						NEXT( CONT( CAR(code), C_BUNDLE(cont),
-									CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-					}
-				}
-			case OP_QUOTE:
-				NEXT( C_NEXT(cont), CAR(code) );
-			case OP_CALL0:
-				// display_val( "OP_CALL0: ", cons( result, C_CODE(cont) ) );
-				switch( TYPE_OF(result) ){
-				case TYPE_LAMBDA:
-					{
-						Value args = cons(result,NIL);
-						Value lmd = result;
-						switch( LAMBDA_KIND(lmd) ){
-						case LAMBDA_TYPE_LAMBDA:
-						case LAMBDA_TYPE_CFUNC:
-							if( code != NIL ){
-								NEXT( CONT( CAR(code), C_BUNDLE(cont),
-											CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) ),
-									  NIL );
-							}else{
-								Value res = NIL;
-								Value next = call( lmd, NIL, cont, &res);
-								NEXT( next, res );
-							}
-						case LAMBDA_TYPE_MACRO:
-							{
-								Value cont2 = call( lmd, code, cont, NULL );
-								C_NEXT(cont2) = CONT_OP( V_EXEC_MACRO, NIL, C_BUNDLE(cont), C_NEXT(cont));
-								NEXT( cont2, NIL );
-							}
-						case LAMBDA_TYPE_CMACRO:
-							{
-								Value expanded;
-								Value next = call( lmd, code, cont, &expanded );
-								NEXT( CONT_OP( V_BEGIN, expanded, C_BUNDLE(cont), next ), NIL );
-							}
-						}
-					}
-				case TYPE_SPECIAL:
-					NEXT( CONT_OP( result, code, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
-				case TYPE_CONTINUATION:
-					{
-						Value args = cons(result,NIL);
-						NEXT( CONT( CAR(code), C_BUNDLE(cont),
-									CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) ),
-							  NIL );
-					}
-				default:
-					printf( "OP_CALL0: result: %s code: %s\n", v2s(result), v2s(C_CODE(cont)) );
-					assert(0);
-				}
-			case OP_CALL1:
-				{
-					// display_val( "OP_CALL1: ", C_CODE(cont) );
-					Value rest, vals, tmp;
-					bind3(code,rest,vals,tmp);
-					CDR(tmp) = cons( result, NIL );
-					if( rest != NIL ){
-						NEXT( CONT( CAR(rest), C_BUNDLE(cont),
-									CONT_OP( V_CALL1, cons4( CDR(rest), vals, CDR(tmp), NIL ), C_BUNDLE(cont), C_NEXT(cont) ) ),
-							  NIL );
-					}else{
-						Value lmd = CAR(vals);
-						if( V_IS_LAMBDA(lmd) ){
-							switch( LAMBDA_KIND(lmd) ){
-							case LAMBDA_TYPE_LAMBDA:
-								NEXT( call( lmd, CDR(vals), cont, NULL ), NIL );
-							case LAMBDA_TYPE_CFUNC:
-								{
-									Value val = NIL;
-									Value next = LAMBDA_FUNC(lmd)( CDR(vals), cont, &val );
-									NEXT( next, val );
-								}
-							default:
-								assert(0);
-							}
-						}else if( V_IS_CONTINUATION(lmd) ){
-							vals = CDR(vals);
-							if( CDR(vals) != NIL ){
-								NEXT( lmd, cons( SYM_VALUES, vals ));
-							}else{
-								NEXT( lmd, CAR(vals) );
-							}
+					Value args = cons(result,NIL);
+					Value lmd = result;
+					switch( LAMBDA_TYPE(lmd) ){
+					case LAMBDA_TYPE_LAMBDA:
+					case LAMBDA_TYPE_CFUNC:
+						if( code != NIL ){
+							NEXT( CONT( CAR(code), C_BUNDLE(cont),
+										CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) ),
+								  NIL );
 						}else{
+							Value res = NIL;
+							Value next = call( lmd, NIL, cont, &res);
+							NEXT( next, res );
+						}
+					default:
+						ERROR( "cannot call" );
+					}
+				}
+			case TYPE_SPECIAL:
+				NEXT( CONT_OP( result, code, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+			case TYPE_CONTINUATION:
+				{
+					Value args = cons(result,NIL);
+					NEXT( CONT( CAR(code), C_BUNDLE(cont),
+								CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) ),
+						  NIL );
+				}
+			default:
+				printf( "OP_CALL0: result: %s code: %s\n", v2s(result), v2s(C_CODE(cont)) );
+				assert(0);
+			}
+			
+		case OP_CALL1:
+			{
+				// display_val( "OP_CALL1: ", C_CODE(cont) );
+				Value rest, vals, tmp;
+				bind3(code,rest,vals,tmp);
+				CDR(tmp) = cons( result, NIL );
+				if( rest != NIL ){
+					NEXT( CONT( CAR(rest), C_BUNDLE(cont),
+								CONT_OP( V_CALL1, cons4( CDR(rest), vals, CDR(tmp), NIL ), C_BUNDLE(cont), C_NEXT(cont) ) ),
+						  NIL );
+				}else{
+					Value lmd = CAR(vals);
+					if( IS_LAMBDA(lmd) ){
+						switch( LAMBDA_TYPE(lmd) ){
+						case LAMBDA_TYPE_LAMBDA:
+							NEXT( call( lmd, CDR(vals), cont, NULL ), NIL );
+						case LAMBDA_TYPE_CFUNC:
+							{
+								Value val = NIL;
+								Value next = LAMBDA_FUNC(lmd)( CDR(vals), cont, &val );
+								NEXT( next, val );
+							}
+						default:
 							assert(0);
 						}
-					}
-				}
-			case OP_DEFINE:
-				{
-					if( V_IS_SYMBOL(CAR(code)) ){
-						// (define sym val) の形
-						NEXT( CONT( CADR(code), C_BUNDLE(cont),
-									CONT_OP( V_DEFINE2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) ), NIL );
-					}else if( V_IS_PAIR(CAR(code)) ){
-						// (define (sym args ... ) の形
-						NEXT( CONT( cons3( V_LAMBDA, CDAR(code), CDR(code) ), C_BUNDLE(cont),
-									CONT_OP( V_DEFINE2, CAAR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+					}else if( IS_CONTINUATION(lmd) ){
+						vals = CDR(vals);
+						if( CDR(vals) != NIL ){
+							NEXT( lmd, cons( SYM_VALUES, vals ));
+						}else{
+							NEXT( lmd, CAR(vals) );
+						}
 					}else{
 						assert(0);
 					}
 				}
-				
-			case OP_DEFINE2:
-				bundle_define( C_BUNDLE(cont), code, result );
-				NEXT( C_NEXT(cont), NIL );
-				
-			case OP_SET_I:
-				NEXT( CONT( CAR(CDR(code)), C_BUNDLE(cont),
-							CONT_OP( V_SET_I2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) ), NIL );
-				
-			case OP_SET_I2:
-				bundle_set( C_BUNDLE(cont), code, result );
-				NEXT( C_NEXT(cont), NIL );
-
-			case OP_LET:
-			case OP_LET_A:
-				// display_val( "LET: ", code );
-				if( V_IS_PAIR( CAR(code) )){
-					// normal let
-					NEXT( CONT_OP( V_LET2, code, bundle_new( C_BUNDLE(cont) ), C_NEXT(cont)), NIL );
-				}else if( V_IS_SYMBOL( CAR(code) ) ){
-					// named let
-					Value bundle = bundle_new( C_BUNDLE(cont) );
-					Value name = CAR(code);
-					Value lmd = lambda_new();
-					LAMBDA_KIND(lmd) = LAMBDA_TYPE_LAMBDA;
-					LAMBDA_BUNDLE(lmd) = bundle;
-					Value lmd_args = cons( NIL, NIL );
-					Value lmd_args_tail = lmd_args;
-					Value lmd_vals = cons( NIL, NIL );
-					Value lmd_vals_tail = lmd_vals;
-					for( Value cur=CADR(code); cur != NIL; cur=CDR(cur) ){
-						lmd_args_tail = CDR(lmd_args_tail) = cons( CAR(CAR(cur)), NIL);
-						lmd_vals_tail = CDR(lmd_vals_tail) = cons( CADR(CAR(cur)), NIL);
-					}
-					LAMBDA_ARGS(lmd) = CDR(lmd_args);
-					LAMBDA_BODY(lmd) = CDDR(code);
-					bundle_define( bundle, name, lmd );
-					Value call_form = cons( lmd, CDR(lmd_vals) );
-					//display_val( "let: ", cons3( LAMBDA_ARGS(lmd), LAMBDA_BODY(lmd), NIL) );
-					//display_val( "let: ", call_form );
-					NEXT( CONT( call_form, bundle, C_NEXT(cont)), NIL );
+			}
+			
+		case OP_DEFINE:
+			{
+				if( IS_SYMBOL(CAR(code)) ){
+					// (define sym val) の形
+					NEXT( CONT( CADR(code), C_BUNDLE(cont),
+								CONT_OP( V_DEFINE2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) ), NIL );
+				}else if( IS_PAIR(CAR(code)) ){
+					// (define (sym args ... ) の形
+					NEXT( CONT( cons3( V_LAMBDA, CDAR(code), CDR(code) ), C_BUNDLE(cont),
+								CONT_OP( V_DEFINE2, CAAR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
 				}else{
 					assert(0);
 				}
+			}
 				
-			case OP_LET2:
-				if( CAR(code) != NIL ){
-					Value args = CAR(code);
-					NEXT( CONT( CADR(CAR(args)), C_BUNDLE(cont),
-								CONT_OP( V_LET3, cons3( CAAR(args), CDR(args), CDR(code) ), C_BUNDLE(cont), C_NEXT(cont) )), NIL);
-				}else{
-					NEXT( CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
-				}
+		case OP_DEFINE2:
+			bundle_define( C_BUNDLE(cont), code, result );
+			NEXT( C_NEXT(cont), NIL );
 				
-			case OP_LET3:
-				bundle_define( C_BUNDLE(cont), CAR(code), result );
-				NEXT( CONT_OP( V_LET2, CDR(code), C_BUNDLE(cont), C_NEXT(cont)), NIL );
+		case OP_SET_I:
+			NEXT( CONT( CAR(CDR(code)), C_BUNDLE(cont),
+						CONT_OP( V_SET_I2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) ), NIL );
 				
-			case OP_LAMBDA:
-			case OP_MACRO:
-				{
-					// display_val( "lambda2:", result );
-					Value lmd = lambda_new();
-					LAMBDA_KIND(lmd) = (op==OP_LAMBDA)?LAMBDA_TYPE_LAMBDA:LAMBDA_TYPE_MACRO;
-					LAMBDA_BUNDLE(lmd) = C_BUNDLE(cont);
-					bind2cdr( code, LAMBDA_ARGS(lmd), LAMBDA_BODY(lmd) );
-					NEXT( C_NEXT(cont), lmd );
-				}
+		case OP_SET_I2:
+			bundle_set( C_BUNDLE(cont), code, result );
+			NEXT( C_NEXT(cont), NIL );
 
-			case OP_EXEC_MACRO:
-				// display_val( "EXEC_MACRO :", result );
-				NEXT( CONT( result, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
-				
-			case OP_IF:
-				NEXT( CONT( CAR(code), C_BUNDLE(cont),
-							CONT_OP( V_IF2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-			case OP_IF2:
-				if( result != VALUE_F ){
-					NEXT( CONT( CAR(code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
-				}else{
-					NEXT( CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+		case OP_LET:
+		case OP_LET_A:
+			// display_val( "LET: ", code );
+			if( IS_PAIR( CAR(code) )){
+				// normal let
+				NEXT( CONT_OP( V_LET2, code, bundle_new( C_BUNDLE(cont) ), C_NEXT(cont)), NIL );
+			}else if( IS_SYMBOL( CAR(code) ) ){
+				// named let
+				Value bundle = bundle_new( C_BUNDLE(cont) );
+				Value name = CAR(code);
+				Value lmd = lambda_new();
+				LAMBDA_TYPE(lmd) = LAMBDA_TYPE_LAMBDA;
+				LAMBDA_BUNDLE(lmd) = bundle;
+				Value lmd_args = cons( NIL, NIL );
+				Value lmd_args_tail = lmd_args;
+				Value lmd_vals = cons( NIL, NIL );
+				Value lmd_vals_tail = lmd_vals;
+				for( Value cur=CADR(code); cur != NIL; cur=CDR(cur) ){
+					lmd_args_tail = CDR(lmd_args_tail) = cons( CAR(CAR(cur)), NIL);
+					lmd_vals_tail = CDR(lmd_vals_tail) = cons( CADR(CAR(cur)), NIL);
 				}
+				LAMBDA_ARGS(lmd) = CDR(lmd_args);
+				LAMBDA_BODY(lmd) = CDDR(code);
+				bundle_define( bundle, name, lmd );
+				Value call_form = cons( lmd, CDR(lmd_vals) );
+				//display_val( "let: ", cons3( LAMBDA_ARGS(lmd), LAMBDA_BODY(lmd), NIL) );
+				//display_val( "let: ", call_form );
+				NEXT( CONT( call_form, bundle, C_NEXT(cont)), NIL );
+			}else{
+				ERROR( "invalid let form" );
+			}
+				
+		case OP_LET2:
+			if( CAR(code) != NIL ){
+				Value args = CAR(code);
+				NEXT( CONT( CADR(CAR(args)), C_BUNDLE(cont),
+							CONT_OP( V_LET3, cons3( CAAR(args), CDR(args), CDR(code) ), C_BUNDLE(cont), C_NEXT(cont) )), NIL);
+			}else{
+				NEXT( CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+			}
+				
+		case OP_LET3:
+			bundle_define( C_BUNDLE(cont), CAR(code), result );
+			NEXT( CONT_OP( V_LET2, CDR(code), C_BUNDLE(cont), C_NEXT(cont)), NIL );
+				
+		case OP_LAMBDA:
+		case OP_MACRO:
+			{
+				// display_val( "lambda2:", result );
+				Value lmd = lambda_new();
+				LAMBDA_TYPE(lmd) = (op==OP_LAMBDA)?LAMBDA_TYPE_LAMBDA:LAMBDA_TYPE_MACRO;
+				LAMBDA_BUNDLE(lmd) = C_BUNDLE(cont);
+				bind2cdr( code, LAMBDA_ARGS(lmd), LAMBDA_BODY(lmd) );
+				NEXT( C_NEXT(cont), lmd );
+			}
 
-			case OP_AND:
+		case OP_EXEC_MACRO:
+			// display_val( "EXEC_MACRO :", result );
+			NEXT( CONT( result, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+				
+		case OP_IF:
+			NEXT( CONT( CAR(code), C_BUNDLE(cont),
+						CONT_OP( V_IF2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+			
+		case OP_IF2:
+			if( result != VALUE_F ){
+				NEXT( CONT( CAR(code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+			}else{
+				NEXT( CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+			}
+
+		case OP_AND:
+			NEXT( CONT( CAR(code), C_BUNDLE(cont),
+						CONT_OP( V_AND2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+
+		case OP_AND2:
+			if( result != VALUE_F && IS_PAIR(code) ){
 				NEXT( CONT( CAR(code), C_BUNDLE(cont),
 							CONT_OP( V_AND2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+			}else{
+				NEXT( C_NEXT(cont), result );
+			}
 
-			case OP_AND2:
-				if( result != VALUE_F && V_IS_PAIR(code) ){
-					NEXT( CONT( CAR(code), C_BUNDLE(cont),
-								CONT_OP( V_AND2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-				}else{
-					NEXT( C_NEXT(cont), result );
-				}
+		case OP_OR:
+			NEXT( CONT( CAR(code), C_BUNDLE(cont),
+						CONT_OP( V_OR2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
 
-			case OP_OR:
+		case OP_OR2:
+			if( result == VALUE_F && IS_PAIR(code) ){
 				NEXT( CONT( CAR(code), C_BUNDLE(cont),
 							CONT_OP( V_OR2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-
-			case OP_OR2:
-				if( result == VALUE_F && V_IS_PAIR(code) ){
-					NEXT( CONT( CAR(code), C_BUNDLE(cont),
-								CONT_OP( V_OR2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-				}else{
-					NEXT( C_NEXT(cont), result );
-				}
-				
-			case OP_READ_EVAL:
-				{
-					Value stat = stream_read( code );
-					if( opt_trace ) printf( "trace: %s\n", v2s(stat) );
-					if( stat != V_EOF ){
-						Value compile_hook = bundle_get( bundle_cur, SYM_A_COMPILE_HOOK_A );
-						if( compile_hook != NIL ){
-							// *compile-hook* があればコンパイルする
-							stat = cons3( compile_hook, cons3( V_QUOTE, stat, NIL ), NIL );
-							// display_val( "READ_EVAL: ", stat );
-							NEXT( CONT( stat, C_BUNDLE(cont),
-										CONT_OP( V_READ_EVAL2, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-						}else{
-							NEXT( CONT( stat, C_BUNDLE(cont),
-										CONT_OP( V_READ_EVAL, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-						}
-					}else{
-						NEXT( C_NEXT(cont), NIL );
-					}
-				}
-				
-			case OP_READ_EVAL2:
-				NEXT( CONT( result, C_BUNDLE(cont),
-							CONT_OP( V_READ_EVAL, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+			}else{
+				NEXT( C_NEXT(cont), result );
 			}
+				
+		case OP_READ_EVAL:
+			{
+				Value stat = stream_read( code );
+				if( opt_trace ) printf( "trace: %s\n", v2s_limit(stat,100) );
+				if( stat != V_EOF ){
+					Value compile_hook = bundle_get( bundle_cur, SYM_A_COMPILE_HOOK_A );
+					if( compile_hook != NIL ){
+						// *compile-hook* があればコンパイルする
+						stat = cons3( compile_hook, cons3( V_QUOTE, stat, NIL ), NIL );
+						// display_val( "READ_EVAL: ", stat );
+						NEXT( CONT( stat, C_BUNDLE(cont),
+									CONT_OP( V_READ_EVAL2, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+					}else{
+						NEXT( CONT( stat, C_BUNDLE(cont),
+									CONT_OP( V_READ_EVAL, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+					}
+				}else{
+					NEXT( C_NEXT(cont), NIL );
+				}
+			}
+				
+		case OP_READ_EVAL2:
+			NEXT( CONT( result, C_BUNDLE(cont),
+						CONT_OP( V_READ_EVAL, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
 		}
 	}
 	assert(0);
@@ -914,7 +931,7 @@ void register_cfunc( char *sym, LambdaType type, CFunction func )
 {
 	Value v = lambda_new();
 	LAMBDA_FUNC(v) = func;
-	LAMBDA_KIND(v) = type;
+	LAMBDA_TYPE(v) = type;
 	bundle_define( bundle_cur, intern(sym), v );
 }
 
@@ -1073,7 +1090,11 @@ void finalize()
 
 void show_prof()
 {
-	printf( "size: %d / %d (%3.2f%%) total: %d\n",
+	printf( "alloc use: %d / %d (%3.2f%%) total: %d\n",
 			prof.use, prof.size, (100.0*prof.use/prof.size), prof.alloc_count );
+	printf( "cell count:\n" );
+	for( int type=1; type<TYPE_MAX; type++ ){
+		printf( "  %16s: %8d\n", TYPE_NAMES[type], prof.cell_count[type] );
+	}
 }
 

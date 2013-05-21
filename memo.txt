@@ -1,10 +1,13 @@
 
+* define-macro を scheme的に
+* define-syntax
 * let と let*の区別
-* SRFI-0 list library
 * string関係の関数
 * string stream
 * intを埋め込みに
+* デバッグ用の変数を指定する関数 (*runtime-option* "trace" 1) みたいな
 
+- SRFI-1 list library
 - 名前付きlet
 - gcをまともに
 - bundle を hashに

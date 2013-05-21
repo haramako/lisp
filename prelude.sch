@@ -57,20 +57,22 @@
 	(display " ")
 	(apply puts (cdr x))))
 
-(define-macro (cond . form)
-  (let recur ((form form))
-	(if (not (pair? form)) '(#f)
-		(let ((c (car form))
-			  (rest (cdr form)))
-		  (if (and (pair? c)
-				   (eq? (car (cdr c)) '=>))
-			  (list 'if (car c) (list (car (cdr (cdr c))) (car c)) (recur rest))
-			  (list 'if (car c) (cons 'begin (cdr c)) (recur rest)))))))
+(define cond
+  (macro form
+	(let recur ((form form))
+	  (if (not (pair? form)) '(#f)
+		  (let ((c (car form))
+				(rest (cdr form)))
+			(if (and (pair? c)
+					 (eq? (car (cdr c)) '=>))
+				(list 'if (car c) (list (car (cdr (cdr c))) (car c)) (recur rest))
+				(list 'if (car c) (cons 'begin (cdr c)) (recur rest))))))))
 
 (define else #t)
 
 (define (error . mes)
   (puts "error:" mes)
+  (backtrace)
   (exit 1))
 
 ;;; macro expander
@@ -86,6 +88,8 @@
 	   (apply (eval (car form)) (cdr form)))
 	form))
 
+1
+
 (define (macro-expand-all form)
   (define macro-expand-list
 	(lambda (form)
@@ -98,6 +102,7 @@
 	(cons (macro-expand-all (car form)) (macro-expand-list (cdr form)))))
 
 (define *compile-hook* macro-expand-all)
+;; ここからマクロが有効化
 
 (define-macro (when c . t)
   (list 'if c (cons 'begin t)))
@@ -109,17 +114,17 @@
 		r)))
 
 (define (append . lists)
-  (define (append-reverse-1 r lis)
+  (define (prepend-1 r lis)
 	(if (pair? lis)
-		(append-reverse-1 (cons (car lis) r) (cdr lis))
+		(cons (car lis) (prepend-1 r (cdr lis)))
 		r))
   (if (pair? lists)
 	  (let recur ((r '())
 				  (list1 (car lists))
 				  (lists (cdr lists)))
 		(if (pair? lists)
-			(recur (append-reverse-1 r list1) (car lists) (cdr lists))
-			(append-reverse-1 r list1)))
+			(prepend-1 (recur r (car lists) (cdr lists)) list1)
+			(prepend-1 r list1)))
 	  '()))
 
 ;; copy from tinyscheme.

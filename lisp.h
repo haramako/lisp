@@ -19,10 +19,13 @@ typedef enum {
 	TYPE_CONTINUATION,
 	TYPE_SPECIAL,
 	TYPE_STREAM,
+	TYPE_MAX,
 } Type;
 
 #define TYPE_MASK_INT 1
 #define VALUE_MIN_POINTER 128
+
+extern const char *TYPE_NAMES[];
 
 typedef enum {
 	OP_BEGIN = 0,
@@ -56,6 +59,8 @@ typedef enum {
 	LAMBDA_TYPE_MACRO,
 	LAMBDA_TYPE_CMACRO,
 } LambdaType;
+
+extern const char* LAMBDA_TYPE_NAME[];
 
 typedef struct Cell* (*CFunction)( struct Cell *args, struct Cell *cont, struct Cell **result );
 
@@ -112,28 +117,28 @@ typedef Cell* Value;
 
 #define TYPE_OF(v) (v->type)
 
-#define V_IS_INT(v) (v->type==TYPE_INT)
-#define V_IS_SYMBOL(v) ((v)->type==TYPE_SYMBOL)
-#define V_IS_STRING(v) ((v)->type==TYPE_STRING)
-#define V_IS_PAIR(v) ((v)->type==TYPE_PAIR)
-#define V_IS_LAMBDA(v) ((v)->type==TYPE_LAMBDA)
-#define V_IS_BUNDLE(v) ((v)->type==TYPE_BUNDLE)
-#define V_IS_CONTINUATION(v) ((v)->type==TYPE_CONTINUATION)
-#define V_IS_SPECIAL(v) ((v)->type==TYPE_SPECIAL)
-#define V_IS_STREAM(v) ((v)->type==TYPE_STREAM)
+#define IS_INT(v) (v->type==TYPE_INT)
+#define IS_SYMBOL(v) ((v)->type==TYPE_SYMBOL)
+#define IS_STRING(v) ((v)->type==TYPE_STRING)
+#define IS_PAIR(v) ((v)->type==TYPE_PAIR)
+#define IS_LAMBDA(v) ((v)->type==TYPE_LAMBDA)
+#define IS_BUNDLE(v) ((v)->type==TYPE_BUNDLE)
+#define IS_CONTINUATION(v) ((v)->type==TYPE_CONTINUATION)
+#define IS_SPECIAL(v) ((v)->type==TYPE_SPECIAL)
+#define IS_STREAM(v) ((v)->type==TYPE_STREAM)
 
-#define V2INT(v) (assert(V_IS_INT(v)),v->d.number)
+#define V2INT(v) (assert(IS_INT(v)),v->d.number)
 #define INT2V(v) (int_new(v))
-#define V2SYMBOL(v) (assert(V_IS_SYMBOL(v)),v)
-#define V2STRING(v) (assert(V_IS_STRING(v)),v)
-#define V2PAIR(v) (assert(V_IS_PAIR(v)),v)
-#define V2LAMBDA(v) (assert(V_IS_LAMBDA(v)),v)
-#define V2BUNDLE(v) (assert(V_IS_BUNDLE(v)),v)
-#define V2CONTINUATION(v) (assert(V_IS_CONTINUATION(v)),v)
-#define V2SPECIAL(v) (assert(V_IS_SPECIAL(v)),v)
-#define V2STREAM(v) (assert(V_IS_STREAM(v)),v)
+#define V2SYMBOL(v) (assert(IS_SYMBOL(v)),v)
+#define V2STRING(v) (assert(IS_STRING(v)),v)
+#define V2PAIR(v) (assert(IS_PAIR(v)),v)
+#define V2LAMBDA(v) (assert(IS_LAMBDA(v)),v)
+#define V2BUNDLE(v) (assert(IS_BUNDLE(v)),v)
+#define V2CONTINUATION(v) (assert(IS_CONTINUATION(v)),v)
+#define V2SPECIAL(v) (assert(IS_SPECIAL(v)),v)
+#define V2STREAM(v) (assert(IS_STREAM(v)),v)
 
-size_t value_to_str( char *buf, Value v );
+size_t value_to_str( char *buf, int len, Value v );
 char* v2s( Value v );
 char* v2s_limit( Value v, int limit );
 void vdump( Value v );
@@ -194,7 +199,7 @@ Value string_new( char *str );
 
 // Lambda
 
-#define LAMBDA_KIND(v) (V2LAMBDA(v)->d.lambda.type)
+#define LAMBDA_TYPE(v) (V2LAMBDA(v)->d.lambda.type)
 #define LAMBDA_NAME(v) (V2LAMBDA(v)->d.lambda.name)
 #define LAMBDA_ARGS(v) (V2LAMBDA(v)->d.lambda.args)
 #define LAMBDA_BODY(v) (V2LAMBDA(v)->d.lambda.body)
@@ -222,13 +227,13 @@ Value lambda_new();
 #define bind2(list,v1,v2) do{bind2cdr(list,v1,v2);v2=CAR(v2);}while(0);
 #define bind3(list,v1,v2,v3) do{bind3cdr(list,v1,v2,v3);v3=CAR(v3);}while(0);
 #define bind4(list,v1,v2,v3,v4) do{bind4cdr(list,v1,v2,v3,v4);v4=CAR(v4);}while(0);
-#define BINDX(v) if(V_IS_PAIR(_)){v=CAR(_);_=CDR(_);}else{v=NULL;}
+#define BINDX(v) if(IS_PAIR(_)){v=CAR(_);_=CDR(_);}else{v=NULL;}
 #define bind1arg(list,v1) do{Value _=(list);BINDX(v1);}while(0);
 #define bind2arg(list,v1,v2) do{Value _=(list);BINDX(v1);BINDX(v2);}while(0);
 #define bind3arg(list,v1,v2,v3) do{Value _=(list);BINDX(v1);BINDX(v2);BINDX(v3);}while(0);
 
 Value cons( Value car, Value cdr );
-size_t value_length( Value v );
+size_t list_length( Value v );
 
 // Bundle
 
@@ -282,6 +287,7 @@ typedef struct {
 	int size;
 	int use;
 	int alloc_count;
+	int cell_count[TYPE_MAX];
 } Profile;
 extern Profile prof;
 

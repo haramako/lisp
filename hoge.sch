@@ -1,3 +1,8 @@
+(begin
+  (let () )
+  (puts 1))
+
+
 (load "srfi-1.sch")
 
 (puts `(1 2 ,@'(3 4) 5))
@@ -43,6 +48,8 @@
   (puts (append '(1 2) '(3 4) '() '(5 6)))
   (puts (append '()))
   (puts (append '() '(1 2)))
+  (define x '(100 200))
+  (puts (append x '(3)))
   (puts (append))
   )
 

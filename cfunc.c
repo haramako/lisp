@@ -220,19 +220,19 @@ static Value _list_a( Value args, Value cont, Value *result )
 
 static Value _number_p( Value args, Value cont, Value *result )
 {
-	*result = V_IS_INT(CAR(args))?VALUE_T:VALUE_F;
+	*result = IS_INT(CAR(args))?VALUE_T:VALUE_F;
 	return CONTINUATION_NEXT(cont);
 }
 
 static Value _symbol_p( Value args, Value cont, Value *result )
 {
-	*result = V_IS_SYMBOL(CAR(args))?VALUE_T:VALUE_F;
+	*result = IS_SYMBOL(CAR(args))?VALUE_T:VALUE_F;
 	return CONTINUATION_NEXT(cont);
 }
 
 static Value _pair_p( Value args, Value cont, Value *result )
 {
-	*result = V_IS_PAIR(CAR(args))?VALUE_T:VALUE_F;
+	*result = IS_PAIR(CAR(args))?VALUE_T:VALUE_F;
 	return CONTINUATION_NEXT(cont);
 }
 
@@ -244,15 +244,15 @@ static Value _null_p( Value args, Value cont, Value *result )
 
 static Value _list_p( Value args, Value cont, Value *result )
 {
-	*result = (CAR(args)==NIL||V_IS_PAIR(CAR(args)))?VALUE_T:VALUE_F;
+	*result = (CAR(args)==NIL||IS_PAIR(CAR(args)))?VALUE_T:VALUE_F;
 	return CONTINUATION_NEXT(cont);
 }
 
 static Value _procedure_p( Value args, Value cont, Value *result )
 {
-	if( V_IS_LAMBDA(CAR(args)) ){
+	if( IS_LAMBDA(CAR(args)) ){
 		Value lmd = V2LAMBDA(CAR(args));
-		*result = (LAMBDA_KIND(lmd)==LAMBDA_TYPE_CFUNC||LAMBDA_KIND(lmd)==LAMBDA_TYPE_LAMBDA)?VALUE_T:VALUE_F;
+		*result = (LAMBDA_TYPE(lmd)==LAMBDA_TYPE_CFUNC||LAMBDA_TYPE(lmd)==LAMBDA_TYPE_LAMBDA)?VALUE_T:VALUE_F;
 	}else{
 		*result = VALUE_F;
 	}
@@ -261,9 +261,9 @@ static Value _procedure_p( Value args, Value cont, Value *result )
 
 static Value _macro_p( Value args, Value cont, Value *result )
 {
-	if( V_IS_LAMBDA(CAR(args)) ){
+	if( IS_LAMBDA(CAR(args)) ){
 		Value lmd = V2LAMBDA(CAR(args));
-		*result = (LAMBDA_KIND(lmd)==LAMBDA_TYPE_CMACRO||LAMBDA_KIND(lmd)==LAMBDA_TYPE_MACRO)?VALUE_T:VALUE_F;
+		*result = (LAMBDA_TYPE(lmd)==LAMBDA_TYPE_CMACRO||LAMBDA_TYPE(lmd)==LAMBDA_TYPE_MACRO)?VALUE_T:VALUE_F;
 	}else{
 		*result = VALUE_F;
 	}
@@ -274,7 +274,7 @@ static Value _get_closure_code( Value args, Value cont, Value *result )
 {
 	Value lmd = V2LAMBDA(CAR(args));
 	Value new_lmd = lambda_new();
-	LAMBDA_KIND(new_lmd) = LAMBDA_TYPE_LAMBDA;
+	LAMBDA_TYPE(new_lmd) = LAMBDA_TYPE_LAMBDA;
 	LAMBDA_ARGS(new_lmd) = LAMBDA_ARGS(lmd);
 	LAMBDA_BODY(new_lmd) = LAMBDA_BODY(lmd);
 	LAMBDA_FUNC(new_lmd) = LAMBDA_FUNC(lmd);
@@ -311,9 +311,13 @@ static Value _backtrace( Value args, Value cont, Value *result )
 	printf( "backtrace:\n" );
 	for( Value cur=CONTINUATION_NEXT(cont); cur != NIL; cur = CONTINUATION_NEXT(cur) ){
 		Value code = CONTINUATION_CODE(cur);
-		printf( "  %s in %s\n",
-				v2s_limit(code, 60),
-				v2s(BUNDLE_LAMBDA(CONTINUATION_BUNDLE(cur))) );
+		if( IS_PAIR(code) && CAR(code) == V_READ_EVAL ){
+			printf( "  %s:%d: *read-eval*\n", STRING_STR(STREAM_FILENAME(CDR(code))), STREAM_LINE(CDR(code)) );
+		}else{
+			printf( "  %s in %s\n",
+					v2s_limit(code, 60),
+					v2s(BUNDLE_LAMBDA(CONTINUATION_BUNDLE(cur))) );
+		}
 	}
 	*result = NIL;
 	return CONTINUATION_NEXT(cont);
@@ -338,7 +342,7 @@ static Value _display( Value args, Value cont, Value *result )
 		fputs( STRING_STR(v), STREAM_FD(port) );
 		break;
 	default:
-		value_to_str(buf, v);
+		value_to_str(buf, sizeof(buf), v);
 		fputs( buf, STREAM_FD(port) );
 	}
 	return CONTINUATION_NEXT(cont);
