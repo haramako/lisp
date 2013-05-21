@@ -35,14 +35,16 @@ const char* LAMBDA_TYPE_NAME[] = {
 
 static size_t _value_to_str( char *buf, int len, Value v )
 {
-	if( len <= 0 ) return len;
+	int n = 0;
+	if( n >= len ) return len;
 	
-	char n = 0;
 	if( !v ){
 		n += snprintf( buf, len, "(NULL)" );
+		if( n >= len ) return len;
 		return n;
 	}
-	// printf( "%d\n", TYPE_OF(v) );
+	
+	// printf( "%s\n", TYPE_NAMES[(int)TYPE_OF(v)] );
 	switch( TYPE_OF(v) ){
 	case TYPE_UNUSED:
 		assert(0);
@@ -72,26 +74,27 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		break;
 	case TYPE_PAIR:
 		n += snprintf( buf, len, "(" );
+		if( n >= len ) return len;
 		bool finished = false;
 		while( !finished ){
 			switch( TYPE_OF(CDR(v)) ){
 			case TYPE_NIL:
-				n += value_to_str( buf+n, len-n, CAR(v) );
+				n += _value_to_str( buf+n, len-n, CAR(v) );
 				if( n >= len ) return len;
 				finished = true;
 				break;
 			case TYPE_PAIR:
-				n += value_to_str( buf+n, len-n, CAR(v) );
+				n += _value_to_str( buf+n, len-n, CAR(v) );
 				if( n >= len ) return len;
 				n += snprintf( buf+n, len-n, " " );
 				if( n >= len ) return len;
 				break;
 			default:
-				n += value_to_str( buf+n, len-n, CAR(v) );
+				n += _value_to_str( buf+n, len-n, CAR(v) );
 				if( n >= len ) return len;
 				n += snprintf( buf+n, len-n, " . " );
 				if( n >= len ) return len;
-				n += value_to_str( buf+n, len-n, CDR(v) );
+				n += _value_to_str( buf+n, len-n, CDR(v) );
 				if( n >= len ) return len;
 				finished = true;
 				break;
@@ -112,8 +115,11 @@ static size_t _value_to_str( char *buf, int len, Value v )
 	case TYPE_STREAM:
 		n += snprintf( buf+n, len-n, "(STREAM:%s)", STRING_STR(STREAM_FILENAME(v)) );
 		break;
+	default:
+		assert(0);
 	}
 
+	if( n >= len ) return len;
 	return n;
 }
 
@@ -126,15 +132,15 @@ size_t value_to_str( char *buf, int len, Value v )
 
 char* v2s( Value v )
 {
-	return v2s_limit( v, 1024 );
+	return v2s_limit( v, 10240 );
 }
 
 char* v2s_limit( Value v, int limit )
 {
-	char buf[10240];
-	if( limit >= sizeof(buf) ) assert(0);
+	char buf[10240+1];
+	assert( limit < sizeof(buf) );
 	int len = value_to_str(buf, limit, v);
-	if( len >= limit ) strcpy( buf+limit-4, "..." );
+	if( len >= (limit-1) ) strcpy( buf+limit-4, "..." );
 	return STRING_STR(string_new(buf));
 }
 
@@ -626,6 +632,8 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 		Value _code = C_CODE(cont);										\
 		NEXT( CONT( cons4( intern("error"), string_new(mes), cons3(V_QUOTE,_code,NIL), NIL ), \
 					C_BUNDLE(cont), C_NEXT(cont)), NIL); }while(0)
+#define CHECK(x) do{ if(!x){ ERROR("invalid form"); } }while(0)
+#define FAIL() CHECK(0)
 
 #define CONT continuation_new
 #define CONT_OP(op,a,b,c) continuation_new(cons(op,a),b,c)
@@ -801,11 +809,30 @@ Value eval_loop( Value code )
 
 		case OP_LET:
 		case OP_LET_A:
+		case OP_LETREC:
 			// display_val( "LET: ", code );
 			if( IS_PAIR( CAR(code) )){
 				// normal let
-				NEXT( CONT_OP( V_LET2, code, bundle_new( C_BUNDLE(cont) ), C_NEXT(cont)), NIL );
+				Value new_bundle = bundle_new(C_BUNDLE(cont));
+				switch( op ){
+				case OP_LET:
+					NEXT( CONT_OP( V_LET2, cons(C_BUNDLE(cont), code), new_bundle, C_NEXT(cont)), NIL );
+				case OP_LET_A:
+					NEXT( CONT_OP( V_LET2, cons(new_bundle, code), new_bundle, C_NEXT(cont)), NIL );
+				case OP_LETREC:
+					for( Value cur=CAR(code); cur != NIL; cur = CDR(cur) ){
+						Value sym_val = CAR(cur);
+						CHECK( IS_PAIR(sym_val) );
+						Value sym = CAR(sym_val);
+						CHECK( IS_SYMBOL(sym) );
+						bundle_define( new_bundle, sym, NIL );
+					}
+					NEXT( CONT_OP( V_LET2, cons(new_bundle, code), new_bundle, C_NEXT(cont)), NIL );
+				default:
+					assert(0);
+				}
 			}else if( IS_SYMBOL( CAR(code) ) ){
+				CHECK( op == OP_LET );
 				// named let
 				Value bundle = bundle_new( C_BUNDLE(cont) );
 				Value name = CAR(code);
@@ -828,21 +855,32 @@ Value eval_loop( Value code )
 				//display_val( "let: ", call_form );
 				NEXT( CONT( call_form, bundle, C_NEXT(cont)), NIL );
 			}else{
-				ERROR( "invalid let form" );
+				FAIL();
 			}
 				
 		case OP_LET2:
-			if( CAR(code) != NIL ){
-				Value args = CAR(code);
-				NEXT( CONT( CADR(CAR(args)), C_BUNDLE(cont),
-							CONT_OP( V_LET3, cons3( CAAR(args), CDR(args), CDR(code) ), C_BUNDLE(cont), C_NEXT(cont) )), NIL);
-			}else{
-				NEXT( CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+			{
+				Value bundle, vars, body;
+				bind3cdr( code, bundle, vars, body );
+				// printf( "OP_LET2: %s\n", v2s(vars) );
+				if( IS_PAIR(vars) ){
+					// printf( "OP_LET2- %s\n", v2s(CADR(CAR(vars))) );
+					NEXT( CONT( CADR(CAR(vars)), bundle,
+								CONT_OP( V_LET3, cons4( bundle, CAAR(vars), CDR(vars), body ), C_BUNDLE(cont), C_NEXT(cont) )), NIL);
+				}else if( vars == NIL ){
+					NEXT( CONT_OP( V_BEGIN, body, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+				}else{
+					ERROR( "invalid let" );
+				}
 			}
 				
 		case OP_LET3:
-			bundle_define( C_BUNDLE(cont), CAR(code), result );
-			NEXT( CONT_OP( V_LET2, CDR(code), C_BUNDLE(cont), C_NEXT(cont)), NIL );
+			{
+				Value bundle, sym, form;
+				bind3cdr( code, bundle, sym, form );
+				bundle_define( C_BUNDLE(cont), sym, result );
+				NEXT( CONT_OP( V_LET2, cons( bundle, form ), C_BUNDLE(cont), C_NEXT(cont)), NIL );
+			}
 				
 		case OP_LAMBDA:
 		case OP_MACRO:
@@ -979,7 +1017,7 @@ Value V_CALL1;
 Value V_QUOTE;
 Value V_DEFINE, V_DEFINE2;
 Value V_SET_I, V_SET_I2;
-Value V_LET, V_LET_A, V_LET2, V_LET3;
+Value V_LET, V_LET_A, V_LETREC, V_LET2, V_LET3;
 Value V_LAMBDA, V_MACRO, V_EXEC_MACRO;
 Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 Value V_READ_EVAL, V_READ_EVAL2;
@@ -1039,6 +1077,7 @@ void init_prelude( bool with_prelude )
 	V_SET_I2 = _operator("*set!2*", OP_SET_I2);
 	V_LET = _operator("let", OP_LET);
 	V_LET_A = _operator("let*", OP_LET_A);
+	V_LETREC = _operator("letrec", OP_LETREC);
 	V_LET2 = _operator("*let2*", OP_LET2);
 	V_LET3 = _operator("*let3*", OP_LET3);
 	V_LAMBDA = _operator("lambda", OP_LAMBDA);

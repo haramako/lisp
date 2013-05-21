@@ -161,4 +161,19 @@
 			 (cont 1 2)
 			 (assert eqv? #t #f)))))
 
+;; test let, let*
+(let ((a 1))
+  (let ((a (+ a 1))
+		(b (+ a 1)))
+	(assert '(2 2) (list a b)))
+  (let* ((a (+ a 1))
+		(b (+ a 1)))
+	(assert '(2 3) (list a b)))
+  (letrec ((a b)
+		   (b (cons 1 a)))
+	(assert '(() (1)) (list a b)))
+  )
+
+	
+
 (minitest-finish)

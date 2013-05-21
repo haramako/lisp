@@ -133,6 +133,31 @@
 ;;   Copyright 1988 by Eric S. Tiedemann; all rights reserved.
 ;;
 ;; Subsequently modified to handle vectors: D. Souflis
+(define-macro (quasiquote+ l)
+  (define (mcons f l r)
+	;; (display (list 'mcons f l r))
+	(if (and (pair? r)
+			 (eq? (car r) 'quote)
+			 (eq? (car (cdr r)) (cdr f))
+			 (pair? l)
+			 (eq? (car l) 'quote)
+			 (eq? (car (cdr l)) (car f)))
+		(if (or (procedure? f) (number? f))
+			f
+		  (list 'quote f))
+	  ;;(if (eqv? l vector)
+	  ;;   (apply l (eval r))
+	  (list 'cons l r)))
+  (define (mappend f l r)
+	(if (or (null? (cdr f))
+			
+			(and (pair? r)
+				 (eq? (car r) 'quote)
+				 (eq? (car (cdr r)) '())))
+		l
+	  (list 'append l r)))
+  )
+
 (define-macro (quasiquote l)
   (define (mcons f l r)
 	;; (display (list 'mcons f l r))

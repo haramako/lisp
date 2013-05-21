@@ -14,6 +14,13 @@ void show_help(int err)
 
 int main( int argc, char **argv )
 {
+	/*
+	char buf[] = "01245678";
+	int x = snprintf( buf, 0, "%s", "hoge" );
+	printf( "%d %s\n", x, buf );
+	exit(0);
+	*/
+		   
 	// parse command line options
 	int n = 1;
 	for( ; n<argc; n++ ){

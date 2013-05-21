@@ -38,6 +38,7 @@ typedef enum {
 	OP_SET_I2,
 	OP_LET,
 	OP_LET_A,
+	OP_LETREC,
 	OP_LET2,
 	OP_LET3,
 	OP_LAMBDA,
@@ -303,7 +304,7 @@ extern Value V_CALL1;
 extern Value V_QUOTE;
 extern Value V_DEFINE, V_DEFINE2;
 extern Value V_SET_I, V_SET_I2;
-extern Value V_LET, V_LET_A, V_LET2, V_LET3;
+extern Value V_LET, V_LET_A, V_LETREC, V_LET2, V_LET3;
 extern Value V_LAMBDA, V_MACRO, V_EXEC_MACRO;
 extern Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 extern Value V_READ_EVAL, V_READ_EVAL2;
