@@ -1,4 +1,4 @@
-(load "minitest.sch")
+(load "minitest.scm")
 
 ;; test type operator
 (assert #t (symbol? 'a))

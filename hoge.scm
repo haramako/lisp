@@ -3,7 +3,7 @@
   (puts 1))
 
 
-(load "srfi-1.sch")
+(load "srfi-1.scm")
 
 (puts `(1 2 ,@'(3 4) 5))
 

@@ -14,7 +14,7 @@ env.Program('mlisp', ['main.c'] + LISP_LIBS)
 env.Program('test_mlisp', ['test.c'] + LISP_LIBS)
 
 def do_test(target, source, env):
-    for file in glob.glob('test*.sch') + glob.glob('*.ss'):
+    for file in glob.glob('test*.scm') + glob.glob('*.ss'):
         print "testing", file, "..."
         result, out = commands.getstatusoutput( "./mlisp "+file )
         if result != 0:

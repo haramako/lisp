@@ -1109,7 +1109,7 @@ void init_prelude( bool with_prelude )
 	cfunc_init();
 
 	if( with_prelude ){
-		FILE *fd = fopen( "prelude.sch", "r" );
+		FILE *fd = fopen( "prelude.scm", "r" );
 		if( !fd ){
 			printf( "cannot open prelude.sch\n" );
 			exit(1);
