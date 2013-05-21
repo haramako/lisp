@@ -38,6 +38,15 @@
 (puts 1)
 
 
+(let ((a 2))
+  ;;(puts 'append)
+  (puts (append '(1 2) '(3 4) '() '(5 6)))
+  (puts (append '()))
+  (puts (append '() '(1 2)))
+  (puts (append))
+  )
+
+
 ;; (define (rec n)
 ;;   (rec (+ 1 n)))
 
