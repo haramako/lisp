@@ -260,6 +260,24 @@
   (let loop ((li li) (n 0))
 	(if (null? li) n (loop (cdr li) (+ n 1)))))
 
+(define-macro (define-unless . form)
+  (let ((sym (car (car form)))
+		(args (cdr (car form))))
+	`(if (define? ',sym)
+		 (set! ,sym (lambda ,args ,@(cdr form)))
+		 (define ,@form))))
 
+(define-macro (:optional sym val)
+  `(if (pair? ,sym) (car ,sym) ,val))
+  
 
+;;************************************************************
+;; from http://srfi.schemers.org/srfi-1/srfi-1-reference.scm
+;;************************************************************
+(define (tree-copy x_)
+  (let recur ((x x_))
+	(if (not (pair? x)) x
+		(cons (recur (car x)) (recur (cdr x))))))
 
+(define (check-arg pred val caller)
+  (if (pred val) val (check-arg (error "Bad argument" val pred caller))))

@@ -676,10 +676,7 @@ Value eval_loop( Value code )
 	case TYPE_SYMBOL:
 		{
 			DictEntry *found = bundle_find( C_BUNDLE(cont), C_CODE(cont), true, false );
-			if( !found ){
-				printf( "symbol not found: %s\n", v2s(C_CODE(cont)) );
-				assert(0);
-			}
+			if( !found ) ERROR( "symbol not found" );
 			NEXT( C_NEXT(cont), found->val );
 		}
 	case TYPE_PAIR:

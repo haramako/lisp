@@ -217,18 +217,10 @@
 (define (xcons d a) (cons a d))
 
 ;;;; Recursively copy every cons.
-; TODO: 名前付きletがまだ
-'(define (tree-copy x_)
-  (let recur ((x x_))
-	(if (not (pair? x)) x
-		(cons (recur (car x)) (recur (cdr x))))))
-
-(define (tree-copy x)
-  (if (not (pair? x)) x
-	  (cons (tree-copy (car x)) (tree-copy (cdr x)))))
-
-(define (check-arg pred val caller)
-  (if (pred val) val (check-arg (error "Bad argument" val pred caller))))
+										;(define (tree-copy x)
+										;  (let recur ((x x))
+										;    (if (not (pair? x)) x
+										;	(cons (recur (car x)) (recur (cdr x))))))
 
 ;;; Make a list of length LEN.
 
@@ -251,8 +243,8 @@
 (define (list-tabulate len proc)
   (check-arg (lambda (n) (and (integer? n) (>= n 0))) len list-tabulate)
   (check-arg procedure? proc list-tabulate)
-  (do ((ans '() (cons (proc i) ans))
-	   (i (- len 1) (- i 1)))
+  (do ((i (- len 1) (- i 1))
+       (ans '() (cons (proc i) ans)))
       ((< i 0) ans)))
 
 ;;; (cons* a1 a2 ... an) = (cons a1 (cons a2 (cons ... an)))
@@ -676,15 +668,14 @@
 					first)))))))
 
 ;;; APPEND is R4RS.
-(set! append
-	  (lambda lists
-		(if (pair? lists)
-			(let recur ((list1 (car lists)) (lists (cdr lists)))
-			  (if (pair? lists)
-				  (let ((tail (recur (car lists) (cdr lists))))
-					(fold-right cons tail list1)) ; Append LIST1 & TAIL.
-				  list1))
-			'())))
+										;(define (append . lists)
+										;  (if (pair? lists)
+										;      (let recur ((list1 (car lists)) (lists (cdr lists)))
+										;        (if (pair? lists)
+										;            (let ((tail (recur (car lists) (cdr lists))))
+										;              (fold-right cons tail list1)) ; Append LIST1 & TAIL.
+										;            list1))
+										;      '()))
 
 ;; (define (append-reverse rev-head tail) (fold cons tail rev-head))
 
@@ -808,13 +799,12 @@
 
 ;;; fold/unfold
 ;;;;;;;;;;;;;;;
+
 (define (unfold-right p f g seed . maybe-tail)
   (check-arg procedure? p unfold-right)
   (check-arg procedure? f unfold-right)
   (check-arg procedure? g unfold-right)
-  ;; (let lp ((seed seed) (ans (:optional maybe-tail '())))
-  (puts 'ur maybe-tail )
-  (let lp ((seed seed) (ans (if (pair? maybe-tail) (car maybe-tail) '())))
+  (let lp ((seed seed) (ans (:optional maybe-tail '())))
     (if (p seed) ans
 		(lp (g seed)
 			(cons (f seed) ans)))))
@@ -1010,7 +1000,6 @@
 
 
 ;;; We extend MAP to handle arguments of unequal length.
-;(define map map-in-order)	
 (set! map map-in-order)	
 
 
@@ -1090,20 +1079,19 @@
 		  ;;           When the segment ends, patch in a link from PREV
 		  ;;           to the start of the next good segment, and jump to
 		  ;;           SCAN-IN.
-		  (else (let ((scan-in #f) (scan-out #f))
-				  (set! scan-in (lambda (prev lis)
+		  (else (letrec ((scan-in (lambda (prev lis)
 									(if (pair? lis)
 										(if (pred (car lis))
 											(scan-in lis (cdr lis))
 											(scan-out prev (cdr lis))))))
-				  (set! scan-out (lambda (prev lis)
+						 (scan-out (lambda (prev lis)
 									 (let lp ((lis lis))
 									   (if (pair? lis)
 										   (if (pred (car lis))
 											   (begin (set-cdr! prev lis)
 													  (scan-in lis (cdr lis)))
 											   (lp (cdr lis)))
-										   (set-cdr! prev lis)))))
+										   (set-cdr! prev lis))))))
 				  (scan-in ans (cdr ans))
 				  ans)))))
 
@@ -1154,9 +1142,7 @@
       ;; list, splicing the runs together. The invariants are
       ;;   SCAN-IN:  (cdr in-prev)  = LIS.
       ;;   SCAN-OUT: (cdr out-prev) = LIS.
-	  (define scan-in #f)
-	  (define scan-out #f)
-      (set! scan-in (lambda (in-prev out-prev lis)
+      (letrec ((scan-in (lambda (in-prev out-prev lis)
 						  (let lp ((in-prev in-prev) (lis lis))
 							(if (pair? lis)
 								(if (pred (car lis))
@@ -1165,14 +1151,14 @@
 										   (scan-out in-prev lis (cdr lis))))
 								(set-cdr! out-prev lis))))) ; Done.
 
-	  (set! scan-out (lambda (in-prev out-prev lis)
+			   (scan-out (lambda (in-prev out-prev lis)
 						   (let lp ((out-prev out-prev) (lis lis))
 							 (if (pair? lis)
 								 (if (pred (car lis))
 									 (begin (set-cdr! in-prev lis)
 											(scan-in lis out-prev (cdr lis)))
 									 (lp lis (cdr lis)))
-								 (set-cdr! in-prev lis))))) ; Done.
+								 (set-cdr! in-prev lis)))))) ; Done.
 
 		;; Crank up the scan&splice loops.
 		(if (pred (car lis))
@@ -1189,7 +1175,7 @@
 					((pred (car l))
 					 (scan-in l prev-l (cdr l))
 					 (values l lis))		; Done.
-					(else (lp l (cdr l))))))))
+					(else (lp l (cdr l)))))))))
 
 
 ;;; Inline us, please.
@@ -1216,16 +1202,16 @@
 ;;; alist-delete key alist [=]	Alist-delete by key comparison
 
 (define (delete x lis . maybe-=) 
-  (let ((= (if (pair? maybe-=) (car maybe-=) equal?)))
+  (let ((= (:optional maybe-= equal?)))
     (filter (lambda (y) (not (= x y))) lis)))
 
 (define (delete! x lis . maybe-=)
-  (let ((= (if (pair? maybe-=) (car maybe-=) equal?)))
+  (let ((= (:optional maybe-= equal?)))
     (filter! (lambda (y) (not (= x y))) lis)))
 
 ;;; Extended from R4RS to take an optional comparison argument.
 (define (member x lis . maybe-=)
-  (let ((= (if (pair? maybe-=) (car maybe-=) equal?)))
+  (let ((= (:optional maybe-= equal?)))
     (find-tail (lambda (y) (= x y)) lis)))
 
 ;;; R4RS, hence we don't bother to define.
@@ -1245,7 +1231,7 @@
 ;;; element-marking. The former gives you O(n lg n), the latter is linear.
 
 (define (delete-duplicates lis . maybe-=)
-  (let ((elt= (if (pair? maybe-=) (car maybe-=) equal?)))
+  (let ((elt= (:optional maybe-= equal?)))
     (check-arg procedure? elt= delete-duplicates)
     (let recur ((lis lis))
       (if (null-list? lis) lis
@@ -1255,7 +1241,7 @@
 			(if (eq? tail new-tail) lis (cons x new-tail)))))))
 
 (define (delete-duplicates! lis . maybe-=)
-  (let ((elt= (if (pair? maybe-=) (car maybe-=) equal?)))
+  (let ((elt= (:optional maybe-= equal?)))
     (check-arg procedure? elt= delete-duplicates!)
     (let recur ((lis lis))
       (if (null-list? lis) lis
@@ -1270,7 +1256,7 @@
 
 ;;; Extended from R4RS to take an optional comparison argument.
 (define (assoc x lis . maybe-=)
-  (let ((= (if (pair? maybe-=) (car maybe-=) equal?)))
+  (let ((= (:optional maybe-= equal?)))
     (find (lambda (entry) (= x (car entry))) lis)))
 
 (define (alist-cons key datum alist) (cons (cons key datum) alist))
@@ -1280,11 +1266,11 @@
        alist))
 
 (define (alist-delete key alist . maybe-=)
-  (let ((= (if (pair? maybe-=) (car maybe-=) equal?)))
+  (let ((= (:optional maybe-= equal?)))
     (filter (lambda (elt) (not (= key (car elt)))) alist)))
 
 (define (alist-delete! key alist . maybe-=)
-  (let ((= (if (pair? maybe-=) (car maybe-=) equal?)))
+  (let ((= (:optional maybe-= equal?)))
     (filter! (lambda (elt) (not (= key (car elt)))) alist)))
 
 
@@ -1420,13 +1406,11 @@
 ;;; Reverse
 ;;;;;;;;;;;
 
-;;R4RS, so not defined here.
-;; (define (reverse lis) (fold cons '() lis))
-(set! reverse (lambda (lis) (fold cons '() lis)))
+										;R4RS, so not defined here.
+										;(define (reverse lis) (fold cons '() lis))
 
-;;(define (reverse! lis)
-;;   (pair-fold (lambda (pair tail) (set-cdr! pair tail) pair) '() lis))
-
+										;(define (reverse! lis)
+										;  (pair-fold (lambda (pair tail) (set-cdr! pair tail) pair) '() lis))
 (define (reverse! lis)
   (let lp ((lis lis) (ans '()))
     (if (null-list? lis) ans
