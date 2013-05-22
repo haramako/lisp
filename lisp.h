@@ -236,6 +236,7 @@ Value lambda_new();
 
 Value cons( Value car, Value cdr );
 size_t list_length( Value v );
+Value list_copy( Value list );
 
 // Bundle
 

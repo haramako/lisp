@@ -9,9 +9,10 @@
 
 (puts (syntax-expand1 '(nil! hoge)))
 
-(define hoge 1)
-(nil! hoge)
-(puts 'hoge hoge)
+(begin
+  (define hoge 1)
+  (nil! hoge)
+  (puts 'hoge hoge))
 
 (let ((x 1))
   (puts 'dynamic-wind)

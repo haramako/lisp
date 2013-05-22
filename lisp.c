@@ -24,8 +24,8 @@ const char *TYPE_NAMES[] = {
 
 const char* LAMBDA_TYPE_NAME[] = {
 	"LAMBDA",
-	"MACRO",
 	"CFUNC",
+	"MACRO",
 	"CMACRO"
 };
 
@@ -266,6 +266,17 @@ size_t list_length( Value v )
 	size_t len = 0;
 	for( Value cur=v; cur != NIL; cur = CDR(cur) ) len++;
 	return len;
+}
+
+Value list_copy( Value list )
+{
+	if( !IS_PAIR(list) ) return list;
+	Value r = cons( CAR(list), NIL );
+	Value tail = r;
+	for( Value cur=CDR(list); cur != NIL; cur=CDR(cur) ){
+		tail = CDR(tail) = cons( CAR(cur), NIL );
+	}
+	return r;
 }
 
 //********************************************************
@@ -983,28 +994,16 @@ Value eval_loop( Value code )
 
 Value _syntax_expand_body( Value body, Value bundle )
 {
+	body = list_copy(body);
 	for( Value cur=body; cur != NIL; cur=CDR(cur) ){
 		if( IS_PAIR(CAR(cur)) ){
 			CAR(cur) = _syntax_expand_body( CAR(cur), bundle );
 		}else if( IS_SYMBOL(CAR(cur)) ){
 			Value found = bundle_get( bundle, CAR(cur), NULL );
-			if( found ){
-				CAR(cur) = found;
-			}
+			if( found ) CAR(cur) = found;
 		}
 	}
 	return body;
-}
-
-Value list_copy( Value list )
-{
-	if( !IS_PAIR(list) ) return list;
-	Value r = cons( CAR(list), NIL );
-	Value tail = r;
-	for( Value cur=CDR(list); cur != NIL; cur=CDR(cur) ){
-		tail = CDR(tail) = cons( CAR(cur), NIL );
-	}
-	return r;
 }
 
 Value syntax_expand1( Value code )
@@ -1023,7 +1022,7 @@ Value syntax_expand1( Value code )
 		Value rule = CAR(cur);
 		bool matched = true;
 		Value rest = code;
-		for( Value c = CAR(rule); c != NIL; c=CDR(c), rest=CDR(code) ){
+		for( Value c = CAR(rule); c != NIL; c=CDR(c), rest=CDR(rest) ){
 			if( !IS_PAIR(rest) ){
 				matched = false;
 				break;
@@ -1031,8 +1030,8 @@ Value syntax_expand1( Value code )
 			bundle_define( bundle, CAR(c), CAR(rest) );
 			// printf( "bind %s => %s\n", v2s(CAR(c)), v2s(CAR(rest)) );
 		}
-		Value new_code = _syntax_expand_body( list_copy(CADR(rule)), bundle );
-		printf( "expand-syntax: %s => %s\n", v2s(code), v2s(new_code) );
+		Value new_code = _syntax_expand_body( CADR(rule), bundle );
+		// printf( "expand-syntax: %s => %s\n", v2s(code), v2s(new_code) );
 		return new_code;
 	}
 	printf( "no pattern matched" );

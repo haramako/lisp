@@ -43,9 +43,9 @@
 
 (define (for-each f l)
   (let recur ((f f) (l l))
-	(when (pair? l)
-		  (f (car l))
-		  (recur f (cdr l)))))
+	(if (not (pair? l)) #f
+		(f (car l))
+		(recur f (cdr l)))))
 
 (define (newline)
   (display end-of-line))
@@ -136,34 +136,8 @@
 ;;   Copyright 1988 by Eric S. Tiedemann; all rights reserved.
 ;;
 ;; Subsequently modified to handle vectors: D. Souflis
-(define-macro (quasiquote+ l)
-  (define (mcons f l r)
-	;; (display (list 'mcons f l r))
-	(if (and (pair? r)
-			 (eq? (car r) 'quote)
-			 (eq? (car (cdr r)) (cdr f))
-			 (pair? l)
-			 (eq? (car l) 'quote)
-			 (eq? (car (cdr l)) (car f)))
-		(if (or (procedure? f) (number? f))
-			f
-		  (list 'quote f))
-	  ;;(if (eqv? l vector)
-	  ;;   (apply l (eval r))
-	  (list 'cons l r)))
-  (define (mappend f l r)
-	(if (or (null? (cdr f))
-			
-			(and (pair? r)
-				 (eq? (car r) 'quote)
-				 (eq? (car (cdr r)) '())))
-		l
-	  (list 'append l r)))
-  )
-
 (define-macro (quasiquote l)
   (define (mcons f l r)
-	;; (display (list 'mcons f l r))
 	(if (and (pair? r)
 			 (eq? (car r) 'quote)
 			 (eq? (car (cdr r)) (cdr f))
@@ -185,7 +159,6 @@
 		l
 	  (list 'append l r)))
   (define (foo level form)
-	;; (display (list 'foo level form ))
 	(cond ((not (pair? form))
 		   (if (or (procedure? form) (number? form))
 			   form
@@ -233,9 +206,10 @@
   (if (null? (cdr x)) (car x) (cons 'VALUES x)))
 
 (define (call-with-values v f)
-  (if (and (pair? v) (eq? 'VALUES (car v)))
-	  (apply f (cdr v))
-	  (f v)))
+  (let ((v (apply v)))
+	(if (and (pair? v) (eq? 'VALUES (car v)))
+		(apply f (cdr v))
+		(f v))))
 
 (define-macro (receive args vals . body)
   `(let ((*vals* (cdr ,vals)))
@@ -274,6 +248,10 @@
 
 (define-macro (let1 var . body)
   `(let (,var) ,@body))
+
+(define-syntax inc!
+  (syntax-rules ()
+	((_ x) (set! x (+ x 1)))))
 
 ;;************************************************************
 ;; from http://srfi.schemers.org/srfi-1/srfi-1-reference.scm

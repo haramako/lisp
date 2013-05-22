@@ -137,8 +137,8 @@
 				 (list a b)))
 
 ;; test call-with-values
-(assert 3 (call-with-values (values 1 2) +))
-(assert 1 (call-with-values 1 +))
+(assert 3 (call-with-values (lambda () (values 1 2)) +))
+(assert 1 (call-with-values (lambda () 1) value))
 
 ;; test list-tail
 (assert '(1 2) (list-tail '(1 2) 0))
@@ -174,13 +174,27 @@
 	(assert '(() (1)) (list a b)))
   )
 
-;;; current-environment, eval
+;; test current-environment, eval
 (let ((x 1))
   (define env (current-environment))
   (let ((x 2))
-	(assert 1 (eval 'x env))))
+	(assert 1 (eval 'x env))
+	(assert 2 (eval 'x))))
 
+;; test define-syntax
+(define-syntax my-set!
+  (syntax-rules ()
+	((_ sym x) (set! sym x))))
 
+(define-syntax nil!
+  (syntax-rules ()
+	((_ x) (my-set! x '()))))
+
+(let ((hoge 1))
+  (my-set! hoge 2)
+  (assert 2 hoge)
+  (nil! hoge)
+  (assert '() hoge))
 	
 
 (minitest-finish)

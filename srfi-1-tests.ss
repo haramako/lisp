@@ -112,19 +112,36 @@
        (newline)))))
 
 
-(define-macro (test name trial criterion)
-  `(begin
-	 (let ((*results* ,trial))
-	   (if (call-with-values *results* ,criterion)
-		   ;; (display-line "PASS: " ,name " passed.")
-		   (display ".")
-		   (display-line "----------------------------------------")
-		   (puts "Test " ,name ":")
-		   (puts ',trial)
-		   (puts "-->" *results*)
-		   (display-line "*** Test " ,name " failed.")
-		   (display-line "----------------------------------------")
-		   (newline)))))
+'(define-syntax test
+  (syntax-rules ()
+    ((test name trial criterion)
+     (begin
+       (display-line "----------------------------------------")
+       (display-line "Test " name ":")
+       (newline)
+       (display-line 'trial)
+       (newline)
+       (display-line "-->")
+       (newline)
+       (call-with-values
+		   (lambda () trial)
+         (lambda results
+           (for-each display-line results)
+           (newline)
+           (if (apply criterion results)
+               (display-line "Test " name " passed.")
+               (display-line "*** Test " name " failed."))))
+       (display-line "----------------------------------------")
+       (newline)))))
+
+(define *test-error* 0)
+(define-syntax test
+  (syntax-rules ()
+	((_ name trial criterion)
+	 (if (call-with-values (lambda () trial) criterion)
+		 (display ".")
+		 (puts end-of-line "FAILED:" name)
+		 (inc! *test-error*)))))
 
 (define non-printing-test test)
 
@@ -4053,3 +4070,4 @@
 |#
 
 (newline)
+(exit *test-error* )
