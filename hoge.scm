@@ -1,4 +1,16 @@
-(load "srfi-1.scm")
+;; (load "srfi-1.scm")
+
+(when 1 (puts 1))
+
+(define-syntax hoge
+  (syntax-rules ()
+	((_ a b ...) (list a b ...))
+	))
+
+(puts (hoge 'fuga 'piyo 'hage))
+(puts (hoge 'fuga '(piyo hage) 'nyao))
+
+(exit)
 
 
 (define-syntax nil!

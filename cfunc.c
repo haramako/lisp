@@ -90,8 +90,8 @@ static Value _mul( Value args, Value cont, Value *result )
 
 static Value _div( Value args, Value cont, Value *result )
 {
-	int sum = 1;
-	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
+	int64_t sum = V2INT(CAR(args));
+	for( Value cur = CDR(args); cur != NIL; cur = CDR(cur) ){
 		sum /= V2INT(CAR(cur));
 	}
 	*result = INT2V(sum);
@@ -411,6 +411,25 @@ static Value _exit( Value args, Value cont, Value *result )
 	return NIL;
 }
 
+static Value _number_to_string( Value args, Value cont, Value *result )
+{
+	char buf[32];
+	sprintf( buf, "%lld", V2INT(CAR(args)) );
+	*result = string_new(buf);
+	return CONTINUATION_NEXT(cont);
+}
+
+static Value _string_append( Value args, Value cont, Value *result )
+{
+	char buf[10240];
+	char *tail = buf;
+	for( Value cur=args; cur != NIL; cur=CDR(cur) ){
+		tail += sprintf( tail, "%s", STRING_STR(CAR(cur)) );
+	}
+	*result = string_new(buf);
+	return CONTINUATION_NEXT(cont);
+}
+
 void cfunc_init()
 {
 	defun( "value", _value );
@@ -424,6 +443,7 @@ void cfunc_init()
 	defun( "-", _sub );
 	defun( "*", _mul );
 	defun( "/", _div );
+	defun( "quotient", _div );
 	defun( "modulo", _modulo );
 	defun( "<", _less );
 	defun( "<=", _less_eq );
@@ -464,5 +484,8 @@ void cfunc_init()
 	defun( "read", _read );
 	defun( "load", _load );
 	defun( "exit", _exit );
+
+	defun( "number->string", _number_to_string );
+	defun( "string-append", _string_append );
 
 }

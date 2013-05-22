@@ -64,6 +64,8 @@ typedef enum {
 
 extern const char* LAMBDA_TYPE_NAME[];
 
+typedef struct Cell* Value;
+
 typedef struct Cell* (*CFunction)( struct Cell *args, struct Cell *cont, struct Cell **result );
 
 typedef struct Cell {
@@ -115,8 +117,6 @@ typedef struct Cell {
 	} d;
 } Cell;
 
-typedef Cell* Value;
-
 #define TYPE_OF(v) (v->type)
 
 #define IS_INT(v) (v->type==TYPE_INT)
@@ -148,6 +148,7 @@ void vdump( Value v );
 bool eq( Value a, Value b );
 bool eqv( Value a, Value b );
 bool equal( Value a, Value b );
+unsigned int hash_eqv( Value v );
 
 // Gabage collection in gc.c
 
@@ -169,13 +170,18 @@ typedef struct DictEntry {
 	struct DictEntry *next;
 } DictEntry;
 
+typedef unsigned int (*HashFunction)( struct Cell *v);
+typedef bool (*CompareFunction)( struct Cell *a, struct Cell *b);
+
 typedef struct Dict {
 	int size;
 	int use;
+	HashFunction hash_func;
+	CompareFunction comp_func;
 	DictEntry *entry[1];
 } Dict;
 
-Dict* dict_new();
+Dict* dict_new( HashFunction hash_func, CompareFunction comp_func );
 void dict_free( Dict *d );
 DictEntry* dict_find( Dict *d, Value key, bool create );
 void dict_set( Dict *d, Value key, Value val );
@@ -313,7 +319,8 @@ extern Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 extern Value V_READ_EVAL, V_READ_EVAL2;
 
 extern Value SYM_A_DEBUG_A, SYM_A_COMPILE_HOOK_A, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
-	SYM_CURRENT_INPUT_PORT, SYM_CURRENT_OUTPUT_PORT, SYM_END_OF_LINE, SYM_VALUES;
+	SYM_CURRENT_INPUT_PORT, SYM_CURRENT_OUTPUT_PORT, SYM_END_OF_LINE, SYM_VALUES,
+	SYM_DOT, SYM_DOT3, SYM_ERROR, SYM_SYNTAX_RULES, SYM_SYNTAX_REST;
 
 extern bool opt_trace;
 extern bool opt_debug;

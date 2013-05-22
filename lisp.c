@@ -191,6 +191,44 @@ bool equal( Value a, Value b )
 	}
 }
 
+unsigned int hash_eq( Value v )
+{
+	switch( TYPE_OF(v) ){
+	case TYPE_INT:
+		return (unsigned int)V2INT(v);
+	default:
+		return (unsigned int)(((uintptr_t)v) >> 4) * 31;
+	}
+}
+
+unsigned int hash_eqv( Value v )
+{
+	switch( TYPE_OF(v) ){
+	case TYPE_STRING:
+		{
+			char *str = STRING_STR(v);
+			size_t len = strlen(str);
+			int hash = 0;
+			for( int i=0; i<len; i++ ){
+				hash = hash * 31 + str[i];
+			}
+			return hash;
+		}
+	default:
+		return hash_eq(v);
+	}
+}
+
+unsigned int hash_equal( Value v )
+{
+	switch( TYPE_OF(v) ){
+	case TYPE_PAIR:
+		return hash_equal(CAR(v)) * 31 + hash_equal(CDR(v));
+	default:
+		return hash_eqv(v);
+	}
+}
+
 //********************************************************
 // Int
 //********************************************************
@@ -288,7 +326,7 @@ Value bundle_cur = NULL;
 Value bundle_new( Value upper )
 {
 	Value v = gc_new(TYPE_BUNDLE);
-	BUNDLE_DICT(v) = dict_new();
+	BUNDLE_DICT(v) = dict_new( hash_eqv, eqv );
 	BUNDLE_UPPER(v) = upper;
 	BUNDLE_LAMBDA(v) = NIL;
 	return v;
@@ -376,12 +414,12 @@ void _skip_space( Value s )
 	for(;;){
 		int c = stream_getc(s);
 		switch( c ){
-		case '\n': case ' ': case '\t': 
+		case '\n': case '\r': case ' ': case '\t': 
 			break;
 		case ';':
 			for(;;){
 				c = stream_getc(s);
-				if( c == '\n' || c == '\0' || c == -1 ) break;
+				if( c == '\n' || c == '\r' || c == '\0' || c == -1 ) break;
 			}
 			break;
 		default:
@@ -408,7 +446,7 @@ int _parse_list( Value s, Value *result )
 		err = _parse( s, &val );
 		if( err ) return err;
 
-		if( val == intern(".") ){
+		if( val == SYM_DOT ){
 			err = _parse( s, &cdr );
 			if( err ) return err;
 			*result = cdr;
@@ -426,7 +464,7 @@ int _parse_list( Value s, Value *result )
 static inline bool _is_val_char( int c )
 {
 	switch( c ){
-	case ' ': case '\t': case '\n': case '(': case ')': case '\0': case -1:
+	case ' ': case '\t': case '\n': case '\r': case '(': case ')': case '\0': case -1:
 		return false;
 	default:
 		return true;
@@ -449,7 +487,12 @@ static int _read_token( Value s, char *buf )
 
 static Value _parse_token( char *str )
 {
-	if( isnumber(str[0]) || ( str[0] == '-' && isnumber(str[1]) ) ){
+	if( isnumber(str[0]) || (str[0] == '-' && isnumber(str[1])) ){
+		for( char *s = str+1; *s != '\0'; s++ ){
+			if( !isnumber(*s) ){
+				return intern(str);
+			}
+		}
 		return INT2V(atoi(str));
 	}else{
 		return intern( str );
@@ -615,7 +658,7 @@ Value stream_write( Value s, Value v )
 
 Value cont_error( char *str, Value cont )
 {
-	return continuation_new( cons3( intern("error"), string_new(str), NIL ),
+	return continuation_new( cons3( SYM_ERROR, string_new(str), NIL ),
 							 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
 }
 
@@ -656,7 +699,7 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 #define NEXT(_cont,_v) do{ Value r = _v; cont = _cont; result = (r); goto _loop; }while(0)
 #define ERROR(mes) do{													\
 		Value _code = C_CODE(cont);										\
-		NEXT( CONT( cons4( intern("error"), string_new(mes), cons3(V_QUOTE,_code,NIL), NIL ), \
+		NEXT( CONT( cons4( SYM_ERROR, string_new(mes), cons3(V_QUOTE,_code,NIL), NIL ), \
 					C_BUNDLE(cont), C_NEXT(cont)), NIL); }while(0)
 #define CHECK(x) do{ if(!x){ ERROR("invalid form"); } }while(0)
 #define FAIL() CHECK(0)
@@ -761,6 +804,7 @@ Value eval_loop( Value code )
 						  NIL );
 				}
 			default:
+				FAIL();
 				printf( "OP_CALL0: result: %s code: %s\n", v2s(result), v2s(C_CODE(cont)) );
 				assert(0);
 			}
@@ -992,18 +1036,62 @@ Value eval_loop( Value code )
 	assert(0);
 }
 
-Value _syntax_expand_body( Value body, Value bundle )
+Value list_tail( Value list )
+{
+	if( list == NIL ) return NIL;
+	for(;CDR(list) != NIL; list=CDR(list));
+	return list;
+}
+
+Value _syntax_expand_body( Value body, Dict *bundle )
 {
 	body = list_copy(body);
 	for( Value cur=body; cur != NIL; cur=CDR(cur) ){
-		if( IS_PAIR(CAR(cur)) ){
+		Value found = dict_get( bundle, CAR(cur) );
+		if( found ){
+			if( IS_PAIR(CDR(cur)) && CADR(cur) == SYM_DOT3 ){
+				Value next = CDDR(cur);
+				if( CAR(found) != SYM_SYNTAX_REST ) assert(0);
+				found = CDR(found);
+				if( found != NIL ){
+					found = list_copy( found );
+					CAR(cur) = CAR(found);
+					CDR(cur) = CDR(found);
+					cur = list_tail( cur );
+				}
+				CDR(cur) = next;
+			}else{
+				CAR(cur) = found;
+			}
+		}else if( IS_PAIR(CAR(cur)) ){
 			CAR(cur) = _syntax_expand_body( CAR(cur), bundle );
-		}else if( IS_SYMBOL(CAR(cur)) ){
-			Value found = bundle_get( bundle, CAR(cur), NULL );
-			if( found ) CAR(cur) = found;
 		}
 	}
 	return body;
+}
+
+bool _syntax_match( Value rule, Value code, Dict *bundle )
+{
+	// printf( "syntax_match: %s %s\n", v2s(rule), v2s(code) );
+	for( Value c = rule; c != NIL; c=CDR(c), code=CDR(code) ){
+		if( IS_PAIR(CDR(c)) && CADR(c) == SYM_DOT3 ){
+			dict_set( bundle, CAR(c), cons( SYM_SYNTAX_REST, code ));
+			// printf( "bind %s => %s\n", v2s(CAR(c)), v2s(code) );
+			return true;
+		}else{
+			if( !IS_PAIR(code) ) return false;
+			if( IS_PAIR(CAR(c)) ){
+				if( !_syntax_match( CAR(c), CAR(code), bundle ) ) return false;
+			}else if(IS_SYMBOL(CAR(c)) ){
+				dict_set( bundle, CAR(c), CAR(code) );
+				// printf( "bind %s => %s\n", v2s(CAR(c)), v2s(CAR(code)) );
+			}else{
+				assert(0);
+			}
+		}
+	}
+	if( code != NIL ) return false;
+	return true;
 }
 
 Value syntax_expand1( Value code )
@@ -1013,27 +1101,23 @@ Value syntax_expand1( Value code )
 	if( !IS_PAIR(syntax) ) return code;
 	Value sym, keywords, rules;
 	bind3cdr( syntax, sym, keywords, rules );
-	if( sym != intern("syntax-rules") ) return code;
+	if( sym != SYM_SYNTAX_RULES ) return code;
 	if( keywords == NULL || rules == NULL ) assert(0);
 	
+	// printf( "matching: %s %s\n", v2s(rules), v2s(code) );
 	// 名前のバインド
-	Value bundle = bundle_new(NIL);
+	Dict *bundle = dict_new( hash_equal, equal );
 	for( Value cur=rules; cur != NIL; cur=CDR(cur) ){
-		Value rule = CAR(cur);
-		bool matched = true;
-		Value rest = code;
-		for( Value c = CAR(rule); c != NIL; c=CDR(c), rest=CDR(rest) ){
-			if( !IS_PAIR(rest) ){
-				matched = false;
-				break;
-			}
-			bundle_define( bundle, CAR(c), CAR(rest) );
-			// printf( "bind %s => %s\n", v2s(CAR(c)), v2s(CAR(rest)) );
+		// printf( "rule: %s\n", v2s(CAAR(cur)) );
+		bool matched = _syntax_match( CAAR(cur), code, bundle );
+		if( matched ){
+			Value new_code = _syntax_expand_body( CADR(CAR(cur)), bundle );
+			// printf( "expand-syntax: %s => %s\n", v2s(code), v2s(new_code) );
+			dict_free( bundle );
+			return new_code;
 		}
-		Value new_code = _syntax_expand_body( CADR(rule), bundle );
-		// printf( "expand-syntax: %s => %s\n", v2s(code), v2s(new_code) );
-		return new_code;
 	}
+	dict_free( bundle );
 	printf( "no pattern matched" );
 	assert(0);
 }
@@ -1108,6 +1192,7 @@ Value SYM_CURRENT_INPUT_PORT;
 Value SYM_CURRENT_OUTPUT_PORT;
 Value SYM_END_OF_LINE;
 Value SYM_VALUES;
+Value SYM_DOT, SYM_DOT3, SYM_ERROR, SYM_SYNTAX_RULES, SYM_SYNTAX_REST;
 
 Value _operator( char *sym, Operator op ){
 	Value v = gc_new(TYPE_SPECIAL);
@@ -1179,6 +1264,11 @@ void init_prelude( bool with_prelude )
 	SYM_CURRENT_OUTPUT_PORT = intern("current-output-port");
 	SYM_END_OF_LINE = intern("end-of-line");
 	SYM_VALUES = intern("VALUES");
+	SYM_DOT = intern(".");
+	SYM_DOT3 = intern("...");
+	SYM_ERROR = intern("error");
+	SYM_SYNTAX_RULES = intern("syntax-rules");
+	SYM_SYNTAX_REST = intern("*syntax-rest*");
 
 	bundle_define( bundle_cur, SYM_CURRENT_INPUT_PORT, V_STDIN );
 	bundle_define( bundle_cur, SYM_CURRENT_OUTPUT_PORT, V_STDOUT );

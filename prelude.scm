@@ -107,8 +107,9 @@
 (define *compile-hook* macro-expand-all)
 ;; ここからマクロが有効化
 
-(define-macro (when c . t)
-  (list 'if c (cons 'begin t)))
+(define-syntax when 
+  (syntax-rules ()
+	  ((_ cnd body ...) (if cnd (begin body ...)))))
 
 (define (reverse lis)
   (let recur ((r '()) (lis lis))
@@ -189,8 +190,9 @@
 
 ;; utilities
 
-(define-macro (unless c . t)
-  `(if ,c #f ,@t))
+(define-syntax unless
+  (syntax-rules ()
+	((_ cnd body ...) (if cnd #f body ...))))
 
 (define-macro (do arg . body)
   (let ((arg-form (map (lambda (x) (list (car x) (cadr x))) arg))
@@ -221,6 +223,17 @@
 			 ,(loop (cdr args))))
 		 (#t (cons 'begin body))))))
 
+(define-syntax let-values
+  (syntax-rules ()
+	((_ (((args ...) val)) body ...)
+	 (call-with-values (lambda () val)
+	   (lambda (args ...) body ...)))
+	((_ (((args ...) val) rest ...) body ...)
+	 (call-with-values (lambda () val)
+	   (lambda (args ...)
+	  	 (let-values (rest ...) body ...))))
+	))
+
 ;; number
 
 (define (zero? x) (eqv? x 0))
@@ -228,6 +241,14 @@
 (define (positive? x) (>= x 0))
 (define (even? x) (eqv? (modulo x 2) 0))
 (define (odd? x) (eqv? (modulo x 2) 1))
+
+(define-syntax inc!
+  (syntax-rules ()
+	((_ x) (set! x (+ x 1)))))
+
+(define-syntax dec!
+  (syntax-rules ()
+	((_ x) (set! x (+ x 1)))))
 
 ;; list
 
@@ -249,9 +270,6 @@
 (define-macro (let1 var . body)
   `(let (,var) ,@body))
 
-(define-syntax inc!
-  (syntax-rules ()
-	((_ x) (set! x (+ x 1)))))
 
 ;;************************************************************
 ;; from http://srfi.schemers.org/srfi-1/srfi-1-reference.scm
