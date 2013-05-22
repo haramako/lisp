@@ -105,21 +105,18 @@ static void _mark( Value v )
 		_mark( CDR(v) );
 		break;
 	case TYPE_LAMBDA:
-		_mark( LAMBDA_ARGS(v) );
-		_mark( LAMBDA_BODY(v) );
+		_mark( LAMBDA_DATA(v) );
 		_mark( LAMBDA_BUNDLE(v) );
 		break;
 	case TYPE_CFUNC:
 		break;
 	case TYPE_BUNDLE:
 		_mark_dict( BUNDLE_DICT(v) );
-		_mark( BUNDLE_UPPER(v) );
-		_mark( BUNDLE_LAMBDA(v) );
+		_mark( BUNDLE_DATA(v) );
 		break;
 	case TYPE_CONTINUATION:
 		_mark( CONTINUATION_BUNDLE(v) );
-		_mark( CONTINUATION_CODE(v) );
-		_mark( CONTINUATION_NEXT(v) );
+		_mark( CONTINUATION_DATA(v) );
 		break;
 	case TYPE_STREAM:
 		_mark( STREAM_FILENAME(v) );

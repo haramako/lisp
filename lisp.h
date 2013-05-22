@@ -23,9 +23,6 @@ typedef enum {
 	TYPE_MAX,
 } Type;
 
-#define TYPE_MASK_INT 1
-#define VALUE_MIN_POINTER 128
-
 extern const char *TYPE_NAMES[];
 
 typedef enum {
@@ -80,6 +77,7 @@ typedef Value (*CFunction7)( Value bundle, Value v1, Value v2, Value v3, Value v
 typedef struct Cell {
 	char type;
 	char marked;
+	int16_t flag;
 	union {
 		int64_t number;
 		struct {
@@ -96,16 +94,12 @@ typedef struct Cell {
 			char *str;
 		} string;
 		struct {
-			Value upper;
 			struct Dict *dict;
-			Value lambda;
+			Value data; // ( upper . lambda )
 		} bundle;
 		struct {
-			LambdaType type;
-			Value name;
-			Value args;
-			Value body;
 			Value bundle;
+			Value data; // (name arg . body)
 		} lambda;
 		struct {
 			int arity;
@@ -117,14 +111,11 @@ typedef struct Cell {
 		} special;
 		struct {
 			Value bundle;
-			Value code;
-			Value next;
+			Value data; // (code . next )
 		} continuation;
 		struct {
 			FILE *fd;
-			bool close;
             Value filename;
-			int line;
 		} stream;
 	} d;
 } Cell;
@@ -221,10 +212,11 @@ Value string_new( char *str );
 
 // Lambda
 
-#define LAMBDA_TYPE(v) (V2LAMBDA(v)->d.lambda.type)
-#define LAMBDA_NAME(v) (V2LAMBDA(v)->d.lambda.name)
-#define LAMBDA_ARGS(v) (V2LAMBDA(v)->d.lambda.args)
-#define LAMBDA_BODY(v) (V2LAMBDA(v)->d.lambda.body)
+#define LAMBDA_TYPE(v) (V2LAMBDA(v)->flag)
+#define LAMBDA_DATA(v) (V2LAMBDA(v)->d.lambda.data)
+#define LAMBDA_NAME(v) (CAR(V2LAMBDA(v)->d.lambda.data))
+#define LAMBDA_ARGS(v) (CAR(CDR(V2LAMBDA(v)->d.lambda.data)))
+#define LAMBDA_BODY(v) (CDR(CDR(V2LAMBDA(v)->d.lambda.data)))
 #define LAMBDA_BUNDLE(v) (V2LAMBDA(v)->d.lambda.bundle)
 
 Value lambda_new();
@@ -268,8 +260,9 @@ Value list_copy( Value list );
 // Bundle
 
 #define BUNDLE_DICT(v) (V2BUNDLE(v)->d.bundle.dict)
-#define BUNDLE_UPPER(v) (V2BUNDLE(v)->d.bundle.upper)
-#define BUNDLE_LAMBDA(v) (V2BUNDLE(v)->d.bundle.lambda)
+#define BUNDLE_DATA(v) (V2BUNDLE(v)->d.bundle.data)
+#define BUNDLE_UPPER(v) (CAR(V2BUNDLE(v)->d.bundle.data))
+#define BUNDLE_LAMBDA(v) (CDR(V2BUNDLE(v)->d.bundle.data))
 
 extern Value bundle_cur;
 Value bundle_new( Value upper );
@@ -280,9 +273,10 @@ Value bundle_get( Value b, Value sym, Value def );
 
 // Continuation
 
-#define CONTINUATION_CODE(v) (V2CONTINUATION(v)->d.continuation.code)
 #define CONTINUATION_BUNDLE(v) (V2CONTINUATION(v)->d.continuation.bundle)
-#define CONTINUATION_NEXT(v) (V2CONTINUATION(v)->d.continuation.next)
+#define CONTINUATION_DATA(v) (V2CONTINUATION(v)->d.continuation.data)
+#define CONTINUATION_CODE(v) (CAR(V2CONTINUATION(v)->d.continuation.data))
+#define CONTINUATION_NEXT(v) (CDR(V2CONTINUATION(v)->d.continuation.data))
 
 Value continuation_new( Value code, Value bundle, Value next );
 
@@ -293,10 +287,12 @@ Value continuation_new( Value code, Value bundle, Value next );
 
 // Stream
 
+#define STREAM_MASK_CLOSE (1>>15)
+#define STREAM_MASK_LINE ((1>>15)-1)
 #define STREAM_FD(v) (V2STREAM(v)->d.stream.fd)
-#define STREAM_CLOSE(v) (V2STREAM(v)->d.stream.close)
+#define STREAM_CLOSE(v) ((V2STREAM(v)->flag) & STREAM_MASK_CLOSE)
 #define STREAM_FILENAME(v) (V2STREAM(v)->d.stream.filename)
-#define STREAM_LINE(v) (V2STREAM(v)->d.stream.line)
+#define STREAM_LINE(v) (V2STREAM(v)->flag & STREAM_MASK_LINE)
 
 Value stream_new( FILE *fd, bool close, char *filename );
 int stream_getc( Value s );

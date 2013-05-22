@@ -16,6 +16,7 @@ const char *TYPE_NAMES[] = {
 	"STRING",
 	"PAIR",
 	"LAMBDA",
+	"CFUNC",
 	"BUNDLE",
 	"CONTINUATION",
 	"SPECIAL",
@@ -24,9 +25,7 @@ const char *TYPE_NAMES[] = {
 
 const char* LAMBDA_TYPE_NAME[] = {
 	"LAMBDA",
-	"CFUNC",
 	"MACRO",
-	"CMACRO"
 };
 
 //********************************************************
@@ -143,7 +142,7 @@ char* v2s_limit( Value v, int limit )
 {
 	char buf[10240+1];
 	assert( limit < sizeof(buf) );
-	int len = value_to_str(buf, limit, v);
+	size_t len = value_to_str(buf, limit, v);
 	if( len >= (limit-1) ) strcpy( buf+limit-4, "..." );
 	return STRING_STR(string_new(buf));
 }
@@ -282,9 +281,7 @@ Value string_new( char *str )
 Value lambda_new()
 {
 	Value v = gc_new(TYPE_LAMBDA);
-	LAMBDA_NAME(v) = NIL;
-	LAMBDA_ARGS(v) = NIL;
-	LAMBDA_BODY(v) = NIL;
+	LAMBDA_DATA(v) = NIL;
 	LAMBDA_BUNDLE(v) = NIL;
 	return v;
 }
@@ -348,8 +345,7 @@ Value bundle_new( Value upper )
 {
 	Value v = gc_new(TYPE_BUNDLE);
 	BUNDLE_DICT(v) = dict_new( hash_eqv, eqv );
-	BUNDLE_UPPER(v) = upper;
-	BUNDLE_LAMBDA(v) = NIL;
+	BUNDLE_DATA(v) = cons( upper, NIL );
 	return v;
 }
 
@@ -418,9 +414,8 @@ Value bundle_get( Value b, Value sym, Value def )
 Value continuation_new( Value code, Value bundle, Value next )
 {
 	Value v = gc_new( TYPE_CONTINUATION );
-	CONTINUATION_CODE(v) = code;
 	CONTINUATION_BUNDLE(v) = bundle;
-	CONTINUATION_NEXT(v) = next;
+	CONTINUATION_DATA(v) = cons( code, next );
 	return v;
 }
 
@@ -635,22 +630,22 @@ Value stream_new( FILE *fd, bool close, char *filename )
 {
 	Value v = gc_new( TYPE_STREAM );
 	STREAM_FD(v) = fd;
-	STREAM_CLOSE(v) = close;
+	v->flag = ( v->flag & ~STREAM_MASK_CLOSE ) | (close?1:0)<<15; // STREAM_CLOSE(v) = close;
 	STREAM_FILENAME(v) = string_new(filename);
-	STREAM_LINE(v) = 1;
+	v->flag = ( v->flag & ~STREAM_MASK_LINE ) | 1; // STREAM_LINE(v) = 1;
 	return v;
 }
 
 int stream_getc( Value s )
 {
 	int c = fgetc( STREAM_FD(s) );
-	if( c == '\n' ) STREAM_LINE(s) = STREAM_LINE(s) + 1;
+	if( c == '\n' ) s->flag = ( s->flag & ~STREAM_MASK_LINE ) | (STREAM_LINE(s) + 1);
 	return c;
 }
 
 void stream_ungetc( int c, Value s )
 {
-	if( c == '\n' ) STREAM_LINE(s) = STREAM_LINE(s) - 1;
+	if( c == '\n' ) s->flag = ( s->flag & ~STREAM_MASK_LINE ) | (STREAM_LINE(s) - 1);
 	ungetc( c, STREAM_FD(s) );
 }
 
@@ -720,7 +715,7 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 				Value bundle = CONTINUATION_BUNDLE(cont);
 				bool has_rest = (arity<0);
 				int arg_num = has_rest?(-1-arity):(arity);
-				Value v[8];
+				Value v[8] = {NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
 				
 				for( int i=0; i<arg_num; i++ ){
 					if( vals == NIL ) assert(0);
@@ -973,10 +968,9 @@ Value eval_loop( Value code )
 					lmd_args_tail = CDR(lmd_args_tail) = cons( CAR(CAR(cur)), NIL);
 					lmd_vals_tail = CDR(lmd_vals_tail) = cons( CADR(CAR(cur)), NIL);
 				}
-				LAMBDA_ARGS(lmd) = CDR(lmd_args);
-				LAMBDA_BODY(lmd) = CDDR(code);
+				LAMBDA_DATA(lmd) = cons3( NIL, CDR(lmd_args), CDDR(code) );
 				bundle_define( bundle, name, lmd );
-				Value call_form = cons( lmd, CDR(lmd_vals) );
+				Value call_form = cons( name, CDR(lmd_vals) );
 				//display_val( "let: ", cons3( LAMBDA_ARGS(lmd), LAMBDA_BODY(lmd), NIL) );
 				//display_val( "let: ", call_form );
 				NEXT( CONT( call_form, bundle, C_NEXT(cont)), NIL );
@@ -1015,7 +1009,7 @@ Value eval_loop( Value code )
 				Value lmd = lambda_new();
 				LAMBDA_TYPE(lmd) = (op==OP_LAMBDA)?LAMBDA_TYPE_LAMBDA:LAMBDA_TYPE_MACRO;
 				LAMBDA_BUNDLE(lmd) = C_BUNDLE(cont);
-				bind2cdr( code, LAMBDA_ARGS(lmd), LAMBDA_BODY(lmd) );
+				LAMBDA_DATA(lmd) = cons( NIL, code );
 				NEXT( C_NEXT(cont), lmd );
 			}
 

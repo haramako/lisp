@@ -305,6 +305,7 @@ static Value _load( Value args, Value cont, Value *result )
 {
 	Value filename, port;
 	bind2arg( args, filename, port );
+    assert(filename);
 	FILE *fd = fopen( STRING_STR(filename), "r" );
 	if( !fd ) assert(0);
 	Value file = stream_new( fd, true, STRING_STR(filename) );

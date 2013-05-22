@@ -14,6 +14,7 @@ void show_help(int err)
 
 int main( int argc, char **argv )
 {
+	printf( "sizeof:%ld\n", sizeof(Cell) );
 	/*
 	char buf[] = "01245678";
 	int x = snprintf( buf, 0, "%s", "hoge" );
@@ -68,13 +69,11 @@ int main( int argc, char **argv )
 			exit(1);
 		}
 		Value v = eval_loop( V_SRC_FILE = stream_new(f,true,argv[n]) );
-		if( IS_INT(v) ) result = V2INT(v);
+		if( IS_INT(v) ) result = (int)V2INT(v);
 	}
     
 	// show_prof();
 
-	return result;
-	
 	if( opt_trace ){
 		show_prof();
 		finalize();
