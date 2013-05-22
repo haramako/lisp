@@ -1,4 +1,5 @@
 ;; macro-expand-all, quasi-quote に必要な物は早めに
+
 (define (caar x) (car (car x)))
 (define (cadr x) (car (cdr x)))
 (define (cdar x) (cdr (car x)))
@@ -57,6 +58,10 @@
 	(display " ")
 	(apply puts (cdr x))))
 
+(define (*tee* x)
+  (puts x)
+  x)
+
 (define cond
   (macro form
 	(let recur ((form form))
@@ -71,7 +76,7 @@
 (define else #t)
 
 (define (error . mes)
-  (puts "error:" mes)
+  (apply puts (cons "error:" mes))
   (backtrace)
   (exit 1))
 
@@ -79,16 +84,14 @@
 (define (macro-form? form)
   (and (pair? form)
 	   (symbol? (car form))
-	   (define? (car form))
+	   (defined? (car form))
 	   (macro? (eval (car form)))))
 
 (define (macro-expand form)
   (if (macro-form? form)
 	  (begin
 	   (apply (eval (car form)) (cdr form)))
-	form))
-
-1
+	(syntax-expand1 form)))
 
 (define (macro-expand-all form)
   (define macro-expand-list
@@ -98,8 +101,8 @@
 		(cons (macro-expand-all (car form)) (macro-expand-list (cdr form))))))
   (if (not (pair? form))
 	  form
-	(set! form (macro-expand form))
-	(cons (macro-expand-all (car form)) (macro-expand-list (cdr form)))))
+	  (let ((form (macro-expand form)))
+		(cons (macro-expand-all (car form)) (macro-expand-list (cdr form))))))
 
 (define *compile-hook* macro-expand-all)
 ;; ここからマクロが有効化
@@ -213,13 +216,9 @@
 
 ;; utilities
 
-;(define-macro (not-pair? x) `(not (pair? ,x)))
+(define-macro (unless c . t)
+  `(if ,c #f ,@t))
 
-
-
-(define (mac form)
-  (puts (macro-expand-all form)))
-  
 (define-macro (do arg . body)
   (let ((arg-form (map (lambda (x) (list (car x) (cadr x))) arg))
 		(next-form (map caddr arg)))
@@ -227,6 +226,8 @@
 	   (if ,(caar body) (begin ,@(cdar body))
 		   ,@(cdr body)
 		   (*loop* ,@next-form)))))
+
+;; values
 
 (define (values . x)
   (if (null? (cdr x)) (car x) (cons 'VALUES x)))
@@ -246,11 +247,15 @@
 			 ,(loop (cdr args))))
 		 (#t (cons 'begin body))))))
 
+;; number
+
 (define (zero? x) (eqv? x 0))
 (define (negative? x) (< x 0))
 (define (positive? x) (>= x 0))
 (define (even? x) (eqv? (modulo x 2) 0))
 (define (odd? x) (eqv? (modulo x 2) 1))
+
+;; list
 
 (define (list-tail li n)
   (let loop ((li li) (n n))
@@ -263,17 +268,20 @@
 (define-macro (define-unless . form)
   (let ((sym (car (car form)))
 		(args (cdr (car form))))
-	`(if (define? ',sym)
+	`(if (defined? ',sym)
 		 (set! ,sym (lambda ,args ,@(cdr form)))
 		 (define ,@form))))
 
-(define-macro (:optional sym val)
-  `(if (pair? ,sym) (car ,sym) ,val))
-  
+(define-macro (let1 var . body)
+  `(let (,var) ,@body))
 
 ;;************************************************************
 ;; from http://srfi.schemers.org/srfi-1/srfi-1-reference.scm
 ;;************************************************************
+
+(define-macro (:optional sym val)
+  `(if (pair? ,sym) (car ,sym) ,val))
+
 (define (tree-copy x_)
   (let recur ((x x_))
 	(if (not (pair? x)) x
@@ -281,3 +289,127 @@
 
 (define (check-arg pred val caller)
   (if (pred val) val (check-arg (error "Bad argument" val pred caller))))
+
+
+;;************************************************************
+;; dynamic-wind from tiny-scheme
+;; URL: http://tinyscheme.sourceforge.net/
+;;************************************************************
+
+;;;;;Helper for the dynamic-wind definition.  By Tom Breton (Tehom)
+(define (shared-tail x y)
+   (let ((len-x (length x))
+         (len-y (length y)))
+      (define (shared-tail-helper x y)
+         (if
+            (eq? x y)
+            x
+            (shared-tail-helper (cdr x) (cdr y))))
+
+      (cond
+         ((> len-x len-y)
+            (shared-tail-helper
+               (list-tail x (- len-x len-y))
+               y))
+         ((< len-x len-y)
+            (shared-tail-helper
+               x
+               (list-tail y (- len-y len-x))))
+         (#t (shared-tail-helper x y)))))
+
+;;;;;Dynamic-wind by Tom Breton (Tehom)
+
+;;Guarded because we must only eval this once, because doing so
+;;redefines call/cc in terms of old call/cc
+(unless (defined? 'dynamic-wind)
+   (let
+      ;;These functions are defined in the context of a private list of
+      ;;pairs of before/after procs.
+      (  (*active-windings* '())
+         ;;We'll define some functions into the larger environment, so
+         ;;we need to know it.
+         (outer-env (current-environment)))
+
+      ;;Poor-man's structure operations
+      (define before-func car)
+      (define after-func  cdr)
+      (define make-winding cons)
+
+      ;;Manage active windings
+      (define (activate-winding! new)
+         ((before-func new))
+         (set! *active-windings* (cons new *active-windings*)))
+      (define (deactivate-top-winding!)
+         (let ((old-top (car *active-windings*)))
+            ;;Remove it from the list first so it's not active during its
+            ;;own exit.
+            (set! *active-windings* (cdr *active-windings*))
+            ((after-func old-top))))
+
+      (define (set-active-windings! new-ws)
+         (unless (eq? new-ws *active-windings*)
+            (let ((shared (shared-tail new-ws *active-windings*)))
+
+               ;;Define the looping functions.
+               ;;Exit the old list.  Do deeper ones last.  Don't do
+               ;;any shared ones.
+               (define (pop-many)
+                  (unless (eq? *active-windings* shared)
+                     (deactivate-top-winding!)
+                     (pop-many)))
+               ;;Enter the new list.  Do deeper ones first so that the
+               ;;deeper windings will already be active.  Don't do any
+               ;;shared ones.
+               (define (push-many new-ws)
+                  (unless (eq? new-ws shared)
+                     (push-many (cdr new-ws))
+                     (activate-winding! (car new-ws))))
+
+               ;;Do it.
+               (pop-many)
+               (push-many new-ws))))
+
+      ;;The definitions themselves.
+      (eval
+         `(define call-with-current-continuation
+             ;;It internally uses the built-in call/cc, so capture it.
+             ,(let ((old-c/cc call-with-current-continuation))
+                 (lambda (func)
+                    ;;Use old call/cc to get the continuation.
+                    (old-c/cc
+                       (lambda (continuation)
+                          ;;Call func with not the continuation itself
+                          ;;but a procedure that adjusts the active
+                          ;;windings to what they were when we made
+                          ;;this, and only then calls the
+                          ;;continuation.
+                          (func
+                             (let ((current-ws *active-windings*))
+                                (lambda x
+								  (set-active-windings! current-ws)
+								  (apply continuation x)))))))))
+         outer-env)
+      ;;We can't just say "define (dynamic-wind before thunk after)"
+      ;;because the lambda it's defined to lives in this environment,
+      ;;not in the global environment.
+      (eval
+         `(define dynamic-wind
+             ,(lambda (before thunk after)
+                 ;;Make a new winding
+                 (activate-winding! (make-winding before after))
+                 (let ((result (thunk)))
+                    ;;Get rid of the new winding.
+                    (deactivate-top-winding!)
+                    ;;The return value is that of thunk.
+                    result)))
+         outer-env)))
+
+(define call/cc call-with-current-continuation)
+
+;;************************************************************
+;; other
+;;************************************************************
+
+(define (mac form)
+  (puts (macro-expand-all form)))
+  

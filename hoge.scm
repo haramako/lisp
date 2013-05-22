@@ -1,21 +1,43 @@
-(begin
-  (let () )
-  (puts 1))
-
-
 (load "srfi-1.scm")
 
-(puts `(1 2 ,@'(3 4) 5))
 
-(puts 'a)
-(puts '(1 2))
+(define-syntax nil!
+  (syntax-rules ()
+	((_ x)
+	 (set! x '()))
+	))
 
-(puts (call/cc (lambda (cont) (cont 1) 2)))
+(puts (syntax-expand1 '(nil! hoge)))
+
+(define hoge 1)
+(nil! hoge)
+(puts 'hoge hoge)
+
+(let ((x 1))
+  (puts 'dynamic-wind)
+  (call/cc (lambda (break)
+			 (dynamic-wind
+				 (lambda () (puts 1))
+				 (lambda () (break 0) (puts 2))
+				 (lambda () (puts 3))
+			   )
+			 ))
+  (puts 4)
+  )
 
 (define (fib n)
   (if (<= n 1)
 	  1
-	  (+ (fib (- n 1) (fib (- n 2))))))
+	  (+ (fib (- n 1)) (fib (- n 2)))))
+
+(puts "fib" (fib 10))
+
+(let ((x 1))
+  (define ce (current-environment))
+  (puts ce)
+  (let ((x 2))
+	(puts (eval 'x ce)))
+  )
 
 ; (puts (fib 29))
 

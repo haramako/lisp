@@ -155,7 +155,7 @@
 		   (lambda (cont)
 			 (cont 1)
 			 (assert eqv? #t #f))))
-  (assert (values 1 2)
+  '(assert (values 1 2)
 		  (call/cc
 		   (lambda (cont)
 			 (cont 1 2)
@@ -173,6 +173,13 @@
 		   (b (cons 1 a)))
 	(assert '(() (1)) (list a b)))
   )
+
+;;; current-environment, eval
+(let ((x 1))
+  (define env (current-environment))
+  (let ((x 2))
+	(assert 1 (eval 'x env))))
+
 
 	
 

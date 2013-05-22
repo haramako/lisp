@@ -48,7 +48,7 @@ static Value _equal_p( Value args, Value cont, Value *result )
 	return CONTINUATION_NEXT(cont);
 }
 
-static Value _define_p( Value args, Value cont, Value *result )
+static Value _defined_p( Value args, Value cont, Value *result )
 {
 	if( bundle_find( CONTINUATION_BUNDLE(cont), CAR(args), true, false ) ){
 		*result = VALUE_T;
@@ -282,8 +282,25 @@ static Value _get_closure_code( Value args, Value cont, Value *result )
 	return CONTINUATION_NEXT(cont);
 }
 
+static Value _syntax_expand1( Value args, Value cont, Value *result )
+{
+	*result = syntax_expand1( CAR(args) );
+	return CONTINUATION_NEXT(cont);
+}
+
 static Value _apply( Value args, Value cont, Value *result )
 {
+	// 継続の場合
+	if( TYPE_OF(CAR(args)) == TYPE_CONTINUATION ){
+		Value rest = CADR(args);
+		if( IS_PAIR(CDR(rest)) ){
+			*result = cons( intern("VALUES"), rest );
+		}else{
+			*result = CAR(rest);
+		}
+		return CAR(args);
+	}
+	
 	Value lmd = V2LAMBDA(CAR(args));
 	Value head = cons( NIL, NIL );
 	Value tail = head;
@@ -302,8 +319,18 @@ static Value _apply( Value args, Value cont, Value *result )
 
 static Value _eval( Value args, Value cont, Value *result )
 {
-	Value c = continuation_new( CAR(args), CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
+	Value code, bundle;
+	bind2arg( args, code, bundle );
+	if( !code ) assert(0);
+	if( !bundle ) bundle = CONTINUATION_BUNDLE(cont);
+	Value c = continuation_new( code, bundle, CONTINUATION_NEXT(cont) );
 	return c;
+}
+
+static Value _current_environment( Value args, Value cont, Value *result )
+{
+	*result = CONTINUATION_BUNDLE(cont);
+	return CONTINUATION_NEXT(cont);
 }
 
 static Value _backtrace( Value args, Value cont, Value *result )
@@ -336,7 +363,7 @@ static Value _display( Value args, Value cont, Value *result )
 	Value v, port;
 	bind2arg( args, v, port );
     assert( v );
-	if( !port ) port = bundle_get( CONTINUATION_BUNDLE(cont), SYM_CURRENT_OUTPUT_PORT );
+	if( !port ) port = bundle_get( CONTINUATION_BUNDLE(cont), SYM_CURRENT_OUTPUT_PORT, NULL );
 	switch( TYPE_OF(v) ){
 	case TYPE_STRING:
 		fputs( STRING_STR(v), STREAM_FD(port) );
@@ -352,7 +379,7 @@ static Value _write( Value args, Value cont, Value *result )
 {
 	Value v, port;
 	bind2arg( args, v, port );
-	if( !port ) port = bundle_get( CONTINUATION_BUNDLE(cont), SYM_CURRENT_OUTPUT_PORT );
+	if( !port ) port = bundle_get( CONTINUATION_BUNDLE(cont), SYM_CURRENT_OUTPUT_PORT, NULL );
 	stream_write( port, v );
 	return CONTINUATION_NEXT(cont);
 }
@@ -361,7 +388,7 @@ static Value _read( Value args, Value cont, Value *result )
 {
 	Value v, port;
 	bind2arg( args, v, port );
-	if( !port ) port = bundle_get( CONTINUATION_BUNDLE(cont), SYM_CURRENT_INPUT_PORT );
+	if( !port ) port = bundle_get( CONTINUATION_BUNDLE(cont), SYM_CURRENT_INPUT_PORT, NULL );
 	*result = stream_read(port);
 	return CONTINUATION_NEXT(cont);
 }
@@ -391,7 +418,7 @@ void cfunc_init()
 	defun( "eqv?", _eqv_p );
 	defun( "=", _eqv_p );
 	defun( "equal?", _equal_p );
-	defun( "define?", _define_p );
+	defun( "defined?", _defined_p );
 	
 	defun( "+", _add );
 	defun( "-", _sub );
@@ -424,8 +451,10 @@ void cfunc_init()
 
 	defun( "apply", _apply );
 	defun( "get-closure-code", _get_closure_code );
+	defun( "syntax-expand1", _syntax_expand1 );
 
 	defun( "eval", _eval );
+	defun( "current-environment", _current_environment );
 	defun( "backtrace", _backtrace );
 	defun( "call/cc", _call_cc );
 	defun( "call-with-current-continuation", _call_cc );

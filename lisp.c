@@ -66,7 +66,8 @@ static size_t _value_to_str( char *buf, int len, Value v )
 	case TYPE_LAMBDA:
 		{
 			if( LAMBDA_NAME(v) != NIL ){
-				n += snprintf( buf, len, "(%s:%s)", LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], STRING_STR(SYMBOL_STR(LAMBDA_NAME(v))) );
+				n += snprintf( buf, len, "(%s:%s:%p)",
+							   LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], STRING_STR(SYMBOL_STR(LAMBDA_NAME(v))), v );
 			}else{
 				n += snprintf( buf, len, "(%s:%p)", LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], v );
 			}
@@ -322,21 +323,21 @@ void bundle_define( Value b, Value sym, Value v )
 	
 	DictEntry *entry = bundle_find( b, sym, false, true );
 	if( entry->val != NIL ){
-		printf( "bundle_define: %s\n", v2s(sym) );
-		assert( !"already set" );
+		// printf( "bundle_define: %s\n", v2s(sym) );
+		// assert( !"already set" );
 	}
 	entry->val = v;
 	
 	if( IS_LAMBDA(v) && LAMBDA_NAME(v) == NIL ) LAMBDA_NAME(v) = sym;
 }
 
-Value bundle_get( Value b, Value sym )
+Value bundle_get( Value b, Value sym, Value def )
 {
 	DictEntry *entry = bundle_find( b, sym, true, false );
 	if( entry ){
 		return entry->val;
 	}else{
-		return NIL;
+		return def;
 	}
 }
 
@@ -470,6 +471,12 @@ int _parse( Value s, Value *result )
 		case 'f':
 			*result = VALUE_F;
 			return 0;
+		case 'p':
+			// for debug pringint
+			err = _parse(s,result);
+			if( err ) return err;
+			*result = cons3( intern("*tee*"), *result, NIL );
+			return 0;
 		case '|':
 			// multi-line comment
 			level = 1;
@@ -595,6 +602,12 @@ Value stream_write( Value s, Value v )
 // Evaluation
 //********************************************************
 
+Value cont_error( char *str, Value cont )
+{
+	return continuation_new( cons3( intern("error"), string_new(str), NIL ),
+							 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
+}
+
 Value call( Value lmd, Value vals, Value cont, Value *result )
 {
 	Value orig_vals = vals;
@@ -609,8 +622,10 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 					if( !IS_PAIR(vals) ){
 						printf( "call: %s orig_vals: %s lmd: %s\n", v2s(LAMBDA_BODY(lmd)), v2s(orig_vals), v2s(LAMBDA_ARGS(lmd)) );
 					}
+					if( !IS_SYMBOL(CAR(cur)) ) return cont_error( "not symbol", cont );
 					bundle_define( bundle, CAR(cur), CAR(vals) );
 				}else{
+					if( !IS_SYMBOL(cur) ) return cont_error( "not symbol", cont );
 					bundle_define( bundle, cur, vals );
 					break;
 				}
@@ -867,7 +882,7 @@ Value eval_loop( Value code )
 				}else if( vars == NIL ){
 					NEXT( CONT_OP( V_BEGIN, body, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
 				}else{
-					ERROR( "invalid let" );
+					FAIL();
 				}
 			}
 				
@@ -893,6 +908,12 @@ Value eval_loop( Value code )
 		case OP_EXEC_MACRO:
 			// display_val( "EXEC_MACRO :", result );
 			NEXT( CONT( result, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+
+		case OP_DEFINE_SYNTAX:
+			{
+				bundle_define( C_BUNDLE(cont), CAR(code), CADR(code) );
+				NEXT( C_NEXT(cont), NIL );
+			}
 				
 		case OP_IF:
 			NEXT( CONT( CAR(code), C_BUNDLE(cont),
@@ -934,7 +955,9 @@ Value eval_loop( Value code )
 				Value stat = stream_read( code );
 				if( opt_trace ) printf( "trace: %s\n", v2s_limit(stat,100) );
 				if( stat != V_EOF ){
-					Value compile_hook = bundle_get( bundle_cur, SYM_A_COMPILE_HOOK_A );
+					// stat = syntax_expand1( stat );
+						
+					Value compile_hook = bundle_get( bundle_cur, SYM_A_COMPILE_HOOK_A, NIL );
 					if( compile_hook != NIL ){
 						// *compile-hook* があればコンパイルする
 						stat = cons3( compile_hook, cons3( V_QUOTE, stat, NIL ), NIL );
@@ -955,6 +978,64 @@ Value eval_loop( Value code )
 						CONT_OP( V_READ_EVAL, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
 		}
 	}
+	assert(0);
+}
+
+Value _syntax_expand_body( Value body, Value bundle )
+{
+	for( Value cur=body; cur != NIL; cur=CDR(cur) ){
+		if( IS_PAIR(CAR(cur)) ){
+			CAR(cur) = _syntax_expand_body( CAR(cur), bundle );
+		}else if( IS_SYMBOL(CAR(cur)) ){
+			Value found = bundle_get( bundle, CAR(cur), NULL );
+			if( found ){
+				CAR(cur) = found;
+			}
+		}
+	}
+	return body;
+}
+
+Value list_copy( Value list )
+{
+	if( !IS_PAIR(list) ) return list;
+	Value r = cons( CAR(list), NIL );
+	Value tail = r;
+	for( Value cur=CDR(list); cur != NIL; cur=CDR(cur) ){
+		tail = CDR(tail) = cons( CAR(cur), NIL );
+	}
+	return r;
+}
+
+Value syntax_expand1( Value code )
+{
+	if( !IS_PAIR(code) ) return code;
+	Value syntax = bundle_get( bundle_cur, CAR(code), NIL );
+	if( !IS_PAIR(syntax) ) return code;
+	Value sym, keywords, rules;
+	bind3cdr( syntax, sym, keywords, rules );
+	if( sym != intern("syntax-rules") ) return code;
+	if( keywords == NULL || rules == NULL ) assert(0);
+	
+	// 名前のバインド
+	Value bundle = bundle_new(NIL);
+	for( Value cur=rules; cur != NIL; cur=CDR(cur) ){
+		Value rule = CAR(cur);
+		bool matched = true;
+		Value rest = code;
+		for( Value c = CAR(rule); c != NIL; c=CDR(c), rest=CDR(code) ){
+			if( !IS_PAIR(rest) ){
+				matched = false;
+				break;
+			}
+			bundle_define( bundle, CAR(c), CAR(rest) );
+			// printf( "bind %s => %s\n", v2s(CAR(c)), v2s(CAR(rest)) );
+		}
+		Value new_code = _syntax_expand_body( list_copy(CADR(rule)), bundle );
+		printf( "expand-syntax: %s => %s\n", v2s(code), v2s(new_code) );
+		return new_code;
+	}
+	printf( "no pattern matched" );
 	assert(0);
 }
 
@@ -1015,7 +1096,7 @@ Value V_QUOTE;
 Value V_DEFINE, V_DEFINE2;
 Value V_SET_I, V_SET_I2;
 Value V_LET, V_LET_A, V_LETREC, V_LET2, V_LET3;
-Value V_LAMBDA, V_MACRO, V_EXEC_MACRO;
+Value V_LAMBDA, V_MACRO, V_EXEC_MACRO, V_DEFINE_SYNTAX;
 Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 Value V_READ_EVAL, V_READ_EVAL2;
 
@@ -1079,6 +1160,7 @@ void init_prelude( bool with_prelude )
 	V_LET3 = _operator("*let3*", OP_LET3);
 	V_LAMBDA = _operator("lambda", OP_LAMBDA);
 	V_MACRO = _operator("macro", OP_MACRO);
+	V_DEFINE_SYNTAX = _operator("define-syntax", OP_DEFINE_SYNTAX);
 	V_EXEC_MACRO = _operator("*exec-macro*", OP_EXEC_MACRO);
 	V_IF = _operator("if", OP_IF);
 	V_IF2 = _operator("*if2*", OP_IF2);

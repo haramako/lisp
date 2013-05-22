@@ -44,6 +44,7 @@ typedef enum {
 	OP_LAMBDA,
 	OP_MACRO,
 	OP_EXEC_MACRO,
+	OP_DEFINE_SYNTAX,
 	OP_IF,
 	OP_IF2,
 	OP_AND,
@@ -247,7 +248,7 @@ Value bundle_new( Value upper );
 DictEntry* bundle_find( Value b, Value sym, bool find_upper, bool create );
 void bundle_set( Value b, Value sym, Value v );
 void bundle_define( Value b, Value sym, Value v );
-Value bundle_get( Value b, Value sym );
+Value bundle_get( Value b, Value sym, Value def );
 
 // Continuation
 
@@ -281,6 +282,7 @@ Value stream_write( Value s, Value v );
 Value call( Value lmd, Value vals, Value cont, Value *result );
 Value compile( Value code );
 Value eval_loop( Value v );
+Value syntax_expand1( Value code );
 
 // Initialization
 
@@ -305,7 +307,7 @@ extern Value V_QUOTE;
 extern Value V_DEFINE, V_DEFINE2;
 extern Value V_SET_I, V_SET_I2;
 extern Value V_LET, V_LET_A, V_LETREC, V_LET2, V_LET3;
-extern Value V_LAMBDA, V_MACRO, V_EXEC_MACRO;
+extern Value V_LAMBDA, V_MACRO, V_EXEC_MACRO, V_DEFINE_SYNTAX;
 extern Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 extern Value V_READ_EVAL, V_READ_EVAL2;
 
