@@ -73,6 +73,9 @@ static size_t _value_to_str( char *buf, int len, Value v )
 			}
 		}
 		break;
+	case TYPE_CFUNC:
+		n += snprintf( buf, len, "(CFUNC:%p)", CFUNC_FUNC(v) );
+		break;
 	case TYPE_PAIR:
 		n += snprintf( buf, len, "(" );
 		if( n >= len ) return len;
@@ -283,9 +286,27 @@ Value lambda_new()
 	LAMBDA_ARGS(v) = NIL;
 	LAMBDA_BODY(v) = NIL;
 	LAMBDA_BUNDLE(v) = NIL;
-	LAMBDA_FUNC(v) = NULL;
 	return v;
 }
+
+//********************************************************
+// CFunc
+//********************************************************
+
+Value cfunc_new(int arity, void *func )
+{
+	Value v = gc_new(TYPE_CFUNC);
+	CFUNC_ARITY(v) = arity;
+	CFUNC_FUNC(v) = func;
+	return v;
+}
+
+void defun( char *sym, int arity, void *func )
+{
+	Value v = cfunc_new(arity, func);
+	bundle_define( bundle_cur, intern(sym), v );
+}
+
 
 //********************************************************
 // Pair
@@ -665,35 +686,73 @@ Value cont_error( char *str, Value cont )
 Value call( Value lmd, Value vals, Value cont, Value *result )
 {
 	Value orig_vals = vals;
-	switch( LAMBDA_TYPE(lmd) ){
-	case LAMBDA_TYPE_LAMBDA:
-	case LAMBDA_TYPE_MACRO:
-		{
-			Value bundle = bundle_new( LAMBDA_BUNDLE(lmd) );
-			BUNDLE_LAMBDA(bundle) = lmd;
-			for( Value cur=LAMBDA_ARGS(lmd); cur != NIL; cur=CDR(cur), vals=CDR(vals) ){
-				if( IS_PAIR(cur) ){
-					if( !IS_PAIR(vals) ){
-						printf( "call: %s orig_vals: %s lmd: %s\n", v2s(LAMBDA_BODY(lmd)), v2s(orig_vals), v2s(LAMBDA_ARGS(lmd)) );
+	switch( TYPE_OF(lmd) ){
+	case TYPE_LAMBDA:
+		switch( LAMBDA_TYPE(lmd) ){
+		case LAMBDA_TYPE_LAMBDA:
+		case LAMBDA_TYPE_MACRO:
+			{
+				Value bundle = bundle_new( LAMBDA_BUNDLE(lmd) );
+				BUNDLE_LAMBDA(bundle) = lmd;
+				for( Value cur=LAMBDA_ARGS(lmd); cur != NIL; cur=CDR(cur), vals=CDR(vals) ){
+					if( IS_PAIR(cur) ){
+						if( !IS_PAIR(vals) ){
+							printf( "call: %s orig_vals: %s lmd: %s\n", v2s(LAMBDA_BODY(lmd)), v2s(orig_vals), v2s(LAMBDA_ARGS(lmd)) );
+						}
+						if( !IS_SYMBOL(CAR(cur)) ) return cont_error( "not symbol", cont );
+						bundle_define( bundle, CAR(cur), CAR(vals) );
+					}else{
+						if( !IS_SYMBOL(cur) ) return cont_error( "not symbol", cont );
+						bundle_define( bundle, cur, vals );
+						break;
 					}
-					if( !IS_SYMBOL(CAR(cur)) ) return cont_error( "not symbol", cont );
-					bundle_define( bundle, CAR(cur), CAR(vals) );
-				}else{
-					if( !IS_SYMBOL(cur) ) return cont_error( "not symbol", cont );
-					bundle_define( bundle, cur, vals );
-					break;
 				}
+				return continuation_new( cons(V_BEGIN, LAMBDA_BODY(lmd)), bundle, CONTINUATION_NEXT(cont) );
 			}
-			return continuation_new( cons(V_BEGIN, LAMBDA_BODY(lmd)), bundle, CONTINUATION_NEXT(cont) );
 		}
-	case LAMBDA_TYPE_CFUNC:
-	case LAMBDA_TYPE_CMACRO:
+	case TYPE_CFUNC:
 		{
-			Value next = LAMBDA_FUNC(lmd)( vals, cont, result );
-			return next;
+			void *func = CFUNC_FUNC(lmd);
+			int arity = CFUNC_ARITY(lmd);
+			if( arity == CFUNC_VARIABLE ){
+				return ((CFunction)func)( vals, cont, result );
+			}else{
+				Value bundle = CONTINUATION_BUNDLE(cont);
+				bool has_rest = (arity<0);
+				int arg_num = has_rest?(-1-arity):(arity);
+				Value v[8];
+				
+				for( int i=0; i<arg_num; i++ ){
+					if( vals == NIL ) assert(0);
+					v[i] = CAR(vals);
+					vals = CDR(vals);
+				}
+				
+				if( has_rest ){
+					v[arg_num] = vals;
+					arg_num++;
+				}else{
+					if( vals != NIL ) assert(0);
+				}
+				
+				switch( arg_num ){
+				case 0: *result = ((CFunction0)func)( bundle ); break;
+				case 1: *result = ((CFunction1)func)( bundle, v[0] ); break;
+				case 2: *result = ((CFunction2)func)( bundle, v[0], v[1] ); break;
+				case 3: *result = ((CFunction3)func)( bundle, v[0], v[1], v[2] ); break;
+				case 4: *result = ((CFunction4)func)( bundle, v[0], v[1], v[2], v[3] ); break;
+				case 5: *result = ((CFunction5)func)( bundle, v[0], v[1], v[2], v[3], v[4] ); break;
+				case 6: *result = ((CFunction6)func)( bundle, v[0], v[1], v[2], v[3], v[4], v[5] ); break;
+				case 7: *result = ((CFunction7)func)( bundle, v[0], v[1], v[2], v[3], v[4], v[5], v[6] ); break;
+				default:
+					assert(0);
+				}
+				return CONTINUATION_NEXT(cont);
+			}
 		}
+	default:
+		assert(0);
 	}
-	assert(0);
 }
 
 #define NEXT(_cont,_v) do{ Value r = _v; cont = _cont; result = (r); goto _loop; }while(0)
@@ -725,16 +784,18 @@ Value eval_loop( Value code )
 		release( cont );
 		gc_count = 10000;
 	}
-	
+
 	if( cont == NIL ) return result;
 	// printf( "> %s\n", v2s_limit(C_CODE(cont), 80) );
 	// display_val( "=> ", result );
 	switch( TYPE_OF(C_CODE(cont)) ){
 	case TYPE_UNUSED:
+	case TYPE_MAX:
 		assert(0);
 	case TYPE_NIL:
 	case TYPE_INT:
 	case TYPE_LAMBDA:
+	case TYPE_CFUNC:
 	case TYPE_BOOL:
 	case TYPE_STRING:
 	case TYPE_BUNDLE:
@@ -775,24 +836,31 @@ Value eval_loop( Value code )
 			// display_val( "OP_CALL0: ", cons( result, C_CODE(cont) ) );
 			switch( TYPE_OF(result) ){
 			case TYPE_LAMBDA:
-				{
-					Value args = cons(result,NIL);
-					Value lmd = result;
-					switch( LAMBDA_TYPE(lmd) ){
-					case LAMBDA_TYPE_LAMBDA:
-					case LAMBDA_TYPE_CFUNC:
-						if( code != NIL ){
-							NEXT( CONT( CAR(code), C_BUNDLE(cont),
-										CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) ),
-								  NIL );
-						}else{
-							Value res = NIL;
-							Value next = call( lmd, NIL, cont, &res);
-							NEXT( next, res );
-						}
-					default:
-						ERROR( "cannot call" );
+				switch( LAMBDA_TYPE(result) ){
+				case LAMBDA_TYPE_LAMBDA:
+					if( code != NIL ){
+						Value args = cons(result,NIL);
+						NEXT( CONT( CAR(code), C_BUNDLE(cont),
+									CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) ),
+							  NIL );
+					}else{
+						Value res = NIL;
+						Value next = call( result, NIL, cont, &res);
+						NEXT( next, res );
 					}
+				default:
+					ERROR( "cannot call" );
+				}
+			case TYPE_CFUNC:
+				if( code != NIL ){
+					Value args = cons(result,NIL);
+					NEXT( CONT( CAR(code), C_BUNDLE(cont),
+								CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) ),
+						  NIL );
+				}else{
+					Value res = NIL;
+					Value next = call( result, NIL, cont, &res);
+					NEXT( next, res );
 				}
 			case TYPE_SPECIAL:
 				NEXT( CONT_OP( result, code, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
@@ -821,19 +889,10 @@ Value eval_loop( Value code )
 						  NIL );
 				}else{
 					Value lmd = CAR(vals);
-					if( IS_LAMBDA(lmd) ){
-						switch( LAMBDA_TYPE(lmd) ){
-						case LAMBDA_TYPE_LAMBDA:
-							NEXT( call( lmd, CDR(vals), cont, NULL ), NIL );
-						case LAMBDA_TYPE_CFUNC:
-							{
-								Value val = NIL;
-								Value next = LAMBDA_FUNC(lmd)( CDR(vals), cont, &val );
-								NEXT( next, val );
-							}
-						default:
-							assert(0);
-						}
+					if( IS_LAMBDA(lmd) || IS_CFUNC(lmd) ){
+						Value val = NIL;
+						Value next = call(lmd, CDR(vals), cont, &val );
+						NEXT( next, val );
 					}else if( IS_CONTINUATION(lmd) ){
 						vals = CDR(vals);
 						if( CDR(vals) != NIL ){
@@ -1125,24 +1184,6 @@ Value syntax_expand1( Value code )
 //********************************************************
 // Initialization
 //********************************************************
-
-void register_cfunc( char *sym, LambdaType type, CFunction func )
-{
-	Value v = lambda_new();
-	LAMBDA_FUNC(v) = func;
-	LAMBDA_TYPE(v) = type;
-	bundle_define( bundle_cur, intern(sym), v );
-}
-
-void defun( char *sym, CFunction func )
-{
-	return register_cfunc( sym, LAMBDA_TYPE_CFUNC, func );
-}
-
-void defmacro( char *sym, CFunction func )
-{
-	return register_cfunc( sym, LAMBDA_TYPE_CMACRO, func );
-}
 
 // print backtrace
 // See: http://expcodes.com/12895

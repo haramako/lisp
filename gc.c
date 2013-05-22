@@ -87,6 +87,7 @@ static void _mark( Value v )
 	// display_val( "mark: ", (Value)p );
 	switch( TYPE_OF(v) ){
 	case TYPE_UNUSED:
+	case TYPE_MAX:
 		assert(0);
 	case TYPE_NIL:
 	case TYPE_INT:
@@ -107,6 +108,8 @@ static void _mark( Value v )
 		_mark( LAMBDA_ARGS(v) );
 		_mark( LAMBDA_BODY(v) );
 		_mark( LAMBDA_BUNDLE(v) );
+		break;
+	case TYPE_CFUNC:
 		break;
 	case TYPE_BUNDLE:
 		_mark_dict( BUNDLE_DICT(v) );

@@ -72,6 +72,8 @@ int main( int argc, char **argv )
 	}
     
 	// show_prof();
+
+	return result;
 	
 	if( opt_trace ){
 		show_prof();

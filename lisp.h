@@ -15,6 +15,7 @@ typedef enum {
 	TYPE_STRING,
 	TYPE_PAIR,
 	TYPE_LAMBDA,
+	TYPE_CFUNC,
 	TYPE_BUNDLE,
 	TYPE_CONTINUATION,
 	TYPE_SPECIAL,
@@ -57,16 +58,24 @@ typedef enum {
 
 typedef enum {
 	LAMBDA_TYPE_LAMBDA = 0,
-	LAMBDA_TYPE_CFUNC,
 	LAMBDA_TYPE_MACRO,
-	LAMBDA_TYPE_CMACRO,
 } LambdaType;
 
 extern const char* LAMBDA_TYPE_NAME[];
 
 typedef struct Cell* Value;
 
-typedef struct Cell* (*CFunction)( struct Cell *args, struct Cell *cont, struct Cell **result );
+#define CFUNC_VARIABLE 127
+
+typedef Value (*CFunction)( Value args, Value cont, Value *result );
+typedef Value (*CFunction0)( Value bundle );
+typedef Value (*CFunction1)( Value bundle, Value v1 );
+typedef Value (*CFunction2)( Value bundle, Value v1, Value v2 );
+typedef Value (*CFunction3)( Value bundle, Value v1, Value v2, Value v3 );
+typedef Value (*CFunction4)( Value bundle, Value v1, Value v2, Value v3, Value v4 );
+typedef Value (*CFunction5)( Value bundle, Value v1, Value v2, Value v3, Value v4, Value v5 );
+typedef Value (*CFunction6)( Value bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6 );
+typedef Value (*CFunction7)( Value bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6, Value v7 );
 
 typedef struct Cell {
 	char type;
@@ -74,56 +83,60 @@ typedef struct Cell {
 	union {
 		int64_t number;
 		struct {
-			struct Cell *next;
+			Value next;
 		} unused;
 		struct {
-			struct Cell *car;
-			struct Cell *cdr;
+			Value car;
+			Value cdr;
 		} pair;
 		struct {
-			struct Cell *str;
+			Value str;
 		} symbol;
 		struct {
 			char *str;
 		} string;
 		struct {
-			struct Cell *upper;
+			Value upper;
 			struct Dict *dict;
-			struct Cell *lambda;
+			Value lambda;
 		} bundle;
 		struct {
 			LambdaType type;
-			struct Cell *name;
-			struct Cell *args;
-			struct Cell *body;
-			struct Cell *bundle;
-			CFunction func;
+			Value name;
+			Value args;
+			Value body;
+			Value bundle;
 		} lambda;
+		struct {
+			int arity;
+			void *func;
+		} cfunc;
 		struct {
 			Operator op;
 			char *str;
 		} special;
 		struct {
-			struct Cell *bundle;
-			struct Cell *code;
-			struct Cell *next;
+			Value bundle;
+			Value code;
+			Value next;
 		} continuation;
 		struct {
 			FILE *fd;
 			bool close;
-            struct Cell *filename;
+            Value filename;
 			int line;
 		} stream;
 	} d;
 } Cell;
 
-#define TYPE_OF(v) (v->type)
+#define TYPE_OF(v) ((Type)v->type)
 
 #define IS_INT(v) (v->type==TYPE_INT)
 #define IS_SYMBOL(v) ((v)->type==TYPE_SYMBOL)
 #define IS_STRING(v) ((v)->type==TYPE_STRING)
 #define IS_PAIR(v) ((v)->type==TYPE_PAIR)
 #define IS_LAMBDA(v) ((v)->type==TYPE_LAMBDA)
+#define IS_CFUNC(v) ((v)->type==TYPE_CFUNC)
 #define IS_BUNDLE(v) ((v)->type==TYPE_BUNDLE)
 #define IS_CONTINUATION(v) ((v)->type==TYPE_CONTINUATION)
 #define IS_SPECIAL(v) ((v)->type==TYPE_SPECIAL)
@@ -135,6 +148,7 @@ typedef struct Cell {
 #define V2STRING(v) (assert(IS_STRING(v)),v)
 #define V2PAIR(v) (assert(IS_PAIR(v)),v)
 #define V2LAMBDA(v) (assert(IS_LAMBDA(v)),v)
+#define V2CFUNC(v) (assert(IS_CFUNC(v)),v)
 #define V2BUNDLE(v) (assert(IS_BUNDLE(v)),v)
 #define V2CONTINUATION(v) (assert(IS_CONTINUATION(v)),v)
 #define V2SPECIAL(v) (assert(IS_SPECIAL(v)),v)
@@ -165,13 +179,13 @@ Value release( Value v );
 // Dictionary ( Hash Map ) in dict.c
 
 typedef struct DictEntry {
-	struct Cell *key;
-	struct Cell *val;
+	Value key;
+	Value val;
 	struct DictEntry *next;
 } DictEntry;
 
-typedef unsigned int (*HashFunction)( struct Cell *v);
-typedef bool (*CompareFunction)( struct Cell *a, struct Cell *b);
+typedef unsigned int (*HashFunction)( Value v);
+typedef bool (*CompareFunction)( Value a, Value b);
 
 typedef struct Dict {
 	int size;
@@ -211,10 +225,17 @@ Value string_new( char *str );
 #define LAMBDA_NAME(v) (V2LAMBDA(v)->d.lambda.name)
 #define LAMBDA_ARGS(v) (V2LAMBDA(v)->d.lambda.args)
 #define LAMBDA_BODY(v) (V2LAMBDA(v)->d.lambda.body)
-#define LAMBDA_FUNC(v) (V2LAMBDA(v)->d.lambda.func)
 #define LAMBDA_BUNDLE(v) (V2LAMBDA(v)->d.lambda.bundle)
 
 Value lambda_new();
+
+// CFunc
+
+#define CFUNC_ARITY(v) (V2CFUNC(v)->d.cfunc.arity)
+#define CFUNC_FUNC(v) (V2CFUNC(v)->d.cfunc.func)
+
+Value cfunc_new(int arity, void *func );
+void defun( char *sym, int arity, void *func );
 
 // Pair
 
@@ -324,10 +345,6 @@ extern Value SYM_A_DEBUG_A, SYM_A_COMPILE_HOOK_A, SYM_QUASIQUOTE, SYM_UNQUOTE, S
 
 extern bool opt_trace;
 extern bool opt_debug;
-
-void register_cfunc( char *sym, LambdaType type, CFunction func );
-void defun( char *sym, CFunction func );
-void defmacro( char *sym, CFunction func );
 
 void init();
 void init_prelude( bool with_prelude );

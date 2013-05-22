@@ -170,7 +170,7 @@
 	  (tree-copy '())
 	  null?)
 
-(let ((original 43/17))
+(let ((original '43/17))
   (test 'tree-copy:non-pair
 		(tree-copy original)
 		(lambda (result) (equal? result original))))

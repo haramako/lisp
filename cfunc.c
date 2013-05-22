@@ -3,206 +3,168 @@
 #include <string.h>
 #include <limits.h>
 
-static Value _value( Value args, Value cont, Value *result )
+static Value _value( Value bundle, Value v )
 {
-	*result = CAR(args);
-	return CONTINUATION_NEXT(cont);
+	return v;
 }
 
-static Value _eq_p( Value args, Value cont, Value *result )
+static Value _eq_p( Value bundle, Value args )
 {
-	*result = VALUE_F;
-	for( Value cur=args; cur != NIL; cur = CDR(cur) ){
-		if( CDR(cur) == NIL ) break;
-		Value car, cdr;
-		bind2( cur, car, cdr );
-		if( !eq( car, cdr ) ) return CONTINUATION_NEXT(cont);
+	if( args == NIL ) return VALUE_T;
+	Value v = CAR(args);
+	for( Value cur=CDR(args); cur != NIL; cur = CDR(cur) ){
+		if( !eq( v, CAR(cur) ) ) return VALUE_F;
 	}
-	*result = VALUE_T;
-	return CONTINUATION_NEXT(cont);
+	return VALUE_T;
 }
 
-static Value _eqv_p( Value args, Value cont, Value *result )
+static Value _eqv_p( Value bundle, Value args )
 {
-	*result = VALUE_F;
-	for( Value cur=args; cur != NIL; cur = CDR(cur) ){
-		if( CDR(cur) == NIL ) break;
-		Value car, cdr;
-		bind2( cur, car, cdr );
-		if( !eqv( car, cdr ) ) return CONTINUATION_NEXT(cont);
+	if( args == NIL ) return VALUE_T;
+	Value v = CAR(args);
+	for( Value cur=CDR(args); cur != NIL; cur = CDR(cur) ){
+		if( !eqv( v, CAR(cur) ) ) return VALUE_F;
 	}
-	*result = VALUE_T;
-	return CONTINUATION_NEXT(cont);
+	return VALUE_T;
 }
 
-static Value _equal_p( Value args, Value cont, Value *result )
+static Value _equal_p( Value bundle, Value args )
 {
-	*result = VALUE_F;
-	for( Value cur=args; cur != NIL; cur = CDR(cur) ){
-		if( CDR(cur) == NIL ) break;
-		Value car, cdr;
-		bind2( cur, car, cdr );
-		if( !equal( car, cdr ) ) return CONTINUATION_NEXT(cont);
+	if( args == NIL ) return VALUE_T;
+	Value v = CAR(args);
+	for( Value cur=CDR(args); cur != NIL; cur = CDR(cur) ){
+		if( !equal( v, CAR(cur) ) ) return VALUE_F;
 	}
-	*result = VALUE_T;
-	return CONTINUATION_NEXT(cont);
+	return VALUE_T;
 }
 
-static Value _defined_p( Value args, Value cont, Value *result )
+static Value _defined_p( Value bundle, Value sym )
 {
-	if( bundle_find( CONTINUATION_BUNDLE(cont), CAR(args), true, false ) ){
-		*result = VALUE_T;
-	}else{
-		*result = VALUE_F;
-	}
-	return CONTINUATION_NEXT(cont);
+	return bundle_find( bundle, sym, true, false )?VALUE_T:VALUE_F;
 }
 
-static Value _add( Value args, Value cont, Value *result )
+static Value _add( Value bundle, Value args )
 {
 	int sum = 0;
 	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
 		sum += V2INT(CAR(cur));
 	}
-	*result = INT2V(sum);
-	return CONTINUATION_NEXT(cont);
+	return INT2V(sum);
 }
 
-static Value _sub( Value args, Value cont, Value *result )
+static Value _sub( Value bundle, Value args )
 {
 	int64_t sum = V2INT(CAR(args));
 	for( Value cur = CDR(args); cur != NIL; cur = CDR(cur) ){
 		sum -= V2INT(CAR(cur));
 	}
-	*result = INT2V(sum);
-	return CONTINUATION_NEXT(cont);
+	return INT2V(sum);
 }
 
-static Value _mul( Value args, Value cont, Value *result )
+static Value _mul( Value bundle, Value args )
 {
 	int sum = 1;
 	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
 		sum *= V2INT(CAR(cur));
 	}
-	*result = INT2V(sum);
-	return CONTINUATION_NEXT(cont);
+	return INT2V(sum);
 }
 
-static Value _div( Value args, Value cont, Value *result )
+static Value _div( Value bundle, Value args )
 {
 	int64_t sum = V2INT(CAR(args));
 	for( Value cur = CDR(args); cur != NIL; cur = CDR(cur) ){
 		sum /= V2INT(CAR(cur));
 	}
-	*result = INT2V(sum);
-	return CONTINUATION_NEXT(cont);
+	return INT2V(sum);
 }
 
-static Value _modulo( Value args, Value cont, Value *result )
+static Value _modulo( Value bundle, Value args )
 {
 	int64_t sum = V2INT(CAR(args));
 	for( Value cur = CDR(args); cur != NIL; cur = CDR(cur) ){
 		sum %= V2INT(CAR(cur));
 	}
-	*result = INT2V(sum);
-	return CONTINUATION_NEXT(cont);
+	return INT2V(sum);
 }
 
-static Value _less( Value args, Value cont, Value *result )
+static Value _less( Value bundle, Value args )
 {
 	int64_t last = INT64_MIN;
-	*result = VALUE_F;
 	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
 		int64_t n = V2INT(CAR(cur));
-		if( !(last < n) ) return CONTINUATION_NEXT(cont);
+		if( !(last < n) ) return VALUE_F;
 		last = n;
 	}
-	*result = VALUE_T;
-	return CONTINUATION_NEXT(cont);
+	return VALUE_T;
 }
 
-static Value _less_eq( Value args, Value cont, Value *result )
+static Value _less_eq( Value bundle, Value args )
 {
 	int64_t last = INT64_MIN;
-	*result = VALUE_F;
 	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
 		int64_t n = V2INT(CAR(cur));
-		if( !(last <= n) ) return CONTINUATION_NEXT(cont);
+		if( !(last <= n) ) return VALUE_F;
 		last = n;
 	}
-	*result = VALUE_T;
-	return CONTINUATION_NEXT(cont);
+	return VALUE_T;
 }
 
-static Value _greater( Value args, Value cont, Value *result )
+static Value _greater( Value bundle, Value args )
 {
 	int64_t last = INT64_MAX;
-	*result = VALUE_F;
 	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
 		int64_t n = V2INT(CAR(cur));
-		if( !(last > n) ) return CONTINUATION_NEXT(cont);
+		if( !(last > n) ) return VALUE_F;
 		last = n;
 	}
-	*result = VALUE_T;
-	return CONTINUATION_NEXT(cont);
+	return VALUE_T;
 }
 
-static Value _greater_eq( Value args, Value cont, Value *result )
+static Value _greater_eq( Value bundle, Value args )
 {
 	int64_t last = INT64_MAX;
-	*result = VALUE_F;
 	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
 		int64_t n = V2INT(CAR(cur));
-		if( !(last >= n) ) return CONTINUATION_NEXT(cont);
+		if( !(last >= n) ) return VALUE_F;
 		last = n;
 	}
-	*result = VALUE_T;
-	return CONTINUATION_NEXT(cont);
+	return VALUE_T;
 }
 
-static Value _car( Value args, Value cont, Value *result )
+static Value _car( Value bundle, Value v )
 {
-	*result = CAAR(args);
-	return CONTINUATION_NEXT(cont);
+	return CAR(v);
 }
 
-static Value _cdr( Value args, Value cont, Value *result )
+static Value _cdr( Value bundle, Value v )
 {
-	*result = CDAR(args);
-	return CONTINUATION_NEXT(cont);
+	return CDR(v);
 }
 
-static Value _cons( Value args, Value cont, Value *result )
+static Value _cons( Value bundle, Value v1, Value v2 )
 {
-	*result = cons( CAR(args), CADR(args) );
-	return CONTINUATION_NEXT(cont);
+	return cons( v1, v2 );
 }
 
-static Value _set_car_i( Value args, Value cont, Value *result )
+static Value _set_car_i( Value bundle, Value pair, Value v )
 {
-	CAR(CAR(args)) = CADR(args);
-	return CONTINUATION_NEXT(cont);
+	CAR(pair) = v;
+	return NIL;
 }
 
-static Value _set_cdr_i( Value args, Value cont, Value *result )
+static Value _set_cdr_i( Value bundle, Value pair, Value v )
 {
-	CDR(CAR(args)) = CADR(args);
-	return CONTINUATION_NEXT(cont);
+	CDR(pair) = v;
+	return NIL;
 }
 
-static Value _not( Value args, Value cont, Value *result )
+static Value _list( Value bundle, Value args )
 {
-	*result = (CAR(args)==VALUE_F)?VALUE_T:VALUE_F;
-	return CONTINUATION_NEXT(cont);
+	return args;
 }
 
-static Value _list( Value args, Value cont, Value *result )
-{
-	*result = args;
-	return CONTINUATION_NEXT(cont);
-}
-
-static Value _list_a( Value args, Value cont, Value *result )
+static Value _list_a( Value bundle, Value args )
 {
 	Value li = cons( NIL, NIL );
 	Value tail = li;
@@ -214,107 +176,89 @@ static Value _list_a( Value args, Value cont, Value *result )
 			CDR(tail) = CAR(cur);
 		}
 	}
-	*result = CDR(li);
-	return CONTINUATION_NEXT(cont);
+	return CDR(li);
 }
 
-static Value _number_p( Value args, Value cont, Value *result )
+static Value _not( Value bundle, Value v )
 {
-	*result = IS_INT(CAR(args))?VALUE_T:VALUE_F;
-	return CONTINUATION_NEXT(cont);
+	return (v==VALUE_F)?VALUE_T:VALUE_F;
 }
 
-static Value _symbol_p( Value args, Value cont, Value *result )
+static Value _number_p( Value bundle, Value v )
 {
-	*result = IS_SYMBOL(CAR(args))?VALUE_T:VALUE_F;
-	return CONTINUATION_NEXT(cont);
+	return IS_INT(v)?VALUE_T:VALUE_F;
 }
 
-static Value _pair_p( Value args, Value cont, Value *result )
+static Value _symbol_p( Value bundle, Value v )
 {
-	*result = IS_PAIR(CAR(args))?VALUE_T:VALUE_F;
-	return CONTINUATION_NEXT(cont);
+	return IS_SYMBOL(v)?VALUE_T:VALUE_F;
 }
 
-static Value _null_p( Value args, Value cont, Value *result )
+static Value _pair_p( Value bundle, Value v )
 {
-	*result = (CAR(args)==NIL)?VALUE_T:VALUE_F;
-	return CONTINUATION_NEXT(cont);
+	return IS_PAIR(v)?VALUE_T:VALUE_F;
 }
 
-static Value _list_p( Value args, Value cont, Value *result )
+static Value _null_p( Value bundle, Value v )
 {
-	*result = (CAR(args)==NIL||IS_PAIR(CAR(args)))?VALUE_T:VALUE_F;
-	return CONTINUATION_NEXT(cont);
+	return (v==NIL)?VALUE_T:VALUE_F;
 }
 
-static Value _procedure_p( Value args, Value cont, Value *result )
+static Value _list_p( Value bundle, Value v )
 {
-	if( IS_LAMBDA(CAR(args)) ){
-		Value lmd = V2LAMBDA(CAR(args));
-		*result = (LAMBDA_TYPE(lmd)==LAMBDA_TYPE_CFUNC||LAMBDA_TYPE(lmd)==LAMBDA_TYPE_LAMBDA)?VALUE_T:VALUE_F;
-	}else{
-		*result = VALUE_F;
-	}
-	return CONTINUATION_NEXT(cont);
+	return (v==NIL||IS_PAIR(v))?VALUE_T:VALUE_F;
 }
 
-static Value _macro_p( Value args, Value cont, Value *result )
+static Value _procedure_p( Value bundle, Value v )
 {
-	if( IS_LAMBDA(CAR(args)) ){
-		Value lmd = V2LAMBDA(CAR(args));
-		*result = (LAMBDA_TYPE(lmd)==LAMBDA_TYPE_CMACRO||LAMBDA_TYPE(lmd)==LAMBDA_TYPE_MACRO)?VALUE_T:VALUE_F;
-	}else{
-		*result = VALUE_F;
-	}
-	return CONTINUATION_NEXT(cont);
+	return (TYPE_OF(v)==TYPE_CFUNC||TYPE_OF(v)==TYPE_LAMBDA)?VALUE_T:VALUE_F;
 }
 
-static Value _get_closure_code( Value args, Value cont, Value *result )
+static Value _macro_p( Value bundle, Value v )
 {
-	Value lmd = V2LAMBDA(CAR(args));
-	Value new_lmd = lambda_new();
-	LAMBDA_TYPE(new_lmd) = LAMBDA_TYPE_LAMBDA;
-	LAMBDA_ARGS(new_lmd) = LAMBDA_ARGS(lmd);
-	LAMBDA_BODY(new_lmd) = LAMBDA_BODY(lmd);
-	LAMBDA_FUNC(new_lmd) = LAMBDA_FUNC(lmd);
-	*result = new_lmd;
-	return CONTINUATION_NEXT(cont);
-}
-
-static Value _syntax_expand1( Value args, Value cont, Value *result )
-{
-	*result = syntax_expand1( CAR(args) );
-	return CONTINUATION_NEXT(cont);
+	return (TYPE_OF(v)==TYPE_LAMBDA&&LAMBDA_TYPE(v)==LAMBDA_TYPE_MACRO)?VALUE_T:VALUE_F;
 }
 
 static Value _apply( Value args, Value cont, Value *result )
 {
 	// 継続の場合
-	if( TYPE_OF(CAR(args)) == TYPE_CONTINUATION ){
-		Value rest = CADR(args);
-		if( IS_PAIR(CDR(rest)) ){
-			*result = cons( intern("VALUES"), rest );
-		}else{
-			*result = CAR(rest);
-		}
-		return CAR(args);
-	}
-	
-	Value lmd = V2LAMBDA(CAR(args));
-	Value head = cons( NIL, NIL );
-	Value tail = head;
-	for( Value cur=CDR(args); cur != NIL; cur = CDR(cur) ){
-		if( CDR(cur) == NIL ){
-			for( Value v=CAR(cur); v != NIL; v = CDR(v) ){
-				tail = CDR(tail) = cons( CAR(v), NIL );
+	switch( TYPE_OF(CAR(args)) ){
+	case TYPE_CONTINUATION:
+		{
+			Value rest = CADR(args);
+			if( IS_PAIR(CDR(rest)) ){
+				*result = cons( intern("VALUES"), rest );
+			}else{
+				*result = CAR(rest);
 			}
-		}else{
-			tail = CDR(tail) = cons( CAR(cur), NIL );
+			return CAR(args);
 		}
+	case TYPE_LAMBDA:
+	case TYPE_CFUNC:
+		{
+			Value lmd = CAR(args);
+			Value head = cons( NIL, NIL );
+			Value tail = head;
+			for( Value cur=CDR(args); cur != NIL; cur = CDR(cur) ){
+				if( CDR(cur) == NIL ){
+					for( Value v=CAR(cur); v != NIL; v = CDR(v) ){
+						tail = CDR(tail) = cons( CAR(v), NIL );
+					}
+				}else{
+					tail = CDR(tail) = cons( CAR(cur), NIL );
+				}
+			}
+			Value c = call( lmd, CDR(head), cont, result );
+			return c;
+		}
+	default:
+		assert(0);
 	}
-	Value c = call( lmd, CDR(head), cont, result );
-	return c;
+}
+
+static Value _syntax_expand1( Value bundle, Value code )
+{
+	return syntax_expand1( code );
 }
 
 static Value _eval( Value args, Value cont, Value *result )
@@ -357,42 +301,6 @@ static Value _call_cc( Value args, Value cont, Value *result )
 							 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
 }
 
-static Value _display( Value args, Value cont, Value *result )
-{
-	char buf[10240];
-	Value v, port;
-	bind2arg( args, v, port );
-    assert( v );
-	if( !port ) port = bundle_get( CONTINUATION_BUNDLE(cont), SYM_CURRENT_OUTPUT_PORT, NULL );
-	switch( TYPE_OF(v) ){
-	case TYPE_STRING:
-		fputs( STRING_STR(v), STREAM_FD(port) );
-		break;
-	default:
-		value_to_str(buf, sizeof(buf), v);
-		fputs( buf, STREAM_FD(port) );
-	}
-	return CONTINUATION_NEXT(cont);
-}
-
-static Value _write( Value args, Value cont, Value *result )
-{
-	Value v, port;
-	bind2arg( args, v, port );
-	if( !port ) port = bundle_get( CONTINUATION_BUNDLE(cont), SYM_CURRENT_OUTPUT_PORT, NULL );
-	stream_write( port, v );
-	return CONTINUATION_NEXT(cont);
-}
-
-static Value _read( Value args, Value cont, Value *result )
-{
-	Value v, port;
-	bind2arg( args, v, port );
-	if( !port ) port = bundle_get( CONTINUATION_BUNDLE(cont), SYM_CURRENT_INPUT_PORT, NULL );
-	*result = stream_read(port);
-	return CONTINUATION_NEXT(cont);
-}
-
 static Value _load( Value args, Value cont, Value *result )
 {
 	Value filename, port;
@@ -411,81 +319,123 @@ static Value _exit( Value args, Value cont, Value *result )
 	return NIL;
 }
 
-static Value _number_to_string( Value args, Value cont, Value *result )
+static Value _display( Value bundle, Value v, Value rest )
 {
-	char buf[32];
-	sprintf( buf, "%lld", V2INT(CAR(args)) );
-	*result = string_new(buf);
-	return CONTINUATION_NEXT(cont);
+	char buf[10240];
+	Value port;
+	bind1arg( rest, port );
+	if( !port ) port = bundle_get( bundle, SYM_CURRENT_OUTPUT_PORT, NULL );
+	
+	switch( TYPE_OF(v) ){
+	case TYPE_STRING:
+		fputs( STRING_STR(v), STREAM_FD(port) );
+		break;
+	default:
+		value_to_str(buf, sizeof(buf), v);
+		fputs( buf, STREAM_FD(port) );
+	}
+	return NIL;
 }
 
-static Value _string_append( Value args, Value cont, Value *result )
+static Value _write( Value bundle, Value v, Value rest )
+{
+	Value port;
+	bind1arg( rest, port );
+	if( !port ) port = bundle_get( bundle, SYM_CURRENT_OUTPUT_PORT, NULL );
+	stream_write( port, v );
+	return NIL;
+}
+
+static Value _read( Value bundle, Value v, Value rest )
+{
+	Value port;
+	bind1arg( rest, port );
+	if( !port ) port = bundle_get( bundle, SYM_CURRENT_INPUT_PORT, NULL );
+	return stream_read(port);
+}
+
+
+static Value _number_to_string( Value bundle, Value v )
+{
+	char buf[32];
+	sprintf( buf, "%lld", V2INT(v) );
+	return string_new(buf);
+}
+
+static Value _string_append( Value bundle, Value args )
 {
 	char buf[10240];
 	char *tail = buf;
 	for( Value cur=args; cur != NIL; cur=CDR(cur) ){
 		tail += sprintf( tail, "%s", STRING_STR(CAR(cur)) );
 	}
-	*result = string_new(buf);
-	return CONTINUATION_NEXT(cont);
+	return string_new(buf);
 }
 
 void cfunc_init()
 {
-	defun( "value", _value );
-	defun( "eq?", _eq_p );
-	defun( "eqv?", _eqv_p );
-	defun( "=", _eqv_p );
-	defun( "equal?", _equal_p );
-	defun( "defined?", _defined_p );
-	
-	defun( "+", _add );
-	defun( "-", _sub );
-	defun( "*", _mul );
-	defun( "/", _div );
-	defun( "quotient", _div );
-	defun( "modulo", _modulo );
-	defun( "<", _less );
-	defun( "<=", _less_eq );
-	defun( ">", _greater );
-	defun( ">=", _greater_eq );
-	
-	defun( "car", _car );
-	defun( "cdr", _cdr );
-	defun( "cons", _cons );
-	defun( "set-car!", _set_car_i );
-	defun( "set-cdr!", _set_cdr_i );
-	defun( "list", _list );
-	defun( "list*", _list_a );
+	// basic
+	defun( "value", 1, _value );
+	defun( "eq?", -1, _eq_p );
+	defun( "eqv?", -1, _eqv_p );
+	defun( "=", -1, _eqv_p );
+	defun( "equal?", -1, _equal_p );
+	defun( "defined?", 1, _defined_p );
 
-	defun( "not", _not );
+	// number
+	defun( "+", -1, _add );
+	defun( "-", -1, _sub );
+	defun( "*", -1, _mul );
+	defun( "/", -1, _div );
+	defun( "quotient", -1, _div );
+	defun( "modulo", -1, _modulo );
+	defun( "<", -1, _less );
+	defun( "<=", -1, _less_eq );
+	defun( ">", -1, _greater );
+	defun( ">=", -1, _greater_eq );
 
-	defun( "number?", _number_p );
-	defun( "integer?", _number_p );
-	defun( "symbol?", _symbol_p );
-	defun( "pair?", _pair_p );
-	defun( "null?", _null_p );
-	defun( "list?", _list_p );
-	defun( "procedure?", _procedure_p );
-	defun( "macro?", _macro_p );
+	// pair/list
+	defun( "car", 1, _car );
+	defun( "cdr", 1, _cdr );
+	defun( "cons", 2, _cons );
+	defun( "set-car!", 2, _set_car_i );
+	defun( "set-cdr!", 2, _set_cdr_i );
+	defun( "list", -1, _list );
+	defun( "list*", -1, _list_a );
 
-	defun( "apply", _apply );
-	defun( "get-closure-code", _get_closure_code );
-	defun( "syntax-expand1", _syntax_expand1 );
+	// bool
+	defun( "not", 1, _not );
 
-	defun( "eval", _eval );
-	defun( "current-environment", _current_environment );
-	defun( "backtrace", _backtrace );
-	defun( "call/cc", _call_cc );
-	defun( "call-with-current-continuation", _call_cc );
+	// type
+	defun( "number?", 1, _number_p );
+	defun( "integer?", 1, _number_p );
+	defun( "symbol?", 1, _symbol_p );
+	defun( "pair?", 1, _pair_p );
+	defun( "null?", 1, _null_p );
+	defun( "list?", 1, _list_p );
+	defun( "procedure?", 1, _procedure_p );
+	defun( "macro?", 1, _macro_p );
 
-	defun( "display", _display );
-	defun( "write", _write );
-	defun( "read", _read );
-	defun( "load", _load );
-	defun( "exit", _exit );
+	//
+	defun( "apply", CFUNC_VARIABLE, _apply );
+	defun( "syntax-expand1", 1, _syntax_expand1 );
 
-	defun( "number->string", _number_to_string );
-	defun( "string-append", _string_append );
+	//
+	defun( "eval", CFUNC_VARIABLE, _eval );
+	defun( "current-environment", CFUNC_VARIABLE, _current_environment );
+	defun( "backtrace", CFUNC_VARIABLE, _backtrace );
+	defun( "call/cc", CFUNC_VARIABLE, _call_cc );
+	defun( "call-with-current-continuation", CFUNC_VARIABLE, _call_cc );
+	defun( "load", CFUNC_VARIABLE, _load );
+	defun( "exit", CFUNC_VARIABLE, _exit );
+
+	// I/O
+	defun( "display", -2, _display );
+	defun( "write", -2, _write );
+	defun( "read", -2, _read );
+
+	// string
+	defun( "number->string", 1, _number_to_string );
+	defun( "string-append", -1, _string_append );
 
 }
