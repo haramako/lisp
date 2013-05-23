@@ -217,15 +217,11 @@
 		(apply f (cdr v))
 		(f v))))
 
-(define-macro (receive args vals . body)
-  `(let ((*vals* (cdr ,vals)))
-	 ,(let loop ((args args))
-		(cond
-		 ((pair? args)
-		  `(let ((,(car args) (car *vals*))
-				 (*vals* (cdr *vals*)))
-			 ,(loop (cdr args))))
-		 (#t (cons 'begin body))))))
+(define-syntax receive
+  (syntax-rules ()
+	((_ (binds ...) val body ...)
+	 (call-with-values (lambda () val)
+	   (lambda (binds ...) body ...)))))
 
 (define-syntax let-values
   (syntax-rules ()
@@ -264,23 +260,18 @@
   (let loop ((li li) (n 0))
 	(if (null? li) n (loop (cdr li) (+ n 1)))))
 
-(define-macro (define-unless . form)
-  (let ((sym (car (car form)))
-		(args (cdr (car form))))
-	`(if (defined? ',sym)
-		 (set! ,sym (lambda ,args ,@(cdr form)))
-		 (define ,@form))))
-
-(define-macro (let1 var . body)
-  `(let (,var) ,@body))
-
+(define-syntax let1
+  (syntax-rules ()
+	((_ var body ...)
+	 (let (var) body ...))))
 
 ;;************************************************************
 ;; from http://srfi.schemers.org/srfi-1/srfi-1-reference.scm
 ;;************************************************************
 
-(define-macro (:optional sym val)
-  `(if (pair? ,sym) (car ,sym) ,val))
+(define-syntax :optional
+  (syntax-rules ()
+	((_ sym val) (if (pair? sym) (car sym) val))))
 
 (define (tree-copy x_)
   (let recur ((x x_))
@@ -410,6 +401,6 @@
 ;; other
 ;;************************************************************
 
-(define (mac form)
-  (puts (macro-expand-all form)))
-  
+(define-syntax mac
+  (syntax-rules ()
+	((_ form) (puts (macro-expand-all 'form)))))

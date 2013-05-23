@@ -1,5 +1,8 @@
 #!/usr/bin/env mlisp
+
 (require srfi-1)
+
+(mac (when 1 1))
 
 (when 1 (puts 1))
 

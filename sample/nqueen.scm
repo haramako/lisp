@@ -184,7 +184,7 @@
                  (lambda (k v)
                    (when v (set! qlist (cons (int2q n k) qlist))))
                  key value))
-	(plot n qlist)
+	;; (plot n qlist)
     ;; (qplot n qlist)   ;; plotting the distinct solutions
     (length qlist)))
 
@@ -234,7 +234,8 @@
 
 ;; for my lisp
 
-(load "srfi-1.scm")
+(require srfi-1)
+(require minitest)
 
 (define (make-eqv-hashtable)
   (list-copy '(())))
@@ -294,5 +295,10 @@
   (puts (string-repeat "=" 80)))
 
 
-(puts (queen 8) "answers")
+(assert 1 (queen 4))
+(assert 2 (queen 5))
+(assert 1 (queen 6))
+(assert 6 (queen 7))
+(assert 12 (queen 8))
 
+(minitest-finish)

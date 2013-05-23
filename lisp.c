@@ -50,7 +50,7 @@ static size_t _value_to_str( char *buf, int len, Value v )
 	case TYPE_UNUSED:
 		assert(0);
 	case TYPE_NIL:
-		n += snprintf( buf, len,"()" );
+		n += snprintf( buf, len, "()" );
 		break;
 	case TYPE_BOOL:
 		n += snprintf( buf, len, (v==VALUE_T)?"#t":"#f" );
@@ -1203,8 +1203,8 @@ Value syntax_expand1( Value code )
 		// printf( "rule: %s\n", v2s(CAAR(cur)) );
 		bool matched = _syntax_match( CAAR(cur), code, bundle );
 		if( matched ){
-			Value new_code = _syntax_expand_body( CADR(CAR(cur)), bundle );
-			// printf( "expand-syntax: %s => %s\n", v2s(code), v2s(new_code) );
+			Value new_code = syntax_expand1( _syntax_expand_body( CADR(CAR(cur)), bundle ) );
+			if( opt_trace ) printf( "expand-syntax: %s => %s\n", v2s(code), v2s(new_code) );
 			dict_free( bundle );
 			return new_code;
 		}
