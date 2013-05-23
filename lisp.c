@@ -4,6 +4,8 @@
 #include <string.h>
 #include <ctype.h>
 #include <setjmp.h>
+#include <limits.h>
+#include <unistd.h>
 
 Profile prof;
 
@@ -1258,7 +1260,7 @@ Value SYM_CURRENT_INPUT_PORT;
 Value SYM_CURRENT_OUTPUT_PORT;
 Value SYM_END_OF_LINE;
 Value SYM_VALUES;
-Value SYM_DOT, SYM_DOT3, SYM_ERROR, SYM_SYNTAX_RULES, SYM_SYNTAX_REST;
+Value SYM_DOT, SYM_DOT3, SYM_ERROR, SYM_SYNTAX_RULES, SYM_SYNTAX_REST, SYM_RUNTIME_LOAD_PATH, SYM_RUNTIME_HOME_PATH;
 
 Value _operator( char *sym, Operator op ){
 	Value v = gc_new(TYPE_SPECIAL);
@@ -1271,13 +1273,24 @@ Value _operator( char *sym, Operator op ){
 bool opt_trace = false;
 bool opt_debug = false;
 
-void init()
+static void _get_home_path( const char *argv0, char *out_path )
 {
-	init_prelude(true);
+	char cwd[PATH_MAX], path[PATH_MAX];
+	getcwd( cwd, sizeof(cwd) );
+	sprintf( path, "%s/%s/..", cwd, argv0 );
+	realpath( path, out_path );
 }
 
-void init_prelude( bool with_prelude )
+void init( const char *argv0 )
 {
+	init_prelude( argv0, true);
+}
+
+void init_prelude( const char *argv0, bool with_prelude )
+{
+	char home_path[PATH_MAX];
+	_get_home_path( argv0, home_path );
+	
 	signal( SIGABRT, handler );
 	signal( SIGSEGV, handler );
 	
@@ -1335,6 +1348,8 @@ void init_prelude( bool with_prelude )
 	SYM_ERROR = intern("error");
 	SYM_SYNTAX_RULES = intern("syntax-rules");
 	SYM_SYNTAX_REST = intern("*syntax-rest*");
+	SYM_RUNTIME_LOAD_PATH = intern("runtime-load-path");
+	SYM_RUNTIME_HOME_PATH = intern("runtime-home-path");
 
 	bundle_define( bundle_cur, SYM_CURRENT_INPUT_PORT, V_STDIN );
 	bundle_define( bundle_cur, SYM_CURRENT_OUTPUT_PORT, V_STDOUT );
@@ -1342,8 +1357,16 @@ void init_prelude( bool with_prelude )
 
 	cfunc_init();
 
+	// define runtime-home-path, runtime-lib-path
+	char lib_path[PATH_MAX];
+	sprintf( lib_path, "%s/lib", home_path );
+	bundle_define( bundle_cur, SYM_RUNTIME_HOME_PATH, string_new(home_path) );
+	bundle_define( bundle_cur, SYM_RUNTIME_LOAD_PATH, cons3( string_new("."), string_new(lib_path), NIL ) );
+
 	if( with_prelude ){
-		FILE *fd = fopen( "lib/prelude.scm", "r" );
+		char path[PATH_MAX];
+		sprintf( path, "%s/prelude.scm", lib_path );
+		FILE *fd = fopen( path, "r" );
 		if( !fd ){
 			printf( "cannot open prelude.sch\n" );
 			exit(1);

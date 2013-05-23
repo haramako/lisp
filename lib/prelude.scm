@@ -107,6 +107,10 @@
 (define *compile-hook* macro-expand-all)
 ;; ここからマクロが有効化
 
+(define-syntax require
+  (syntax-rules ()
+	((_ mod) (%require 'mod))))
+
 (define-syntax when 
   (syntax-rules ()
 	  ((_ cnd body ...) (if cnd (begin body ...)))))

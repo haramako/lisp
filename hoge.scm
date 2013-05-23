@@ -1,4 +1,4 @@
-;; (load "lib/srfi-1.scm")
+(require srfi-1)
 
 (when 1 (puts 1))
 

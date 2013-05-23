@@ -303,14 +303,34 @@ static Value _call_cc( Value args, Value cont, Value *result )
 
 static Value _load( Value args, Value cont, Value *result )
 {
-	Value filename, port;
-	bind2arg( args, filename, port );
+	Value filename;
+	bind1arg( args, filename);
     assert(filename);
 	FILE *fd = fopen( STRING_STR(filename), "r" );
 	if( !fd ) assert(0);
 	Value file = stream_new( fd, true, STRING_STR(filename) );
 	return continuation_new( cons( V_READ_EVAL, file ),
 							 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
+}
+
+static Value _require( Value args, Value cont, Value *result )
+{
+	Value modname;
+	bind1arg( args, modname);
+    assert(modname);
+	if( IS_SYMBOL(modname) ) modname = SYMBOL_STR(modname);
+	Value load_path = bundle_get( CONTINUATION_BUNDLE(cont), SYM_RUNTIME_LOAD_PATH, NULL );
+	for( Value cur=load_path; cur != NIL; cur = CDR(cur) ){
+		char path[PATH_MAX];
+		sprintf( path, "%s/%s.scm", STRING_STR(CAR(cur)), STRING_STR(modname) );
+		// printf( "require: %s\n", path );
+		FILE *fd = fopen( path, "r" );
+		if( !fd ) continue;
+		Value file = stream_new( fd, true, path );
+		return continuation_new( cons( V_READ_EVAL, file ),
+								 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
+	}
+	assert(0);
 }
 
 static Value _exit( Value args, Value cont, Value *result )
@@ -447,6 +467,7 @@ void cfunc_init()
 	defun( "call/cc", CFUNC_VARIABLE, _call_cc );
 	defun( "call-with-current-continuation", CFUNC_VARIABLE, _call_cc );
 	defun( "load", CFUNC_VARIABLE, _load );
+	defun( "%require", CFUNC_VARIABLE, _require );
 	defun( "exit", CFUNC_VARIABLE, _exit );
 
 	// I/O

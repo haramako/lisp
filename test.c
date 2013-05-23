@@ -7,7 +7,7 @@ unsigned int value_hash( Value v );
 
 int main( int argc, char **argv )
 {
-	init_prelude(false);
+	init_prelude(argv[0], false);
 
 	/*
 	printf( "%u\n", value_hash(string_new("hoge")) );

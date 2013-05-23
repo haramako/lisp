@@ -339,13 +339,13 @@ extern Value V_READ_EVAL, V_READ_EVAL2;
 
 extern Value SYM_A_DEBUG_A, SYM_A_COMPILE_HOOK_A, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
 	SYM_CURRENT_INPUT_PORT, SYM_CURRENT_OUTPUT_PORT, SYM_END_OF_LINE, SYM_VALUES,
-	SYM_DOT, SYM_DOT3, SYM_ERROR, SYM_SYNTAX_RULES, SYM_SYNTAX_REST;
+	SYM_DOT, SYM_DOT3, SYM_ERROR, SYM_SYNTAX_RULES, SYM_SYNTAX_REST, SYM_RUNTIME_LOAD_PATH, SYM_RUNTIME_HOME_PATH;
 
 extern bool opt_trace;
 extern bool opt_debug;
 
-void init();
-void init_prelude( bool with_prelude );
+void init( const char *argv0 );
+void init_prelude( const char *argv0, bool with_prelude );
 void cfunc_init();
 void finalize();
 void show_prof();

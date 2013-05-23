@@ -1,4 +1,4 @@
-(load "lib/minitest.scm")
+(require minitest)
 
 ;; test type operator
 (assert #t (symbol? 'a))
