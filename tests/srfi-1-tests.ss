@@ -145,7 +145,7 @@
 
 (define non-printing-test test)
 
-(load "srfi-1.scm")
+(load "lib/srfi-1.scm")
 
 ;;; XCONS
 

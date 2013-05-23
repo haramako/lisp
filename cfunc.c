@@ -373,6 +373,25 @@ static Value _string_append( Value bundle, Value args )
 	return string_new(buf);
 }
 
+static Value _runtime_value_set_i( Value bundle, Value _name, Value val )
+{
+	char *name;
+	if( IS_SYMBOL(_name) ){
+		name = STRING_STR(SYMBOL_STR(_name));
+	}else if( IS_STRING(_name) ){
+		name = STRING_STR(_name);
+	}else{
+		assert(0);
+	}
+	
+	if( strcmp( name, "trace" ) == 0 ){
+		opt_trace = V2INT(val);
+	}else{
+		assert(0);
+	}
+	return NIL;
+}
+
 void cfunc_init()
 {
 	// basic
@@ -438,5 +457,9 @@ void cfunc_init()
 	// string
 	defun( "number->string", 1, _number_to_string );
 	defun( "string-append", -1, _string_append );
+
+	// debug
+	defun( "runtime-value-set!", 2, _runtime_value_set_i );
+	
 
 }

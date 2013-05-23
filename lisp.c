@@ -764,6 +764,41 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 #define C_NEXT CONTINUATION_NEXT
 #define C_CODE CONTINUATION_CODE
 
+Value _eval_direct( Value cont, Value code )
+{
+	switch( TYPE_OF(code) ){
+	case TYPE_UNUSED:
+	case TYPE_MAX:
+		assert(0);
+	case TYPE_NIL:
+	case TYPE_INT:
+	case TYPE_LAMBDA:
+	case TYPE_CFUNC:
+	case TYPE_BOOL:
+	case TYPE_STRING:
+	case TYPE_BUNDLE:
+	case TYPE_CONTINUATION:
+	case TYPE_SPECIAL:
+	case TYPE_STREAM:
+		return code;
+	case TYPE_SYMBOL:
+		return bundle_get( C_BUNDLE(cont), code, NULL );
+	default:
+		return NULL;
+	}
+}
+
+#define NEXT_DIRECT(_code,next_cont) do{					\
+		Value _r = _eval_direct(cont,_code);				\
+		if( _r ){											\
+			cont = next_cont;								\
+			result = _r;									\
+			goto _loop;										\
+		}else{												\
+			NEXT( CONT(_code,C_BUNDLE(cont),next_cont), NIL );	\
+		}													\
+	}while(0)
+
 Value eval_loop( Value code )
 {
 	int gc_count = 10000;
@@ -797,17 +832,16 @@ Value eval_loop( Value code )
 	case TYPE_CONTINUATION:
 	case TYPE_SPECIAL:
 	case TYPE_STREAM:
-		NEXT( C_NEXT(cont), C_CODE(cont) );
 	case TYPE_SYMBOL:
 		{
-			DictEntry *found = bundle_find( C_BUNDLE(cont), C_CODE(cont), true, false );
-			if( !found ) ERROR( "symbol not found" );
-			NEXT( C_NEXT(cont), found->val );
+			Value v = _eval_direct( cont, C_CODE(cont) );
+			if( !v ) ERROR( "symbol not found" );
+			NEXT( C_NEXT(cont), v );
 		}
 	case TYPE_PAIR:
 		if( !IS_SPECIAL(CAR(C_CODE(cont))) ){
-			NEXT( CONT( CAR(C_CODE(cont)), C_BUNDLE(cont), 
-						CONT_OP( V_CALL0, CDR(C_CODE(cont)), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+			NEXT_DIRECT( CAR(C_CODE(cont)),
+						 CONT_OP( V_CALL0, CDR(C_CODE(cont)), C_BUNDLE(cont), C_NEXT(cont) ) );
 		}
 		
 		Value code = CDR(C_CODE(cont));
@@ -818,10 +852,10 @@ Value eval_loop( Value code )
 			if( code == NIL ){
 				NEXT( C_NEXT(cont), result );
 			}else if( CDR(code) == NIL ){
-				NEXT( CONT( CAR(code), C_BUNDLE(cont), C_NEXT(cont)), result );
+				NEXT_DIRECT( CAR(code), C_NEXT(cont));
 			}else{
-				NEXT( CONT( CAR(code), C_BUNDLE(cont),
-							CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+				NEXT_DIRECT( CAR(code), 
+							 CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
 			}
 			
 		case OP_QUOTE:
@@ -835,9 +869,8 @@ Value eval_loop( Value code )
 				case LAMBDA_TYPE_LAMBDA:
 					if( code != NIL ){
 						Value args = cons(result,NIL);
-						NEXT( CONT( CAR(code), C_BUNDLE(cont),
-									CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) ),
-							  NIL );
+						NEXT_DIRECT( CAR(code),
+									 CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) );
 					}else{
 						Value res = NIL;
 						Value next = call( result, NIL, cont, &res);
@@ -849,9 +882,8 @@ Value eval_loop( Value code )
 			case TYPE_CFUNC:
 				if( code != NIL ){
 					Value args = cons(result,NIL);
-					NEXT( CONT( CAR(code), C_BUNDLE(cont),
-								CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) ),
-						  NIL );
+					NEXT_DIRECT( CAR(code), 
+								 CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) );
 				}else{
 					Value res = NIL;
 					Value next = call( result, NIL, cont, &res);
@@ -879,9 +911,8 @@ Value eval_loop( Value code )
 				bind3(code,rest,vals,tmp);
 				CDR(tmp) = cons( result, NIL );
 				if( rest != NIL ){
-					NEXT( CONT( CAR(rest), C_BUNDLE(cont),
-								CONT_OP( V_CALL1, cons4( CDR(rest), vals, CDR(tmp), NIL ), C_BUNDLE(cont), C_NEXT(cont) ) ),
-						  NIL );
+					NEXT_DIRECT( CAR(rest),
+								 CONT_OP( V_CALL1, cons4( CDR(rest), vals, CDR(tmp), NIL ), C_BUNDLE(cont), C_NEXT(cont) ) );
 				}else{
 					Value lmd = CAR(vals);
 					if( IS_LAMBDA(lmd) || IS_CFUNC(lmd) ){
@@ -905,8 +936,8 @@ Value eval_loop( Value code )
 			{
 				if( IS_SYMBOL(CAR(code)) ){
 					// (define sym val) の形
-					NEXT( CONT( CADR(code), C_BUNDLE(cont),
-								CONT_OP( V_DEFINE2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) ), NIL );
+					NEXT_DIRECT(CADR(code),
+								CONT_OP( V_DEFINE2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) );
 				}else if( IS_PAIR(CAR(code)) ){
 					// (define (sym args ... ) の形
 					NEXT( CONT( cons3( V_LAMBDA, CDAR(code), CDR(code) ), C_BUNDLE(cont),
@@ -921,8 +952,8 @@ Value eval_loop( Value code )
 			NEXT( C_NEXT(cont), NIL );
 				
 		case OP_SET_I:
-			NEXT( CONT( CAR(CDR(code)), C_BUNDLE(cont),
-						CONT_OP( V_SET_I2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) ), NIL );
+			NEXT_DIRECT( CADR(code),
+						 CONT_OP( V_SET_I2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) );
 				
 		case OP_SET_I2:
 			bundle_set( C_BUNDLE(cont), code, result );
@@ -1024,36 +1055,36 @@ Value eval_loop( Value code )
 			}
 				
 		case OP_IF:
-			NEXT( CONT( CAR(code), C_BUNDLE(cont),
-						CONT_OP( V_IF2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+			NEXT_DIRECT( CAR(code),
+						 CONT_OP( V_IF2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
 			
 		case OP_IF2:
 			if( result != VALUE_F ){
-				NEXT( CONT( CAR(code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
+				NEXT_DIRECT( CAR(code), C_NEXT(cont));
 			}else{
 				NEXT( CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
 			}
 
 		case OP_AND:
-			NEXT( CONT( CAR(code), C_BUNDLE(cont),
-						CONT_OP( V_AND2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+			NEXT_DIRECT( CAR(code),
+						 CONT_OP( V_AND2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
 
 		case OP_AND2:
 			if( result != VALUE_F && IS_PAIR(code) ){
-				NEXT( CONT( CAR(code), C_BUNDLE(cont),
-							CONT_OP( V_AND2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+				NEXT_DIRECT( CAR(code),
+							 CONT_OP( V_AND2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
 			}else{
 				NEXT( C_NEXT(cont), result );
 			}
 
 		case OP_OR:
-			NEXT( CONT( CAR(code), C_BUNDLE(cont),
-						CONT_OP( V_OR2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+			NEXT_DIRECT( CAR(code),
+						 CONT_OP( V_OR2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
 
 		case OP_OR2:
 			if( result == VALUE_F && IS_PAIR(code) ){
-				NEXT( CONT( CAR(code), C_BUNDLE(cont),
-							CONT_OP( V_OR2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+				NEXT_DIRECT( CAR(code),
+							 CONT_OP( V_OR2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
 			}else{
 				NEXT( C_NEXT(cont), result );
 			}
@@ -1312,7 +1343,7 @@ void init_prelude( bool with_prelude )
 	cfunc_init();
 
 	if( with_prelude ){
-		FILE *fd = fopen( "prelude.scm", "r" );
+		FILE *fd = fopen( "lib/prelude.scm", "r" );
 		if( !fd ){
 			printf( "cannot open prelude.sch\n" );
 			exit(1);

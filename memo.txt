@@ -1,12 +1,14 @@
 
+* syntax のシンボルを保護的に
+* syntax, macro を別名前空間に
 * define-macro を scheme的に
-* define-syntax
-* let と let*の区別
 * string関係の関数
 * string stream
 * intを埋め込みに
 * デバッグ用の変数を指定する関数 (*runtime-option* "trace" 1) みたいな
 
+- let と let*の区別
+- define-syntax
 - SRFI-1 list library
 - 名前付きlet
 - gcをまともに

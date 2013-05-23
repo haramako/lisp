@@ -153,7 +153,9 @@ void vdump( Value v );
 bool eq( Value a, Value b );
 bool eqv( Value a, Value b );
 bool equal( Value a, Value b );
+unsigned int hash_eq( Value v );
 unsigned int hash_eqv( Value v );
+unsigned int hash_equal( Value v );
 
 // Gabage collection in gc.c
 
