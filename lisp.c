@@ -577,6 +577,12 @@ int _parse( Value s, Value *result )
 			if( err ) return err;
 			if( stream_getc(s) != ')' ) return -2;
 			return 0;
+		case '!':
+			// shebang
+			while( (c = stream_getc(s)) ){
+				if( c == '\n' ) break;
+			}
+			return _parse(s, result);
 		default:
 			assert(0);
 		}

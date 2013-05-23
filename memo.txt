@@ -1,5 +1,8 @@
 
+* 関数の引数チェックでエラーを出す
+* stringリテラルのエスケープ
 * syntax のシンボルを保護的に
+* syntax を別オブジェクトに
 * syntax, macro を別名前空間に
 * define-macro を scheme的に
 * string関係の関数
@@ -7,6 +10,7 @@
 * intを埋め込みに
 * デバッグ用の変数を指定する関数 (*runtime-option* "trace" 1) みたいな
 
+- #!対応
 - let と let*の区別
 - define-syntax
 - SRFI-1 list library

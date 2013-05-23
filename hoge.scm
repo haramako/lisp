@@ -1,3 +1,4 @@
+#!/usr/bin/env mlisp
 (require srfi-1)
 
 (when 1 (puts 1))
@@ -9,9 +10,6 @@
 
 (puts (hoge 'fuga 'piyo 'hage))
 (puts (hoge 'fuga '(piyo hage) 'nyao))
-
-(exit)
-
 
 (define-syntax nil!
   (syntax-rules ()
@@ -43,7 +41,7 @@
 	  1
 	  (+ (fib (- n 1)) (fib (- n 2)))))
 
-(puts "fib" (fib 10))
+(puts "fib(10)" (fib 10))
 
 (let ((x 1))
   (define ce (current-environment))
