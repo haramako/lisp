@@ -1,7 +1,13 @@
 #!/usr/bin/env mlisp
 
+(write "\n \t \" \r \x41")
 (puts (string->list "hoge"))
 (puts (list->string (string->list "hoge")))
+
+(write "hoge\
+       fuga  \
+       piyo  \
+  ")
 
 (puts (char=? #\a #\a))
 (puts (char=? #\a #\b))

@@ -523,6 +523,7 @@ TODO: 文字列の共有
   (pass-if "non-empty string, not eq?"
     (string=? "foo-bar" (substring/shared "foo-bar" 0 7))))
 |#
+
 (with-test-prefix "string-copy!"
 
   (pass-if "non-empty string"
@@ -628,8 +629,6 @@ TODO: 文字列の共有
   (pass-if "freestyle 2"
     (string=? "532!" (string-pad-right (number->string 532) 4 #\!))))
 
-#|
-TODO: 文字列のエスケープ
 (with-test-prefix "string-trim"
 
   (with-test-prefix "bad char_pred"
@@ -731,7 +730,6 @@ TODO: 文字列のエスケープ
 
   (pass-if "start and end index, charset"
     (string=? "f" (string-trim-both " \tfoo " char-set:whitespace 1 3))))
-|#
 
 (define s0 (make-string 200 #\!))
 (define s1 (make-string 0 #\!))

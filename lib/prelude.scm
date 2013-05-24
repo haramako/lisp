@@ -337,7 +337,7 @@
   (char<=? #\A c #\Z))
 
 (define (char-set:whitespace c)
-  (or (char=? c #\space) (char=? c #\x09)))
+  (or (char=? c #\space) (char=? c #\tab)))
 
 (define (char-set:digit c)
   (and (char<=? #\0 c #\9)))

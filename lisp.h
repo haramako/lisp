@@ -333,6 +333,7 @@ void stream_ungetc( int c, Value s );
 int stream_peekc( Value s );
 Value stream_read( Value s );
 Value stream_write( Value s, Value v );
+size_t stream_read_chars( Value s, char *buf, size_t len );
 	
 // Eval in eval.c
 

@@ -35,6 +35,36 @@ const char* LAMBDA_TYPE_NAME[] = {
 // Utility
 //********************************************************
 
+static size_t _escape_str( char *buf, size_t len, char *str )
+{
+	int n = 0;
+	int slen = strlen(str);
+	for( int i=0; i<slen; i++ ){
+		char c = str[i];
+		if( c < 32 || c >= 127 ){
+			char *escaped = NULL;
+			switch( c ){
+			case '"': escaped = "\\\""; break;
+			case '\\': escaped = "\\\\"; break;
+			case '\n': escaped = "\\n"; break;
+			case '\r': escaped = "\\r"; break;
+			case '\f': escaped = "\\f"; break;
+			case '\t': escaped = "\\t"; break;
+			case '\0': escaped = "\\0"; break;
+			}
+			if( escaped ){
+				n += snprintf( buf+n, len-n, "%s", escaped );
+			}else{
+				n += snprintf( buf+n, len-n, "\\x%02x", c );
+			}
+		}else{
+			buf[n++] = c;
+		}
+		if( n >= len ) break;
+	}
+	return n;
+}
+
 static size_t _value_to_str( char *buf, int len, Value v )
 {
 	int n = 0;
@@ -70,10 +100,14 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		}
 		break;
 	case TYPE_SYMBOL:
-		n += snprintf( buf, len, "%s", STRING_STR(SYMBOL_STR(v)) );
+		n += snprintf( buf, len, "\"%s\"", STRING_STR(SYMBOL_STR(v)) );
 		break;
 	case TYPE_STRING:
-		n += snprintf( buf, len, "\"%s\"", STRING_STR(v) );
+		n += snprintf( buf, len, "\"" );
+		if( n >= len ) return len;
+		n += _escape_str( buf+n, len-n, STRING_STR(v) );
+		if( n >= len ) return len;
+		n += snprintf( buf+n, len-n, "\"" );
 		break;
 	case TYPE_LAMBDA:
 		if( LAMBDA_NAME(v) != NIL ){
@@ -555,11 +589,51 @@ static Value _parse_token( char *str )
 	}
 }
 
-static int _unescape_char( int c )
+static int _unescape_char( Value s )
 {
+	int c = stream_getc(s);
+	char buf[9];
 	switch( c ){
+	case '"': return '"';
+	case '\\': return '\\';
 	case 'n': return '\n';
+	case 'r': return '\r';
+	case 'f': return '\f';
 	case 't': return '\t';
+	case '0': return '\0';
+	case 'x':
+		stream_read_chars(s,buf,2);
+		buf[2] = '\0';
+		sscanf( buf, "%x", &c );
+		return c;
+	case 'u':
+		stream_read_chars(s,buf,4);
+		buf[4] = '\0';
+		sscanf( buf, "%x", &c );
+		return c;
+	case 'U':
+		stream_read_chars(s,buf,8);
+		buf[8] = '\0';
+		sscanf( buf, "%x", &c );
+		return c;
+	case ' ': case '\n': case '\r':
+		{
+			bool feeded = false;
+			for(;;){
+				if( c == '\n' ){
+					if( feeded ) assert(0);
+					feeded = true;
+				}else if( c == ' ' || c == '\f' || c == '\r' || c == '\t' ){
+					// skip
+				}else{
+					if( !feeded ) assert(0);
+					stream_ungetc(c,s);
+					break;
+				}
+				c = stream_getc(s);
+			}
+			return '\n';
+		}
 	default:
 		printf( "unkonwn escaped string \\%c\n", c );
 		assert(0);
@@ -576,8 +650,10 @@ static Value _read_string( Value s )
 		case '"':
 			return string_new_len(buf,i);
 		case '\\':
-			c = _unescape_char( stream_getc(s) );
+			c = _unescape_char(s);
 			break;
+		case '\n': case '\r':
+			assert(0);
 		case '\0':
 			assert(0);
 		}
@@ -671,12 +747,26 @@ int _parse( Value s, Value *result )
 				_read_token(s,buf);
 				if( strlen(buf) == 1 ){
 					*result = CHAR2V(buf[0]);
-				}else if( buf[0] == 'x' ){
+				}else if( buf[0] == 'x' || buf[0] == 'u' ){
 					int num;
 					sscanf( buf+1, "%x", &num);
 					*result = CHAR2V(num);
 				}else if( strcmp(buf,"space") == 0 ){
 					*result = CHAR2V(' ');
+				}else if( strcmp(buf,"newline") == 0 || strcmp(buf,"nl") == 0 || strcmp(buf,"lf") == 0 ){
+					*result = CHAR2V('\n');
+				}else if( strcmp(buf,"return") == 0 || strcmp(buf,"cr") == 0 ){
+					*result = CHAR2V('\r');
+				}else if( strcmp(buf,"tab") == 0 || strcmp(buf,"ht") == 0 ){
+					*result = CHAR2V('\t');
+				}else if( strcmp(buf,"page") == 0 ){
+					*result = CHAR2V(0x0c);
+				}else if( strcmp(buf,"escape") == 0 || strcmp(buf,"esc") == 0 ){
+					*result = CHAR2V(0x1b);
+				}else if( strcmp(buf,"delete") == 0 || strcmp(buf,"del") == 0 ){
+					*result = CHAR2V(0x7f);
+				}else if( strcmp(buf,"null") == 0 ){
+					*result = CHAR2V('\0');
 				}else{
 					printf( "invalid #\\%s\n", buf );
 					assert(0);
@@ -772,6 +862,17 @@ Value stream_write( Value s, Value v )
 	fputs( buf, STREAM_FD(s) );
 	return NIL;
 }
+
+size_t stream_read_chars( Value s, char *buf, size_t len )
+{
+	size_t read_len = fread( buf, len, 1, STREAM_FD(s) );
+	assert( read_len >= 0 );
+	return read_len;
+}
+
+//********************************************************
+// Syntax
+//********************************************************
 
 Value _syntax_expand_body( Value body, Dict *bundle )
 {
