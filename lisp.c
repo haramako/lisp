@@ -555,9 +555,38 @@ static Value _parse_token( char *str )
 	}
 }
 
-int _parse( Value s, Value *result )
+static int _unescape_char( int c )
+{
+	switch( c ){
+	case 'n': return '\n';
+	case 't': return '\t';
+	default:
+		printf( "unkonwn escaped string \\%c\n", c );
+		assert(0);
+	}
+}
+
+static Value _read_string( Value s )
 {
 	char buf[1024];
+	int i = 0;
+	for(;;){
+		int c = stream_getc(s);
+		switch( c ){
+		case '"':
+			return string_new_len(buf,i);
+		case '\\':
+			c = _unescape_char( stream_getc(s) );
+			break;
+		case '\0':
+			assert(0);
+		}
+		buf[i++] = c;
+	}
+}
+
+int _parse( Value s, Value *result )
+{
 	int err;
 	_skip_space( s );
 	int c;
@@ -621,6 +650,11 @@ int _parse( Value s, Value *result )
 				if( c == '\n' ) break;
 			}
 			return _parse(s, result);
+		case ';':
+			// s-exp comment
+			err = _parse(s, result);
+			if( err ) return err;
+			return _parse(s, result);
 		case 'x':
 			{
 				char buf[32];
@@ -654,13 +688,9 @@ int _parse( Value s, Value *result )
 			assert(0);
 		}
 	case '"':
-		{
-			int i = 0;
-			while( (c = stream_getc(s)) != '"') buf[i++] = c;
-			buf[i] = '\0';
-			*result = string_new(buf);
-			return 0;
-		}
+		*result = _read_string(s);
+		if( !*result ) return -4;
+		return 0;
 	case '\'':
 		err = _parse( s, result );
 		if( err ) return err;
@@ -785,12 +815,15 @@ bool _syntax_match( Value keywords, Value rule, Value code, Dict *bundle )
 		}
 		
 		// match keywords
-		LIST_EACH( kw, keywords ){
-			if( kw == CAR(c) ){
-				if( kw == CAR(code) ){
-					continue;
-				}else{
-					return false;
+		// printf( "%s %s\n", v2s(keywords), v2s(CAR(code)) );
+		if( IS_PAIR(code) ){
+			LIST_EACH( kw, keywords ){
+				if( kw == CAR(c) ){
+					if( kw == CAR(code) ){
+						continue;
+					}else{
+						return false;
+					}
 				}
 			}
 		}

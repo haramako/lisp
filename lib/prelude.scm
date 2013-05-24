@@ -65,23 +65,32 @@
 	  (apply putsn (cdr x))))
 
 (define (*tee* x)
-  (puts x)
+  (puts "tee:" x)
   x)
 
-(define cond
-  (macro form
-	(let recur ((form form))
-	  (if (not (pair? form)) '(#f)
-		  (let ((c (car form))
-				(rest (cdr form)))
-			(if (and (pair? c)
-					 (pair? (cdr c))
-					 (eq? (car (cdr c)) '=>))
-				(list 'if (car c) (list (car (cdr (cdr c))) (car c)) (recur rest))
-				(list 'if (car c) (cons 'begin (cdr c)) (recur rest))))))))
-
-(define else #t)
-
+(define-syntax cond
+  (syntax-rules (=> else)
+	((_ (else ?body ...))
+	 (begin ?body ...))
+	
+	((_ (?cnd => ?f))
+	 (let ((*cnd-tmp* ?cnd ))
+	   (if *cnd-tmp* (?f *cnd-tmp*))))
+	
+	((_ (?cnd ?body ...))
+	 (if ?cnd (begin ?body ...)))
+	
+	((_ (?cnd => ?f) ?rest ...)
+	 (let ((*cnd-tmp* ?cnd ))
+	   (if *cnd-tmp* (?f *cnd-tmp*)
+		   (cond ?rest ...))))
+	
+	((_ (?cnd ?body ...) ?rest ...)
+	 (if ?cnd (begin ?body ...)
+		 (cond ?rest ...)))
+	
+	))
+		
 (define (error . mes)
   (apply puts (cons "error:" mes))
   (backtrace)
@@ -328,7 +337,7 @@
   (char<=? #\A c #\Z))
 
 (define (char-set:whitespace c)
-  (and (char=? c #\space) (char=? c #\x09)))
+  (or (char=? c #\space) (char=? c #\x09)))
 
 (define (char-set:digit c)
   (and (char<=? #\0 c #\9)))
@@ -336,8 +345,11 @@
 (define (char-set:numeric c)
   (and (char<=? #\0 c #\9)))
 
-(define (char-set:punctuation c )
+(define (char-set:punctuation c)
   (not (char-set:letter c)))
+
+(define (char-set:graphic c)
+  (not (char-set:whitespace c)))
 
 (define char-alphabetic? char-set:alphabetic)
 (define char-letter? char-set:letter)
@@ -345,8 +357,7 @@
 (define char-whitespace? char-set:whitespace)
 (define char-digit? char-set:digit)
 (define char-numeric? char-set:numeric)
-(define char-set:graphic char-set:whitespace)
-(define char-graphic? char-set:whitespace)
+(define char-graphic? char-set:graphic)
 
 (define string=? eqv?)
 

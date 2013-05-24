@@ -1291,14 +1291,13 @@ TODO: 文字列のエスケープ
     (pass-if (eqv? 2 (string-count "-aa" char-alphabetic?)))))
 
 
-#|
-TODO: 引数の数が違う
 (with-test-prefix "string-replace"
 
-  (pass-if "empty string(s), no indices"
+				  ;;TODO: 引数の数が違う
+  #;(pass-if "empty string(s), no indices"
     (string=? "" (string-replace "" "")))
 
-  (pass-if "empty string(s), 1 index"
+  #;(pass-if "empty string(s), 1 index"
     (string=? "" (string-replace "" "" 0)))
 
   (pass-if "empty string(s), 2 indices"
@@ -1310,10 +1309,10 @@ TODO: 引数の数が違う
   (pass-if "empty string(s), 4 indices"
     (string=? "" (string-replace "" "" 0 0 0 0)))
 
-  (pass-if "no indices"
+  #;(pass-if "no indices"
     (string=? "uu" (string-replace "foo bar" "uu")))
 
-  (pass-if "one index"
+  #;(pass-if "one index"
     (string=? "fuu" (string-replace "foo bar" "uu" 1)))
 
   (pass-if "two indices"
@@ -1325,9 +1324,6 @@ TODO: 引数の数が違う
   (pass-if "four indices"
     (string=? "fuar" (string-replace "foo bar" "uu" 1 5 1 2))))
 
-|#
-#|
-TODO: エスケープ
 (with-test-prefix "string-tokenize"
 
   (pass-if "empty string, no char/pred"
@@ -1350,18 +1346,18 @@ TODO: エスケープ
   (pass-if "charset, start and end index"
     (equal? '("oo" "bar" "!") (string-tokenize "foo\tbar !a"
 					       char-set:graphic 1 9))))
-|#
 
 ;;;
 ;;; string-filter
 ;;;
 
-(define *old-string-filter* string-filter)
-(define (string-filter criterion s . rest)
-  (apply *old-string-filter* (append (list s) (list criterion) rest)))
   
 
 (with-test-prefix "string-filter"
+				  ;; 引数の順序が逆
+  (define *old-string-filter* string-filter)
+  (define (string-filter criterion s . rest)
+    (apply *old-string-filter* (append (list s) (list criterion) rest)))
 
   (with-test-prefix "bad char_pred"
 
@@ -1462,9 +1458,11 @@ TODO: エスケープ
 ;;; string-delete
 ;;;
 
-#|
 (with-test-prefix "string-delete"
 
+				  (define *old-string-delete* string-delete)
+				  (define (string-delete s criterion . rest)
+					(apply *old-string-delete* (append (list criterion s) rest)))
   (with-test-prefix "bad char_pred"
 
     (pass-if-exception "integer" exception:wrong-type-arg
@@ -1532,8 +1530,6 @@ TODO: エスケープ
   (pass-if (string=? "x" (string-delete "x.." char-set:punctuation)))
   (pass-if (string=? "x" (string-delete "x..." char-set:punctuation)))
   (pass-if (string=? "x" (string-delete "...x..." char-set:punctuation))))
-
-|#
 
 (with-test-prefix "string-map"
 

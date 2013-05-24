@@ -114,10 +114,11 @@
 	 ((eq? x 1) 'one)
 	 ((eq? x 2) 'two)
 	 (x => (lambda (x) 'other))
-	 (#t 'other))))
+	 (else #f))))
 (assert 'one (cond-test 1))
 (assert 'two (cond-test 2))
 (assert 'other (cond-test 3))
+(assert #f (cond-test #f))
 
 (assert 3 (eval '(+ 1 2)))
 
