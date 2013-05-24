@@ -91,6 +91,7 @@ static void _mark( Value v )
 		assert(0);
 	case TYPE_NIL:
 	case TYPE_INT:
+	case TYPE_CHAR:
 	case TYPE_BOOL:
 		break;
 	case TYPE_SYMBOL:
@@ -109,6 +110,7 @@ static void _mark( Value v )
 		_mark( LAMBDA_BUNDLE(v) );
 		break;
 	case TYPE_CFUNC:
+		_mark( CFUNC_NAME(v) );
 		break;
 	case TYPE_BUNDLE:
 		_mark_dict( BUNDLE_DICT(v) );

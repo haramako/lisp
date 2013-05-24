@@ -58,6 +58,12 @@
 	(display " ")
 	(apply puts (cdr x))))
 
+(define (putsn . x)
+  (if (not (pair? x)) #f
+	  (display (car x))
+	  (display " ")
+	  (apply putsn (cdr x))))
+
 (define (*tee* x)
   (puts x)
   x)
@@ -69,6 +75,7 @@
 		  (let ((c (car form))
 				(rest (cdr form)))
 			(if (and (pair? c)
+					 (pair? (cdr c))
 					 (eq? (car (cdr c)) '=>))
 				(list 'if (car c) (list (car (cdr (cdr c))) (car c)) (recur rest))
 				(list 'if (car c) (cons 'begin (cdr c)) (recur rest))))))))
@@ -91,7 +98,7 @@
   (if (macro-form? form)
 	  (begin
 	   (apply (eval (car form)) (cdr form)))
-	(syntax-expand1 form)))
+	form))
 
 (define (macro-expand-all form)
   (define macro-expand-list
@@ -99,9 +106,9 @@
 	  (if (not (pair? form))
 		  form
 		(cons (macro-expand-all (car form)) (macro-expand-list (cdr form))))))
-  (if (not (pair? form))
+  (if (or (not (pair? form)) (eq? 'define-syntax (car form)))
 	  form
-	  (let ((form (macro-expand form)))
+	  (let ((form (macro-expand (syntax-expand1 form))))
 		(cons (macro-expand-all (car form)) (macro-expand-list (cdr form))))))
 
 (define *compile-hook* macro-expand-all)
@@ -194,6 +201,10 @@
 
 ;; utilities
 
+(define-syntax mac
+  (syntax-rules ()
+	((_ form) (puts (macro-expand-all 'form)))))
+
 (define-syntax unless
   (syntax-rules ()
 	((_ cnd body ...) (if cnd #f body ...))))
@@ -265,13 +276,18 @@
 	((_ var body ...)
 	 (let (var) body ...))))
 
+(define (trace)
+  (runtime-value-set! 'trace 1))
+
 ;;************************************************************
-;; from http://srfi.schemers.org/srfi-1/srfi-1-reference.scm
+;; for srfi-1.scm
+;; SEE: http://srfi.schemers.org/srfi-1/srfi-1-reference.scm
 ;;************************************************************
 
-(define-syntax :optional
-  (syntax-rules ()
-	((_ sym val) (if (pair? sym) (car sym) val))))
+(define (:optional v def . f)
+  (if (null? f)
+	  (if (null? v) def (car v))
+	  (if ((car f) (car v)) (car v) def)))
 
 (define (tree-copy x_)
   (let recur ((x x_))
@@ -281,6 +297,117 @@
 (define (check-arg pred val caller)
   (if (pred val) val (check-arg (error "Bad argument" val pred caller))))
 
+;;************************************************************
+;; for srfi-13.scm
+;; SEE: http://srfi.schemers.org/srfi-13/srfi-13-reference.scm
+;;************************************************************
+
+(define (1+ n) (+ n 1))
+(define (1- n) (- n 1))
+
+(define (identity v) v)
+
+(define (char-set? v) #f)
+
+(define (char-set . c)
+  (lambda (x) (find (lambda (y) (eqv? y x)) c)))
+
+(define (char-set-contains? cset c)
+  (cset c))
+
+(define (exact? v) (number? v))
+
+(define (char-set:alphabetic c)
+  (or (and (char>=? c #\A) (char<=? c #\Z)) (and (char>=? c #\a) (char<=? c #\z))))
+
+(define (char-set:letter c)
+  (or (and (char>=? c #\A) (char<=? c #\Z)) (and (char>=? c #\a) (char<=? c #\z))))
+
+(define (char-set:upper-case c)
+  (and (char>=? c #\A) (char<=? c #\Z)))
+
+(define (char-set:whitespace c)
+  (and (char=? c #\space) (char=? c #\x09)))
+
+(define (char-set:digit c)
+  (and (char>=? c #\0) (char<=? c #\9)))
+
+(define (char-set:numeric c)
+  (and (char>=? c #\0) (char<=? c #\9)))
+
+(define (char-set:punctuation c )
+  (not (char-set:letter c)))
+
+(define char-alphabetic? char-set:alphabetic)
+(define char-letter? char-set:letter)
+(define char-upper-case? char-set:upper-case)
+(define char-whitespace? char-set:whitespace)
+(define char-digit? char-set:digit)
+(define char-numeric? char-set:numeric)
+(define char-set:graphic char-set:whitespace)
+(define char-graphic? char-set:whitespace)
+
+(define string=? eqv?)
+
+(define (min . lis)
+  (let loop ((min 9999)
+			 (lis lis))
+	(if (null? lis)
+		min
+		(if (< (car lis) min)
+			(loop (car lis) (cdr lis))
+			(loop min (cdr lis))))))
+
+(define (char-ci<? a b)
+  (char<? (char-downcase a) (char-downcase b)))
+
+(define (char-ci=? a b)
+  (char=? (char-downcase a) (char-downcase b)))
+
+;; TODO: ?def-func の処理をいれる
+(define-syntax let-optionals*
+  (syntax-rules ()
+	((_ ?list ((?sym ?def ?def-func ...)) body ...)
+	 (let ((?sym (if (null? ?list) ?def (car ?list))))
+	   body ...))
+	
+	((_ ?list (?sym) body ...)
+	 (let ((?sym ?list))
+	   body ...))
+	
+	((_ ?list ((?sym ?def ?def-func ... ) rest ...) body ...)
+	 (let ((?sym (if (null? ?list) ?def (car ?list)))
+		   (*list* (if (null? ?list) '() (cdr ?list))))
+	   (let-optionals* *list* (rest ...) body ...)))
+	))
+
+(define-syntax %case
+  (syntax-rules (else)
+	
+	((_ ?v (else ?body ...))
+	 (begin ?body ...))
+	
+	((_ ?v ((?cond ...) ?body ...))
+	 (if (find (lambda (x) (eqv? x ?v)) '(?cond ...))
+		 (begin ?body ...)))
+	
+	
+	((_ ?v ((?cond ...) ?body ...) ?rest ...)
+	 (if (find (lambda (x) (eqv? x ?v)) '(?cond ...))
+		 (begin ?body ...)
+		 (%case ?v ?rest ...)))
+	
+	 
+	))
+
+(define-syntax case
+  (syntax-rules ()
+ 	((_ ?v ?rest ...)
+ 	 (let ((*case-tmp* ?v))
+ 	   (%case *case-tmp* ?rest ...)))))
+
+;;(define (min . lis)
+;;  (fold (lambda (a b) (if (< a b) a b)) list))
 
 ;;************************************************************
 ;; dynamic-wind from tiny-scheme
@@ -401,6 +528,3 @@
 ;; other
 ;;************************************************************
 
-(define-syntax mac
-  (syntax-rules ()
-	((_ form) (puts (macro-expand-all 'form)))))

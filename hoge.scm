@@ -1,6 +1,23 @@
 #!/usr/bin/env mlisp
 
+(puts (string->list "hoge"))
+(puts (list->string (string->list "hoge")))
+
+(puts (char=? #\a #\a))
+(puts (char=? #\a #\b))
+(puts (char->integer #\a))
+
+(let ((str (make-string 8 #\_)))
+  (puts str)
+  (string-set! str 3 #\A)
+  (puts (string-ref str 3))
+  )
+
+(puts (char-upcase #\a) (char-upcase #\A) (char-downcase #\a) (char-downcase #\A))
+
+
 (require srfi-1)
+(require srfi-13)
 
 (mac (when 1 1))
 

@@ -11,6 +11,7 @@ typedef enum {
 	TYPE_NIL,
 	TYPE_BOOL,
 	TYPE_INT,
+	TYPE_CHAR,
 	TYPE_SYMBOL,
 	TYPE_STRING,
 	TYPE_PAIR,
@@ -41,7 +42,6 @@ typedef enum {
 	OP_LET3,
 	OP_LAMBDA,
 	OP_MACRO,
-	OP_EXEC_MACRO,
 	OP_DEFINE_SYNTAX,
 	OP_IF,
 	OP_IF2,
@@ -91,6 +91,7 @@ typedef struct Cell {
 			Value str;
 		} symbol;
 		struct {
+			int len;
 			char *str;
 		} string;
 		struct {
@@ -102,7 +103,7 @@ typedef struct Cell {
 			Value data; // (name arg . body)
 		} lambda;
 		struct {
-			int arity;
+			Value name;
 			void *func;
 		} cfunc;
 		struct {
@@ -123,6 +124,7 @@ typedef struct Cell {
 #define TYPE_OF(v) ((Type)v->type)
 
 #define IS_INT(v) (v->type==TYPE_INT)
+#define IS_CHAR(v) (v->type==TYPE_CHAR)
 #define IS_SYMBOL(v) ((v)->type==TYPE_SYMBOL)
 #define IS_STRING(v) ((v)->type==TYPE_STRING)
 #define IS_PAIR(v) ((v)->type==TYPE_PAIR)
@@ -135,6 +137,8 @@ typedef struct Cell {
 
 #define V2INT(v) (assert(IS_INT(v)),v->d.number)
 #define INT2V(v) (int_new(v))
+#define V2CHAR(v) (assert(IS_CHAR(v)),v->d.number)
+#define CHAR2V(v) (char_new(v))
 #define V2SYMBOL(v) (assert(IS_SYMBOL(v)),v)
 #define V2STRING(v) (assert(IS_STRING(v)),v)
 #define V2PAIR(v) (assert(IS_PAIR(v)),v)
@@ -148,6 +152,7 @@ typedef struct Cell {
 size_t value_to_str( char *buf, int len, Value v );
 char* v2s( Value v );
 char* v2s_limit( Value v, int limit );
+#define v2sn v2s_limit
 void vdump( Value v );
 
 bool eq( Value a, Value b );
@@ -169,7 +174,7 @@ void gc_run( int verbose );
 Value retain( Value v );
 Value release( Value v );
 
-// Dictionary ( Hash Map ) in dict.c
+// Dictionary ( hashtable ) in dict.c
 
 typedef struct DictEntry {
 	Value key;
@@ -199,6 +204,10 @@ Dict* dict_rehash( Dict *d );
 
 Value int_new( int64_t i );
 
+// Char
+
+Value char_new( int i );
+
 // Symbol
 
 #define SYMBOL_STR(v) (V2SYMBOL(v)->d.symbol.str)
@@ -210,7 +219,10 @@ Value intern( char *sym );
 // String
 
 #define STRING_STR(v) (V2STRING(v)->d.string.str)
+#define STRING_LEN(v) (V2STRING(v)->d.string.len)
+
 Value string_new( char *str );
+Value string_new_len( char *str, int len );
 
 // Lambda
 
@@ -225,7 +237,8 @@ Value lambda_new();
 
 // CFunc
 
-#define CFUNC_ARITY(v) (V2CFUNC(v)->d.cfunc.arity)
+#define CFUNC_ARITY(v) (V2CFUNC(v)->flag)
+#define CFUNC_NAME(v) (V2CFUNC(v)->d.cfunc.name)
 #define CFUNC_FUNC(v) (V2CFUNC(v)->d.cfunc.func)
 
 Value cfunc_new(int arity, void *func );
@@ -244,20 +257,38 @@ void defun( char *sym, int arity, void *func );
 #define cons4(v1,v2,v3,v4) (cons( v1, cons( v2, cons( v3, v4 ) ) ))
 #define cons5(v1,v2,v3,v4,v5) (cons( v1, cons( v2, cons( v3, cons( v4, v5 ) ) ))
 #define cons6(v1,v2,v3,v4,v5,v6) (cons( v1, cons( v2, cons( v3, cons( v4, cons( v5, v6 ) ) ) ))
+#define cons7(v1,v2,v3,v4,v5,v6) (cons( v1, cons( v2, cons( v3, cons( v4, cons( v5, v6 ) ) ) ))
 #define bind2cdr(list,v1,v2) do{Value _=(list);v1=CAR(_);v2=CDR(_);}while(0);
 #define bind3cdr(list,v1,v2,v3) do{Value _=(list);v1=CAR(_);_=CDR(_);v2=CAR(_);v3=CDR(_);}while(0);
 #define bind4cdr(list,v1,v2,v3,v4) do{Value _=(list);v1=CAR(_);_=CDR(_);v2=CAR(_);_=CDR(_);v3=CAR(_);v4=CDR(_);}while(0);
+#define bind5cdr(list,v1,v2,v3,v4,v5) do{Value _=(list);v1=CAR(_);_=CDR(_);v2=CAR(_);_=CDR(_);v3=CAR(_);_=CDR(_);v4=CAR(_);v5=CDR(_);}while(0);
+#define bind6cdr(list,v1,v2,v3,v4,v5,v6) do{Value _=(list);v1=CAR(_);_=CDR(_);v2=CAR(_);_=CDR(_);v3=CAR(_);_=CDR(_);v4=CDR(_);_=CDR(_);v5=CAR(_);v6=CDR(_);}while(0);
+#define bind7cdr(list,v1,v2,v3,v4,v5,v6,v7) do{Value _=(list);v1=CAR(_);_=CDR(_);v2=CAR(_);_=CDR(_);v3=CAR(_);_=CDR(_);v4=CDR(_);_=CDR(_);v5=CAR(_);_=CDR(_);v6=CAR(_);v7=CDR(_);}while(0);
 #define bind2(list,v1,v2) do{bind2cdr(list,v1,v2);v2=CAR(v2);}while(0);
 #define bind3(list,v1,v2,v3) do{bind3cdr(list,v1,v2,v3);v3=CAR(v3);}while(0);
 #define bind4(list,v1,v2,v3,v4) do{bind4cdr(list,v1,v2,v3,v4);v4=CAR(v4);}while(0);
+#define bind5(list,v1,v2,v3,v4,v5) do{bind5cdr(list,v1,v2,v3,v4,v5);v5=CAR(v5);}while(0);
+#define bind6(list,v1,v2,v3,v4,v5,v6) do{bind6cdr(list,v1,v2,v3,v4,v5,v6);v6=CAR(v6);}while(0);
+#define bind7(list,v1,v2,v3,v4,v5,v6,v7) do{bind7cdr(list,v1,v2,v3,v4,v5,v6,v6);v7=CAR(v7);}while(0);
 #define BINDX(v) if(IS_PAIR(_)){v=CAR(_);_=CDR(_);}else{v=NULL;}
 #define bind1arg(list,v1) do{Value _=(list);BINDX(v1);}while(0);
 #define bind2arg(list,v1,v2) do{Value _=(list);BINDX(v1);BINDX(v2);}while(0);
 #define bind3arg(list,v1,v2,v3) do{Value _=(list);BINDX(v1);BINDX(v2);BINDX(v3);}while(0);
+#define bind4arg(list,v1,v2,v3,v4) do{Value _=(list);BINDX(v1);BINDX(v2);BINDX(v3);BINDX(v4);}while(0);
+#define bind5arg(list,v1,v2,v3,v4,v5) do{Value _=(list);BINDX(v1);BINDX(v2);BINDX(v3);BINDX(v4);BINDX(v5);}while(0);
+#define bind6arg(list,v1,v2,v3,v4,v5,v6) do{Value _=(list);BINDX(v1);BINDX(v2);BINDX(v3);BINDX(v4);BINDX(v5);BINDX(v6);}while(0);
+#define bind7arg(list,v1,v2,v3,v4,v5,v6,v7) do{Value _=(list);BINDX(v1);BINDX(v2);BINDX(v3);BINDX(v4);BINDX(v5);BINDX(v6);BINDX(v7);}while(0);
+
+// usage:
+//   LIST_EACH(cur,list){
+//     vdump(cur);
+//   }
+#define LIST_EACH(it,list) Value it; for( Value it##_pair=list; it##_pair != NIL && (it=CAR(it##_pair),1); it##_pair=CDR(it##_pair) )
 
 Value cons( Value car, Value cdr );
 size_t list_length( Value v );
 Value list_copy( Value list );
+Value list_tail( Value list );
 
 // Bundle
 
@@ -303,12 +334,13 @@ int stream_peekc( Value s );
 Value stream_read( Value s );
 Value stream_write( Value s, Value v );
 	
-// Eval
+// Eval in eval.c
 
 Value call( Value lmd, Value vals, Value cont, Value *result );
 Value compile( Value code );
 Value eval_loop( Value v );
 Value syntax_expand1( Value code );
+Value normalize_let( Value code );
 
 // Initialization
 
@@ -333,20 +365,23 @@ extern Value V_QUOTE;
 extern Value V_DEFINE, V_DEFINE2;
 extern Value V_SET_I, V_SET_I2;
 extern Value V_LET, V_LET_A, V_LETREC, V_LET2, V_LET3;
-extern Value V_LAMBDA, V_MACRO, V_EXEC_MACRO, V_DEFINE_SYNTAX;
+extern Value V_LAMBDA, V_MACRO, V_DEFINE_SYNTAX;
 extern Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 extern Value V_READ_EVAL, V_READ_EVAL2;
 
 extern Value SYM_A_DEBUG_A, SYM_A_COMPILE_HOOK_A, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
 	SYM_CURRENT_INPUT_PORT, SYM_CURRENT_OUTPUT_PORT, SYM_END_OF_LINE, SYM_VALUES,
-	SYM_DOT, SYM_DOT3, SYM_ERROR, SYM_SYNTAX_RULES, SYM_SYNTAX_REST, SYM_RUNTIME_LOAD_PATH, SYM_RUNTIME_HOME_PATH;
+	SYM_DOT, SYM_DOT3, SYM_ERROR, SYM_SYNTAX_RULES, SYM_SYNTAX_REST,
+	SYM_RUNTIME_LOAD_PATH, SYM_RUNTIME_HOME_PATH, SYM_LAMBDA, SYM_LET, SYM_LETREC;
 
 extern bool opt_trace;
 extern bool opt_debug;
 
 void init( const char *argv0 );
 void init_prelude( const char *argv0, bool with_prelude );
-void cfunc_init();
 void finalize();
 void show_prof();
+
+void cfunc_init();
+void srfi13_init();
 

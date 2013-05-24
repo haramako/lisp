@@ -14,6 +14,7 @@ const char *TYPE_NAMES[] = {
 	"NIL",
 	"BOOL",
 	"INT",
+	"CHAR",
 	"SYMBOL",
 	"STRING",
 	"PAIR",
@@ -58,6 +59,16 @@ static size_t _value_to_str( char *buf, int len, Value v )
 	case TYPE_INT:
 		n += snprintf( buf, len, "%lld", V2INT(v) );
 		break;
+	case TYPE_CHAR:
+		{
+			int c = V2CHAR(v);
+			if( c >= 32 && c <= 126 ){
+				n += snprintf( buf, len, "#\\%c", (char)c );
+			}else{
+				n += snprintf( buf, len, "#\\x%02x", c );
+			}
+		}
+		break;
 	case TYPE_SYMBOL:
 		n += snprintf( buf, len, "%s", STRING_STR(SYMBOL_STR(v)) );
 		break;
@@ -65,17 +76,19 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		n += snprintf( buf, len, "\"%s\"", STRING_STR(v) );
 		break;
 	case TYPE_LAMBDA:
-		{
-			if( LAMBDA_NAME(v) != NIL ){
-				n += snprintf( buf, len, "(%s:%s:%p)",
-							   LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], STRING_STR(SYMBOL_STR(LAMBDA_NAME(v))), v );
-			}else{
-				n += snprintf( buf, len, "(%s:%p)", LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], v );
-			}
+		if( LAMBDA_NAME(v) != NIL ){
+			n += snprintf( buf, len, "(%s:%s:%p)",
+						   LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], STRING_STR(SYMBOL_STR(LAMBDA_NAME(v))), v );
+		}else{
+			n += snprintf( buf, len, "(%s:%p)", LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], v );
 		}
 		break;
 	case TYPE_CFUNC:
-		n += snprintf( buf, len, "(CFUNC:%p)", CFUNC_FUNC(v) );
+		if( CFUNC_NAME(v) != NIL ){
+			n += snprintf( buf, len, "(CFUNC:%s)", STRING_STR(SYMBOL_STR(CFUNC_NAME(v))) );
+		}else{
+			n += snprintf( buf, len, "(CFUNC:%p)", CFUNC_FUNC(v) );
+		}
 		break;
 	case TYPE_PAIR:
 		n += snprintf( buf, len, "(" );
@@ -162,6 +175,8 @@ bool eq( Value a, Value b )
 		return true;
 	case TYPE_INT:
 		return ( V2INT(a) == V2INT(b) );
+	case TYPE_CHAR:
+		return ( V2CHAR(a) == V2CHAR(b) );
 	default:
 		return ( a == b );
 	}
@@ -245,6 +260,17 @@ Value int_new( int64_t i )
 }
 
 //********************************************************
+// Char
+//********************************************************
+
+Value char_new( int i )
+{
+	Value v = gc_new(TYPE_CHAR);
+	v->d.number = i;
+	return v;
+}
+
+//********************************************************
 // Symbol
 //********************************************************
 
@@ -268,11 +294,18 @@ Value intern( char *sym )
 
 Value string_new( char *str )
 {
+	return string_new_len( str, strlen(str) );
+}
+
+Value string_new_len( char *str, int len )
+{
 	Value v = gc_new(TYPE_STRING);
-	char *s = malloc(strlen(str)+1);
+	char *s = malloc(len+1);
 	assert( s );
-	strcpy( s, str );
+	memcpy( s, str, len );
+	s[len] = '\0';
 	STRING_STR(v) = s;
+	STRING_LEN(v) = len;
 	return v;
 }
 
@@ -296,6 +329,7 @@ Value cfunc_new(int arity, void *func )
 {
 	Value v = gc_new(TYPE_CFUNC);
 	CFUNC_ARITY(v) = arity;
+	CFUNC_NAME(v) = NIL;
 	CFUNC_FUNC(v) = func;
 	return v;
 }
@@ -335,6 +369,13 @@ Value list_copy( Value list )
 		tail = CDR(tail) = cons( CAR(cur), NIL );
 	}
 	return r;
+}
+
+Value list_tail( Value list )
+{
+	if( list == NIL ) return NIL;
+	for(;CDR(list) != NIL; list=CDR(list));
+	return list;
 }
 
 //********************************************************
@@ -390,13 +431,10 @@ void bundle_define( Value b, Value sym, Value v )
 	if( d->use >= d->size ) BUNDLE_DICT(b) = dict_rehash(d);
 	
 	DictEntry *entry = bundle_find( b, sym, false, true );
-	if( entry->val != NIL ){
-		// printf( "bundle_define: %s\n", v2s(sym) );
-		// assert( !"already set" );
-	}
 	entry->val = v;
-	
+
 	if( IS_LAMBDA(v) && LAMBDA_NAME(v) == NIL ) LAMBDA_NAME(v) = sym;
+	if( IS_CFUNC(v) && CFUNC_NAME(v) == NIL ) CFUNC_NAME(v) = sym;
 }
 
 Value bundle_get( Value b, Value sym, Value def )
@@ -432,12 +470,12 @@ void _skip_space( Value s )
 	for(;;){
 		int c = stream_getc(s);
 		switch( c ){
-		case '\n': case '\r': case ' ': case '\t': 
+		case '\n': case '\r': case '\x0c': case ' ': case '\t': 
 			break;
 		case ';':
 			for(;;){
 				c = stream_getc(s);
-				if( c == '\n' || c == '\r' || c == '\0' || c == -1 ) break;
+				if( c == '\n' || c == '\r' || c == '\x0c' || c == '\0' || c == -1 ) break;
 			}
 			break;
 		default:
@@ -482,7 +520,7 @@ int _parse_list( Value s, Value *result )
 static inline bool _is_val_char( int c )
 {
 	switch( c ){
-	case ' ': case '\t': case '\n': case '\r': case '(': case ')': case '\0': case -1:
+	case ' ': case '\t': case '\n': case '\r': case '\x0c': case '(': case ')': case '\0': case -1:
 		return false;
 	default:
 		return true;
@@ -583,7 +621,36 @@ int _parse( Value s, Value *result )
 				if( c == '\n' ) break;
 			}
 			return _parse(s, result);
+		case 'x':
+			{
+				char buf[32];
+				int num;
+				_read_token(s,buf);
+				sscanf( buf, "%x", &num);
+				*result = INT2V(num);
+				return 0;
+			}
+			
+		case '\\':
+			{
+				char buf[32];
+				_read_token(s,buf);
+				if( strlen(buf) == 1 ){
+					*result = CHAR2V(buf[0]);
+				}else if( buf[0] == 'x' ){
+					int num;
+					sscanf( buf+1, "%x", &num);
+					*result = CHAR2V(num);
+				}else if( strcmp(buf,"space") == 0 ){
+					*result = CHAR2V(' ');
+				}else{
+					printf( "invalid #\\%s\n", buf );
+					assert(0);
+				}
+				return 0;
+			}
 		default:
+			printf( "invalid #char %c\n", c );
 			assert(0);
 		}
 	case '"':
@@ -676,465 +743,6 @@ Value stream_write( Value s, Value v )
 	return NIL;
 }
 
-//********************************************************
-// Evaluation
-//********************************************************
-
-Value cont_error( char *str, Value cont )
-{
-	return continuation_new( cons3( SYM_ERROR, string_new(str), NIL ),
-							 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
-}
-
-Value call( Value lmd, Value vals, Value cont, Value *result )
-{
-	Value orig_vals = vals;
-	switch( TYPE_OF(lmd) ){
-	case TYPE_LAMBDA:
-		switch( LAMBDA_TYPE(lmd) ){
-		case LAMBDA_TYPE_LAMBDA:
-		case LAMBDA_TYPE_MACRO:
-			{
-				Value bundle = bundle_new( LAMBDA_BUNDLE(lmd) );
-				BUNDLE_LAMBDA(bundle) = lmd;
-				for( Value cur=LAMBDA_ARGS(lmd); cur != NIL; cur=CDR(cur), vals=CDR(vals) ){
-					if( IS_PAIR(cur) ){
-						if( !IS_PAIR(vals) ){
-							printf( "call: %s orig_vals: %s lmd: %s\n", v2s(LAMBDA_BODY(lmd)), v2s(orig_vals), v2s(LAMBDA_ARGS(lmd)) );
-						}
-						if( !IS_SYMBOL(CAR(cur)) ) return cont_error( "not symbol", cont );
-						bundle_define( bundle, CAR(cur), CAR(vals) );
-					}else{
-						if( !IS_SYMBOL(cur) ) return cont_error( "not symbol", cont );
-						bundle_define( bundle, cur, vals );
-						break;
-					}
-				}
-				return continuation_new( cons(V_BEGIN, LAMBDA_BODY(lmd)), bundle, CONTINUATION_NEXT(cont) );
-			}
-		}
-	case TYPE_CFUNC:
-		{
-			void *func = CFUNC_FUNC(lmd);
-			int arity = CFUNC_ARITY(lmd);
-			if( arity == CFUNC_VARIABLE ){
-				return ((CFunction)func)( vals, cont, result );
-			}else{
-				Value bundle = CONTINUATION_BUNDLE(cont);
-				bool has_rest = (arity<0);
-				int arg_num = has_rest?(-1-arity):(arity);
-				Value v[8] = {NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
-				
-				for( int i=0; i<arg_num; i++ ){
-					if( vals == NIL ) assert(0);
-					v[i] = CAR(vals);
-					vals = CDR(vals);
-				}
-				
-				if( has_rest ){
-					v[arg_num] = vals;
-					arg_num++;
-				}else{
-					if( vals != NIL ) assert(0);
-				}
-				
-				switch( arg_num ){
-				case 0: *result = ((CFunction0)func)( bundle ); break;
-				case 1: *result = ((CFunction1)func)( bundle, v[0] ); break;
-				case 2: *result = ((CFunction2)func)( bundle, v[0], v[1] ); break;
-				case 3: *result = ((CFunction3)func)( bundle, v[0], v[1], v[2] ); break;
-				case 4: *result = ((CFunction4)func)( bundle, v[0], v[1], v[2], v[3] ); break;
-				case 5: *result = ((CFunction5)func)( bundle, v[0], v[1], v[2], v[3], v[4] ); break;
-				case 6: *result = ((CFunction6)func)( bundle, v[0], v[1], v[2], v[3], v[4], v[5] ); break;
-				case 7: *result = ((CFunction7)func)( bundle, v[0], v[1], v[2], v[3], v[4], v[5], v[6] ); break;
-				default:
-					assert(0);
-				}
-				return CONTINUATION_NEXT(cont);
-			}
-		}
-	default:
-		assert(0);
-	}
-}
-
-#define NEXT(_cont,_v) do{ Value r = _v; cont = _cont; result = (r); goto _loop; }while(0)
-#define ERROR(mes) do{													\
-		Value _code = C_CODE(cont);										\
-		NEXT( CONT( cons4( SYM_ERROR, string_new(mes), cons3(V_QUOTE,_code,NIL), NIL ), \
-					C_BUNDLE(cont), C_NEXT(cont)), NIL); }while(0)
-#define CHECK(x) do{ if(!x){ ERROR("invalid form"); } }while(0)
-#define FAIL() CHECK(0)
-
-#define CONT continuation_new
-#define CONT_OP(op,a,b,c) continuation_new(cons(op,a),b,c)
-#define C_BUNDLE CONTINUATION_BUNDLE
-#define C_NEXT CONTINUATION_NEXT
-#define C_CODE CONTINUATION_CODE
-
-Value _eval_direct( Value cont, Value code )
-{
-	switch( TYPE_OF(code) ){
-	case TYPE_UNUSED:
-	case TYPE_MAX:
-		assert(0);
-	case TYPE_NIL:
-	case TYPE_INT:
-	case TYPE_LAMBDA:
-	case TYPE_CFUNC:
-	case TYPE_BOOL:
-	case TYPE_STRING:
-	case TYPE_BUNDLE:
-	case TYPE_CONTINUATION:
-	case TYPE_SPECIAL:
-	case TYPE_STREAM:
-		return code;
-	case TYPE_SYMBOL:
-		return bundle_get( C_BUNDLE(cont), code, NULL );
-	default:
-		return NULL;
-	}
-}
-
-#define NEXT_DIRECT(_code,next_cont) do{					\
-		Value _r = _eval_direct(cont,_code);				\
-		if( _r ){											\
-			cont = next_cont;								\
-			result = _r;									\
-			goto _loop;										\
-		}else{												\
-			NEXT( CONT(_code,C_BUNDLE(cont),next_cont), NIL );	\
-		}													\
-	}while(0)
-
-Value eval_loop( Value code )
-{
-	int gc_count = 10000;
-	Value result = NIL;
-	Value cont = CONT_OP( V_READ_EVAL, code, bundle_cur, NIL );
- _loop:
-	
-	if( gc_count-- <= 0 ){
-		retain( cont );
-		retain( result );
-		gc_run( opt_trace?1:0 );
-		release( result );
-		release( cont );
-		gc_count = 10000;
-	}
-
-	if( cont == NIL ) return result;
-	// printf( "> %s\n", v2s_limit(C_CODE(cont), 80) );
-	// display_val( "=> ", result );
-	switch( TYPE_OF(C_CODE(cont)) ){
-	case TYPE_UNUSED:
-	case TYPE_MAX:
-		assert(0);
-	case TYPE_NIL:
-	case TYPE_INT:
-	case TYPE_LAMBDA:
-	case TYPE_CFUNC:
-	case TYPE_BOOL:
-	case TYPE_STRING:
-	case TYPE_BUNDLE:
-	case TYPE_CONTINUATION:
-	case TYPE_SPECIAL:
-	case TYPE_STREAM:
-	case TYPE_SYMBOL:
-		{
-			Value v = _eval_direct( cont, C_CODE(cont) );
-			if( !v ) ERROR( "symbol not found" );
-			NEXT( C_NEXT(cont), v );
-		}
-	case TYPE_PAIR:
-		if( !IS_SPECIAL(CAR(C_CODE(cont))) ){
-			NEXT_DIRECT( CAR(C_CODE(cont)),
-						 CONT_OP( V_CALL0, CDR(C_CODE(cont)), C_BUNDLE(cont), C_NEXT(cont) ) );
-		}
-		
-		Value code = CDR(C_CODE(cont));
-		Operator op = SPECIAL_OP(CAR(C_CODE(cont)));
-		switch( op ){
-		case OP_BEGIN:
-			// display_val( "OP_BEGIN: ", code );
-			if( code == NIL ){
-				NEXT( C_NEXT(cont), result );
-			}else if( CDR(code) == NIL ){
-				NEXT_DIRECT( CAR(code), C_NEXT(cont));
-			}else{
-				NEXT_DIRECT( CAR(code), 
-							 CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
-			}
-			
-		case OP_QUOTE:
-			NEXT( C_NEXT(cont), CAR(code) );
-			
-		case OP_CALL0:
-			// display_val( "OP_CALL0: ", cons( result, C_CODE(cont) ) );
-			switch( TYPE_OF(result) ){
-			case TYPE_LAMBDA:
-				switch( LAMBDA_TYPE(result) ){
-				case LAMBDA_TYPE_LAMBDA:
-					if( code != NIL ){
-						Value args = cons(result,NIL);
-						NEXT_DIRECT( CAR(code),
-									 CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) );
-					}else{
-						Value res = NIL;
-						Value next = call( result, NIL, cont, &res);
-						NEXT( next, res );
-					}
-				default:
-					ERROR( "cannot call" );
-				}
-			case TYPE_CFUNC:
-				if( code != NIL ){
-					Value args = cons(result,NIL);
-					NEXT_DIRECT( CAR(code), 
-								 CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) );
-				}else{
-					Value res = NIL;
-					Value next = call( result, NIL, cont, &res);
-					NEXT( next, res );
-				}
-			case TYPE_SPECIAL:
-				NEXT( CONT_OP( result, code, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
-			case TYPE_CONTINUATION:
-				{
-					Value args = cons(result,NIL);
-					NEXT( CONT( CAR(code), C_BUNDLE(cont),
-								CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) ),
-						  NIL );
-				}
-			default:
-				FAIL();
-				printf( "OP_CALL0: result: %s code: %s\n", v2s(result), v2s(C_CODE(cont)) );
-				assert(0);
-			}
-			
-		case OP_CALL1:
-			{
-				// display_val( "OP_CALL1: ", C_CODE(cont) );
-				Value rest, vals, tmp;
-				bind3(code,rest,vals,tmp);
-				CDR(tmp) = cons( result, NIL );
-				if( rest != NIL ){
-					NEXT_DIRECT( CAR(rest),
-								 CONT_OP( V_CALL1, cons4( CDR(rest), vals, CDR(tmp), NIL ), C_BUNDLE(cont), C_NEXT(cont) ) );
-				}else{
-					Value lmd = CAR(vals);
-					if( IS_LAMBDA(lmd) || IS_CFUNC(lmd) ){
-						Value val = NIL;
-						Value next = call(lmd, CDR(vals), cont, &val );
-						NEXT( next, val );
-					}else if( IS_CONTINUATION(lmd) ){
-						vals = CDR(vals);
-						if( CDR(vals) != NIL ){
-							NEXT( lmd, cons( SYM_VALUES, vals ));
-						}else{
-							NEXT( lmd, CAR(vals) );
-						}
-					}else{
-						assert(0);
-					}
-				}
-			}
-			
-		case OP_DEFINE:
-			{
-				if( IS_SYMBOL(CAR(code)) ){
-					// (define sym val) の形
-					NEXT_DIRECT(CADR(code),
-								CONT_OP( V_DEFINE2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) );
-				}else if( IS_PAIR(CAR(code)) ){
-					// (define (sym args ... ) の形
-					NEXT( CONT( cons3( V_LAMBDA, CDAR(code), CDR(code) ), C_BUNDLE(cont),
-								CONT_OP( V_DEFINE2, CAAR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-				}else{
-					assert(0);
-				}
-			}
-				
-		case OP_DEFINE2:
-			bundle_define( C_BUNDLE(cont), code, result );
-			NEXT( C_NEXT(cont), NIL );
-				
-		case OP_SET_I:
-			NEXT_DIRECT( CADR(code),
-						 CONT_OP( V_SET_I2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) );
-				
-		case OP_SET_I2:
-			bundle_set( C_BUNDLE(cont), code, result );
-			NEXT( C_NEXT(cont), NIL );
-
-		case OP_LET:
-		case OP_LET_A:
-		case OP_LETREC:
-			// display_val( "LET: ", code );
-			if( IS_PAIR( CAR(code) )){
-				// normal let
-				Value new_bundle = bundle_new(C_BUNDLE(cont));
-				switch( op ){
-				case OP_LET:
-					NEXT( CONT_OP( V_LET2, cons(C_BUNDLE(cont), code), new_bundle, C_NEXT(cont)), NIL );
-				case OP_LET_A:
-					NEXT( CONT_OP( V_LET2, cons(new_bundle, code), new_bundle, C_NEXT(cont)), NIL );
-				case OP_LETREC:
-					for( Value cur=CAR(code); cur != NIL; cur = CDR(cur) ){
-						Value sym_val = CAR(cur);
-						CHECK( IS_PAIR(sym_val) );
-						Value sym = CAR(sym_val);
-						CHECK( IS_SYMBOL(sym) );
-						bundle_define( new_bundle, sym, NIL );
-					}
-					NEXT( CONT_OP( V_LET2, cons(new_bundle, code), new_bundle, C_NEXT(cont)), NIL );
-				default:
-					assert(0);
-				}
-			}else if( IS_SYMBOL( CAR(code) ) ){
-				CHECK( op == OP_LET );
-				// named let
-				Value bundle = bundle_new( C_BUNDLE(cont) );
-				Value name = CAR(code);
-				Value lmd = lambda_new();
-				LAMBDA_TYPE(lmd) = LAMBDA_TYPE_LAMBDA;
-				LAMBDA_BUNDLE(lmd) = bundle;
-				Value lmd_args = cons( NIL, NIL );
-				Value lmd_args_tail = lmd_args;
-				Value lmd_vals = cons( NIL, NIL );
-				Value lmd_vals_tail = lmd_vals;
-				for( Value cur=CADR(code); cur != NIL; cur=CDR(cur) ){
-					lmd_args_tail = CDR(lmd_args_tail) = cons( CAR(CAR(cur)), NIL);
-					lmd_vals_tail = CDR(lmd_vals_tail) = cons( CADR(CAR(cur)), NIL);
-				}
-				LAMBDA_DATA(lmd) = cons3( NIL, CDR(lmd_args), CDDR(code) );
-				bundle_define( bundle, name, lmd );
-				Value call_form = cons( name, CDR(lmd_vals) );
-				//display_val( "let: ", cons3( LAMBDA_ARGS(lmd), LAMBDA_BODY(lmd), NIL) );
-				//display_val( "let: ", call_form );
-				NEXT( CONT( call_form, bundle, C_NEXT(cont)), NIL );
-			}else{
-				FAIL();
-			}
-				
-		case OP_LET2:
-			{
-				Value bundle, vars, body;
-				bind3cdr( code, bundle, vars, body );
-				// printf( "OP_LET2: %s\n", v2s(vars) );
-				if( IS_PAIR(vars) ){
-					// printf( "OP_LET2- %s\n", v2s(CADR(CAR(vars))) );
-					NEXT( CONT( CADR(CAR(vars)), bundle,
-								CONT_OP( V_LET3, cons4( bundle, CAAR(vars), CDR(vars), body ), C_BUNDLE(cont), C_NEXT(cont) )), NIL);
-				}else if( vars == NIL ){
-					NEXT( CONT_OP( V_BEGIN, body, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
-				}else{
-					FAIL();
-				}
-			}
-				
-		case OP_LET3:
-			{
-				Value bundle, sym, form;
-				bind3cdr( code, bundle, sym, form );
-				bundle_define( C_BUNDLE(cont), sym, result );
-				NEXT( CONT_OP( V_LET2, cons( bundle, form ), C_BUNDLE(cont), C_NEXT(cont)), NIL );
-			}
-				
-		case OP_LAMBDA:
-		case OP_MACRO:
-			{
-				// display_val( "lambda2:", result );
-				Value lmd = lambda_new();
-				LAMBDA_TYPE(lmd) = (op==OP_LAMBDA)?LAMBDA_TYPE_LAMBDA:LAMBDA_TYPE_MACRO;
-				LAMBDA_BUNDLE(lmd) = C_BUNDLE(cont);
-				LAMBDA_DATA(lmd) = cons( NIL, code );
-				NEXT( C_NEXT(cont), lmd );
-			}
-
-		case OP_EXEC_MACRO:
-			// display_val( "EXEC_MACRO :", result );
-			NEXT( CONT( result, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
-
-		case OP_DEFINE_SYNTAX:
-			{
-				bundle_define( C_BUNDLE(cont), CAR(code), CADR(code) );
-				NEXT( C_NEXT(cont), NIL );
-			}
-				
-		case OP_IF:
-			NEXT_DIRECT( CAR(code),
-						 CONT_OP( V_IF2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
-			
-		case OP_IF2:
-			if( result != VALUE_F ){
-				NEXT_DIRECT( CAR(code), C_NEXT(cont));
-			}else{
-				NEXT( CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
-			}
-
-		case OP_AND:
-			NEXT_DIRECT( CAR(code),
-						 CONT_OP( V_AND2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
-
-		case OP_AND2:
-			if( result != VALUE_F && IS_PAIR(code) ){
-				NEXT_DIRECT( CAR(code),
-							 CONT_OP( V_AND2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
-			}else{
-				NEXT( C_NEXT(cont), result );
-			}
-
-		case OP_OR:
-			NEXT_DIRECT( CAR(code),
-						 CONT_OP( V_OR2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
-
-		case OP_OR2:
-			if( result == VALUE_F && IS_PAIR(code) ){
-				NEXT_DIRECT( CAR(code),
-							 CONT_OP( V_OR2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
-			}else{
-				NEXT( C_NEXT(cont), result );
-			}
-				
-		case OP_READ_EVAL:
-			{
-				Value stat = stream_read( code );
-				if( opt_trace ) printf( "trace: %s\n", v2s_limit(stat,100) );
-				if( stat != V_EOF ){
-					// stat = syntax_expand1( stat );
-						
-					Value compile_hook = bundle_get( bundle_cur, SYM_A_COMPILE_HOOK_A, NIL );
-					if( compile_hook != NIL ){
-						// *compile-hook* があればコンパイルする
-						stat = cons3( compile_hook, cons3( V_QUOTE, stat, NIL ), NIL );
-						// display_val( "READ_EVAL: ", stat );
-						NEXT( CONT( stat, C_BUNDLE(cont),
-									CONT_OP( V_READ_EVAL2, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-					}else{
-						NEXT( CONT( stat, C_BUNDLE(cont),
-									CONT_OP( V_READ_EVAL, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-					}
-				}else{
-					NEXT( C_NEXT(cont), NIL );
-				}
-			}
-				
-		case OP_READ_EVAL2:
-			NEXT( CONT( result, C_BUNDLE(cont),
-						CONT_OP( V_READ_EVAL, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-		}
-	}
-	assert(0);
-}
-
-Value list_tail( Value list )
-{
-	if( list == NIL ) return NIL;
-	for(;CDR(list) != NIL; list=CDR(list));
-	return list;
-}
-
 Value _syntax_expand_body( Value body, Dict *bundle )
 {
 	body = list_copy(body);
@@ -1162,10 +770,32 @@ Value _syntax_expand_body( Value body, Dict *bundle )
 	return body;
 }
 
-bool _syntax_match( Value rule, Value code, Dict *bundle )
+bool _syntax_match( Value keywords, Value rule, Value code, Dict *bundle )
 {
 	// printf( "syntax_match: %s %s\n", v2s(rule), v2s(code) );
 	for( Value c = rule; c != NIL; c=CDR(c), code=CDR(code) ){
+		
+		// match literal
+		if( IS_STRING(CAR(c)) ){
+			if( eqv( CAR(c), CAR(code) ) ){
+				continue;
+			}else{
+				return false;
+			}
+		}
+		
+		// match keywords
+		LIST_EACH( kw, keywords ){
+			if( kw == CAR(c) ){
+				if( kw == CAR(code) ){
+					continue;
+				}else{
+					return false;
+				}
+			}
+		}
+
+		// match pattern
 		if( IS_PAIR(CDR(c)) && CADR(c) == SYM_DOT3 ){
 			dict_set( bundle, CAR(c), cons( SYM_SYNTAX_REST, code ));
 			// printf( "bind %s => %s\n", v2s(CAR(c)), v2s(code) );
@@ -1173,7 +803,7 @@ bool _syntax_match( Value rule, Value code, Dict *bundle )
 		}else{
 			if( !IS_PAIR(code) ) return false;
 			if( IS_PAIR(CAR(c)) ){
-				if( !_syntax_match( CAR(c), CAR(code), bundle ) ) return false;
+				if( !_syntax_match( keywords, CAR(c), CAR(code), bundle ) ) return false;
 			}else if(IS_SYMBOL(CAR(c)) ){
 				dict_set( bundle, CAR(c), CAR(code) );
 				// printf( "bind %s => %s\n", v2s(CAR(c)), v2s(CAR(code)) );
@@ -1189,6 +819,7 @@ bool _syntax_match( Value rule, Value code, Dict *bundle )
 Value syntax_expand1( Value code )
 {
 	if( !IS_PAIR(code) ) return code;
+	code = normalize_let( code );
 	Value syntax = bundle_get( bundle_cur, CAR(code), NIL );
 	if( !IS_PAIR(syntax) ) return code;
 	Value sym, keywords, rules;
@@ -1201,10 +832,10 @@ Value syntax_expand1( Value code )
 	Dict *bundle = dict_new( hash_equal, equal );
 	for( Value cur=rules; cur != NIL; cur=CDR(cur) ){
 		// printf( "rule: %s\n", v2s(CAAR(cur)) );
-		bool matched = _syntax_match( CAAR(cur), code, bundle );
+		bool matched = _syntax_match( keywords, CAAR(cur), code, bundle );
 		if( matched ){
 			Value new_code = syntax_expand1( _syntax_expand_body( CADR(CAR(cur)), bundle ) );
-			if( opt_trace ) printf( "expand-syntax: %s => %s\n", v2s(code), v2s(new_code) );
+			// if( opt_trace ) printf( "expand-syntax: %s => %s\n", v2s(code), v2s(new_code) );
 			dict_free( bundle );
 			return new_code;
 		}
@@ -1253,7 +884,7 @@ Value V_QUOTE;
 Value V_DEFINE, V_DEFINE2;
 Value V_SET_I, V_SET_I2;
 Value V_LET, V_LET_A, V_LETREC, V_LET2, V_LET3;
-Value V_LAMBDA, V_MACRO, V_EXEC_MACRO, V_DEFINE_SYNTAX;
+Value V_LAMBDA, V_MACRO, V_DEFINE_SYNTAX;
 Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 Value V_READ_EVAL, V_READ_EVAL2;
 
@@ -1266,7 +897,8 @@ Value SYM_CURRENT_INPUT_PORT;
 Value SYM_CURRENT_OUTPUT_PORT;
 Value SYM_END_OF_LINE;
 Value SYM_VALUES;
-Value SYM_DOT, SYM_DOT3, SYM_ERROR, SYM_SYNTAX_RULES, SYM_SYNTAX_REST, SYM_RUNTIME_LOAD_PATH, SYM_RUNTIME_HOME_PATH;
+Value SYM_DOT, SYM_DOT3, SYM_ERROR, SYM_SYNTAX_RULES, SYM_SYNTAX_REST,
+	SYM_RUNTIME_LOAD_PATH, SYM_RUNTIME_HOME_PATH, SYM_LAMBDA, SYM_LET, SYM_LETREC;
 
 Value _operator( char *sym, Operator op ){
 	Value v = gc_new(TYPE_SPECIAL);
@@ -1330,7 +962,6 @@ void init_prelude( const char *argv0, bool with_prelude )
 	V_LAMBDA = _operator("lambda", OP_LAMBDA);
 	V_MACRO = _operator("macro", OP_MACRO);
 	V_DEFINE_SYNTAX = _operator("define-syntax", OP_DEFINE_SYNTAX);
-	V_EXEC_MACRO = _operator("*exec-macro*", OP_EXEC_MACRO);
 	V_IF = _operator("if", OP_IF);
 	V_IF2 = _operator("*if2*", OP_IF2);
 	V_AND = _operator("and", OP_AND);
@@ -1356,6 +987,9 @@ void init_prelude( const char *argv0, bool with_prelude )
 	SYM_SYNTAX_REST = intern("*syntax-rest*");
 	SYM_RUNTIME_LOAD_PATH = intern("runtime-load-path");
 	SYM_RUNTIME_HOME_PATH = intern("runtime-home-path");
+	SYM_LAMBDA = intern("lambda");
+	SYM_LET = intern("let");
+	SYM_LETREC = intern("letrec");
 
 	bundle_define( bundle_cur, SYM_CURRENT_INPUT_PORT, V_STDIN );
 	bundle_define( bundle_cur, SYM_CURRENT_OUTPUT_PORT, V_STDOUT );
@@ -1365,17 +999,23 @@ void init_prelude( const char *argv0, bool with_prelude )
 
 	// define runtime-home-path, runtime-lib-path
 	char lib_path[PATH_MAX];
-	sprintf( lib_path, "%s/lib", home_path );
 	bundle_define( bundle_cur, SYM_RUNTIME_HOME_PATH, string_new(home_path) );
+	sprintf( lib_path, "%s/lib", home_path );
 	bundle_define( bundle_cur, SYM_RUNTIME_LOAD_PATH, cons3( string_new("."), string_new(lib_path), NIL ) );
-
+	sprintf( lib_path, "lib" );
+   	bundle_define( bundle_cur, SYM_RUNTIME_LOAD_PATH, cons3( string_new("."), string_new(lib_path), NIL ) );
+    
 	if( with_prelude ){
 		char path[PATH_MAX];
 		sprintf( path, "%s/prelude.scm", lib_path );
 		FILE *fd = fopen( path, "r" );
 		if( !fd ){
-			printf( "cannot open prelude.sch\n" );
-			exit(1);
+			sprintf( path, "./lib/prelude.scm" );
+			fd = fopen( path, "r" );
+			if( !fd ){
+				printf( "cannot open prelude.scm\n" );
+				exit(1);
+			}
 		}
 		eval_loop( stream_new(fd,true,"prelude.sch") );
 	}

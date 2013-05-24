@@ -24,7 +24,7 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 				for( Value cur=LAMBDA_ARGS(lmd); cur != NIL; cur=CDR(cur), vals=CDR(vals) ){
 					if( IS_PAIR(cur) ){
 						if( !IS_PAIR(vals) ){
-							printf( "call: %s orig_vals: %s lmd: %s\n", v2s(LAMBDA_BODY(lmd)), v2s(orig_vals), v2s(LAMBDA_ARGS(lmd)) );
+							printf( "call: %s orig_vals: %s lmd: %s\n", v2s(lmd), v2s(orig_vals), v2s(LAMBDA_ARGS(lmd)) );
 						}
 						if( !IS_SYMBOL(CAR(cur)) ) return cont_error( "not symbol", cont );
 						bundle_define( bundle, CAR(cur), CAR(vals) );
@@ -50,7 +50,7 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 				Value v[8] = {NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
 				
 				for( int i=0; i<arg_num; i++ ){
-					if( vals == NIL ) assert(0);
+					if( vals == NIL ){ printf("%s %d\n", v2s(lmd), i); assert(0); }
 					v[i] = CAR(vals);
 					vals = CDR(vals);
 				}
@@ -104,6 +104,7 @@ Value _eval_direct( Value cont, Value code )
 		assert(0);
 	case TYPE_NIL:
 	case TYPE_INT:
+	case TYPE_CHAR:
 	case TYPE_LAMBDA:
 	case TYPE_CFUNC:
 	case TYPE_BOOL:
@@ -188,6 +189,7 @@ Value eval_loop( Value code )
 		assert(0);
 	case TYPE_NIL:
 	case TYPE_INT:
+	case TYPE_CHAR:
 	case TYPE_LAMBDA:
 	case TYPE_CFUNC:
 	case TYPE_BOOL:

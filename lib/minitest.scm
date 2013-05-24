@@ -19,7 +19,7 @@
 			  (*expect* _expect))
 		 (if (elt= *test* *expect*) #t
 			 (newline)
-			 (puts "FAILED:" 'test "EXPECT" *expect* "BUT" *test*)
+			 (puts "FAILED:" '_test "EXPECT" *expect* "BUT" *test*)
 			 (inc! *minitest-failed*)))))
 	))
 

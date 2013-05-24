@@ -12,6 +12,8 @@
 		0E2F8FEE1748629A0084A18C /* gc.c in Sources */ = {isa = PBXBuildFile; fileRef = 0E2F8FE81748629A0084A18C /* gc.c */; };
 		0E2F8FEF1748629A0084A18C /* lisp.c in Sources */ = {isa = PBXBuildFile; fileRef = 0E2F8FE91748629A0084A18C /* lisp.c */; };
 		0E2F8FF01748629A0084A18C /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 0E2F8FEB1748629A0084A18C /* main.c */; };
+		0E5ED8EC174E336D00CA2952 /* eval.c in Sources */ = {isa = PBXBuildFile; fileRef = 0E5ED8EB174E336D00CA2952 /* eval.c */; };
+		0EE20559174F89EB008131E0 /* srfi13.c in Sources */ = {isa = PBXBuildFile; fileRef = 0EE20558174F89EB008131E0 /* srfi13.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -34,6 +36,8 @@
 		0E2F8FE91748629A0084A18C /* lisp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = lisp.c; sourceTree = SOURCE_ROOT; };
 		0E2F8FEA1748629A0084A18C /* lisp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = lisp.h; sourceTree = SOURCE_ROOT; };
 		0E2F8FEB1748629A0084A18C /* main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = SOURCE_ROOT; };
+		0E5ED8EB174E336D00CA2952 /* eval.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = eval.c; sourceTree = SOURCE_ROOT; };
+		0EE20558174F89EB008131E0 /* srfi13.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = srfi13.c; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -66,6 +70,8 @@
 		0E2F8FDC174862330084A18C /* mlisp */ = {
 			isa = PBXGroup;
 			children = (
+				0EE20558174F89EB008131E0 /* srfi13.c */,
+				0E5ED8EB174E336D00CA2952 /* eval.c */,
 				0E2F8FE61748629A0084A18C /* cfunc.c */,
 				0E2F8FE71748629A0084A18C /* dict.c */,
 				0E2F8FE81748629A0084A18C /* gc.c */,
@@ -132,6 +138,8 @@
 				0E2F8FEE1748629A0084A18C /* gc.c in Sources */,
 				0E2F8FEF1748629A0084A18C /* lisp.c in Sources */,
 				0E2F8FF01748629A0084A18C /* main.c in Sources */,
+				0E5ED8EC174E336D00CA2952 /* eval.c in Sources */,
+				0EE20559174F89EB008131E0 /* srfi13.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
