@@ -305,8 +305,6 @@
 (define (1+ n) (+ n 1))
 (define (1- n) (- n 1))
 
-(define (identity v) v)
-
 (define (char-set? v) #f)
 
 (define (char-set . c)
@@ -318,22 +316,25 @@
 (define (exact? v) (number? v))
 
 (define (char-set:alphabetic c)
-  (or (and (char>=? c #\A) (char<=? c #\Z)) (and (char>=? c #\a) (char<=? c #\z))))
+  (or (char<=? #\A c #\Z) (char<=? #\a c #\z)))
 
 (define (char-set:letter c)
-  (or (and (char>=? c #\A) (char<=? c #\Z)) (and (char>=? c #\a) (char<=? c #\z))))
+  (or (char<=? #\A c #\Z) (char<=? #\a c #\z)))
+
+(define (char-set:lower-case c)
+  (char<=? #\a c #\z))
 
 (define (char-set:upper-case c)
-  (and (char>=? c #\A) (char<=? c #\Z)))
+  (char<=? #\A c #\Z))
 
 (define (char-set:whitespace c)
   (and (char=? c #\space) (char=? c #\x09)))
 
 (define (char-set:digit c)
-  (and (char>=? c #\0) (char<=? c #\9)))
+  (and (char<=? #\0 c #\9)))
 
 (define (char-set:numeric c)
-  (and (char>=? c #\0) (char<=? c #\9)))
+  (and (char<=? #\0 c #\9)))
 
 (define (char-set:punctuation c )
   (not (char-set:letter c)))

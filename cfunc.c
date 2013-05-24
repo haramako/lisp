@@ -3,7 +3,7 @@
 #include <string.h>
 #include <limits.h>
 
-static Value _value( Value bundle, Value v )
+static Value _identity( Value bundle, Value v )
 {
 	return v;
 }
@@ -88,49 +88,19 @@ static Value _modulo( Value bundle, Value args )
 	return INT2V(sum);
 }
 
-static Value _less( Value bundle, Value args )
-{
-	int64_t last = INT64_MIN;
-	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
-		int64_t n = V2INT(CAR(cur));
-		if( !(last < n) ) return VALUE_F;
-		last = n;
+#define _INT_COMPARE_FUNC(name,cmp,first)								\
+	static Value name( Value bundle, Value ns ){						\
+	int64_t last = first;													\
+	LIST_EACH( n, ns ){													\
+		if( !(last cmp V2INT(n)) ){ return VALUE_F; }else{ last = V2INT(n); } \
+	}																	\
+	return VALUE_T;														\
 	}
-	return VALUE_T;
-}
 
-static Value _less_eq( Value bundle, Value args )
-{
-	int64_t last = INT64_MIN;
-	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
-		int64_t n = V2INT(CAR(cur));
-		if( !(last <= n) ) return VALUE_F;
-		last = n;
-	}
-	return VALUE_T;
-}
-
-static Value _greater( Value bundle, Value args )
-{
-	int64_t last = INT64_MAX;
-	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
-		int64_t n = V2INT(CAR(cur));
-		if( !(last > n) ) return VALUE_F;
-		last = n;
-	}
-	return VALUE_T;
-}
-
-static Value _greater_eq( Value bundle, Value args )
-{
-	int64_t last = INT64_MAX;
-	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
-		int64_t n = V2INT(CAR(cur));
-		if( !(last >= n) ) return VALUE_F;
-		last = n;
-	}
-	return VALUE_T;
-}
+_INT_COMPARE_FUNC( _less, <, INT64_MIN )
+_INT_COMPARE_FUNC( _less_eq, <=, INT64_MIN )
+_INT_COMPARE_FUNC( _greater, >, INT64_MAX )
+_INT_COMPARE_FUNC( _greater_eq, >=, INT64_MAX )
 
 static Value _car( Value bundle, Value v )
 {
@@ -395,15 +365,27 @@ static Value _read( Value bundle, Value v, Value rest )
 	return stream_read(port);
 }
 
-#define _CHAR_COMPARE_FUNC(name,cmp) \
-	static Value name( Value bundle, Value a, Value b ){ return (V2CHAR(a) cmp V2CHAR(b))?VALUE_T:VALUE_F; }
+static Value _char_eq_p( Value bundle, Value first, Value rest )
+{
+	LIST_EACH( c, rest ){
+		if( V2CHAR(first) != V2CHAR(c) ) return VALUE_F;
+	}
+	return VALUE_T;
+}
 
-//static Value _char_eq_p( Value bundle, Value a, Value b ){ return (V2CHAR(a)==V2CHAR(b))?VALUE_T:VALUE_F; }
-_CHAR_COMPARE_FUNC( _char_eq_p, == )
-_CHAR_COMPARE_FUNC( _char_lt_p, <  )
-_CHAR_COMPARE_FUNC( _char_le_p, <= )
-_CHAR_COMPARE_FUNC( _char_gt_p, >  )
-_CHAR_COMPARE_FUNC( _char_ge_p, >= )
+#define _CHAR_COMPARE_FUNC(name,cmp,first)								\
+	static Value name( Value bundle, Value cs ){						\
+	int last = first;													\
+	LIST_EACH( c, cs ){													\
+		if( !(last cmp V2CHAR(c)) ){ return VALUE_F; }else{ last = V2CHAR(c); } \
+	}																	\
+	return VALUE_T;														\
+	}
+
+_CHAR_COMPARE_FUNC( _char_lt_p, < , INT_MIN )
+_CHAR_COMPARE_FUNC( _char_le_p, <=, INT_MIN )
+_CHAR_COMPARE_FUNC( _char_gt_p, > , INT_MAX )
+_CHAR_COMPARE_FUNC( _char_ge_p, >=, INT_MAX )
 
 static Value _char_to_integer( Value bundle, Value v )
 {
@@ -562,7 +544,7 @@ static Value _runtime_value_set_i( Value bundle, Value _name, Value val )
 void cfunc_init()
 {
 	// basic
-	defun( "value", 1, _value );
+	defun( "identity", 1, _identity );
 	defun( "eq?", -1, _eq_p );
 	defun( "eqv?", -1, _eqv_p );
 	defun( "=", -1, _eqv_p );
@@ -625,19 +607,15 @@ void cfunc_init()
 	defun( "read", -2, _read );
 
 	// char
-	defun( "char=?", 2, _char_eq_p );
-	defun( "char<?", 2, _char_lt_p );
-	defun( "char<=?", 2, _char_le_p );
-	defun( "char>?", 2, _char_gt_p );
-	defun( "char>=?", 2, _char_ge_p );
+	defun( "char=?", -2, _char_eq_p );
+	defun( "char<?", -1, _char_lt_p );
+	defun( "char<=?", -1, _char_le_p );
+	defun( "char>?", -1, _char_gt_p );
+	defun( "char>=?", -1, _char_ge_p );
 	defun( "char->integer", 1, _char_to_integer );
 	defun( "integer->char", 1, _integer_to_char );
 	defun( "char-upcase", 1, _char_upcase );
 	defun( "char-downcase", 1, _char_downcase );
-	/*
-;;; R5RS re-exports (also defined here but commented-out):
-;;; string string-append list->string
-	*/
 
 	// string
 	defun( "number->string", 1, _number_to_string );

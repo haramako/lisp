@@ -140,7 +140,7 @@
 
 ;; test call-with-values
 (assert 3 (call-with-values (lambda () (values 1 2)) +))
-(assert 1 (call-with-values (lambda () 1) value))
+(assert 1 (call-with-values (lambda () 1) identity))
 
 ;; test list-tail
 (assert '(1 2) (list-tail '(1 2) 0))

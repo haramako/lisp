@@ -1614,3 +1614,4 @@ TODO: エスケープ
         (lambda (i) (string-set! bar i (string-ref foo i))) foo)
        (string=? foo bar))))
 
+(minitest-finish)
