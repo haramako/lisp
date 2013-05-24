@@ -100,7 +100,7 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		}
 		break;
 	case TYPE_SYMBOL:
-		n += snprintf( buf, len, "\"%s\"", STRING_STR(SYMBOL_STR(v)) );
+		n += snprintf( buf, len, "%s", STRING_STR(SYMBOL_STR(v)) );
 		break;
 	case TYPE_STRING:
 		n += snprintf( buf, len, "\"" );

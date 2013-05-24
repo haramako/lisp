@@ -1,5 +1,15 @@
 #!/usr/bin/env mlisp
 
+#p(try (lambda x (puts "catch!" 4))
+	 (puts 1)
+	 (puts 2)
+	 ;;(error 1)
+	 (puts 3)
+	 )
+
+(exit)
+
+
 (write "\n \t \" \r \x41")
 (puts (string->list "hoge"))
 (puts (list->string (string->list "hoge")))

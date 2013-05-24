@@ -47,7 +47,8 @@
 (define-syntax pass-if-exception
   (syntax-rules ()
 	((_ ?name ?exception ?v)
-	 (display "-"))))
+	 (assert-exception ?exception ?v))
+	))
 
 
 ;;;

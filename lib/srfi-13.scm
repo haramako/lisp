@@ -1542,6 +1542,7 @@
 (define (string-append/shared . strings) (string-concatenate/shared strings))
 
 (define (string-concatenate/shared strings)
+  (check-arg string-list? strings string-concatenate/shared)
   (let lp ((strings strings) (nchars 0) (first #f))
     (cond ((pair? strings)			; Scan the args, add up total
 	   (let* ((string  (car strings))	; length, remember 1st 
@@ -1572,6 +1573,7 @@
 ;;; Here it is written out. I avoid using REDUCE to add up string lengths
 ;;; to avoid non-R5RS dependencies.
 (define (string-concatenate strings)
+  (check-arg string-list? strings string-concatenate)
   (let* ((total (do ((strings strings (cdr strings))
 		     (i 0 (+ i (string-length (car strings)))))
 		    ((not (pair? strings)) i)))

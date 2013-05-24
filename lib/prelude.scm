@@ -288,6 +288,19 @@
 (define (trace)
   (runtime-value-set! 'trace 1))
 
+(define-syntax try
+  (syntax-rules ()
+	((_ ?error ?body ...)
+	 (call/cc (lambda (*try-exit*)
+				(let ((*old-error* error)
+					  (*new-error* (lambda x (*try-exit* (apply ?error x)))))
+				  (dynamic-wind
+					  (lambda () (set! error *new-error*))
+					  (lambda () ?body ...)
+					  (lambda () (set! error *old-error*)))))))
+	))
+
+
 ;;************************************************************
 ;; for srfi-1.scm
 ;; SEE: http://srfi.schemers.org/srfi-1/srfi-1-reference.scm
@@ -316,8 +329,11 @@
 
 (define (char-set? v) #f)
 
-(define (char-set . c)
-  (lambda (x) (find (lambda (y) (eqv? y x)) c)))
+(define (char-set . cs)
+  (lambda (c)
+	(let loop ((cs cs))
+	  (if (null? cs) #f
+		  (if (char=? c (car cs)) #t (loop (cdr cs)))))))
 
 (define (char-set-contains? cset c)
   (cset c))
@@ -417,6 +433,10 @@
  	((_ ?v ?rest ...)
  	 (let ((*case-tmp* ?v))
  	   (%case *case-tmp* ?rest ...)))))
+
+(define (string-list? ss)
+  (or (null? ss)
+	  (and (pair? ss) (string? (car ss)) (string-list? (cdr ss)))))
 
 ;;(define (min . lis)
 ;;  (fold (lambda (a b) (if (< a b) a b)) list))

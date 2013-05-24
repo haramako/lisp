@@ -184,7 +184,7 @@
                  (lambda (k v)
                    (when v (set! qlist (cons (int2q n k) qlist))))
                  key value))
-	;; (plot n qlist)
+	(plot n qlist)
     ;; (qplot n qlist)   ;; plotting the distinct solutions
     (length qlist)))
 
@@ -275,24 +275,19 @@
 		  (apply f (map car lis))
 		  (loop (map cdr lis)))))
 
-(define (string-repeat s n)
-  (let loop ((r "") (n n))
-	(if (zero? n) r
-		(loop (string-append r s) (- n 1)))))
-
 (define-syntax for
   (syntax-rules ()
 	  ((_ x lis body ...) (for-each (lambda (x) body ...) lis))))
 
 (define (plot n qs)
   (for q qs
-	   (puts (string-repeat "=" 80))
+	   (puts (make-string 80 #\=))
 	   (for a q
 			(puts (string-append
-				   (string-repeat "." a)
+				   (make-string a #\.)
 				   "Q"
-				   (string-repeat "." (- n a 1))))))
-  (puts (string-repeat "=" 80)))
+				   (make-string (- n a 1) #\.)))))
+  (puts (make-string 80 #\=)))
 
 
 (assert 1 (queen 4))
