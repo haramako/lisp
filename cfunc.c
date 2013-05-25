@@ -263,7 +263,8 @@ static Value _backtrace( Value args, Value cont, Value *result )
 	for( Value cur=CONTINUATION_NEXT(cont); cur != NIL; cur = CONTINUATION_NEXT(cur) ){
 		Value code = CONTINUATION_CODE(cur);
 		if( IS_PAIR(code) && CAR(code) == V_READ_EVAL ){
-			printf( "  %s:%d: *read-eval*\n", STRING_STR(STREAM_FILENAME(CDR(code))), STREAM_LINE(CDR(code)) );
+			Stream *s = V2STREAM(CDR(code));
+			printf( "  %s:%d: *read-eval*\n", STRING_STR(s->filename), s->line );
 		}else{
 			printf( "  %s in %s\n",
 					v2s_limit(code, 60),
@@ -288,8 +289,8 @@ static Value _load( Value args, Value cont, Value *result )
     assert(filename);
 	FILE *fd = fopen( STRING_STR(filename), "r" );
 	if( !fd ) assert(0);
-	Value file = stream_new( fd, true, STRING_STR(filename) );
-	return continuation_new( cons( V_READ_EVAL, file ),
+	Stream *file = stream_new( fd, true, STRING_STR(filename) );
+	return continuation_new( cons( V_READ_EVAL, (Value)file ),
 							 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
 }
 
@@ -306,8 +307,8 @@ static Value _require( Value args, Value cont, Value *result )
 		// printf( "require: %s\n", path );
 		FILE *fd = fopen( path, "r" );
 		if( !fd ) continue;
-		Value file = stream_new( fd, true, path );
-		return continuation_new( cons( V_READ_EVAL, file ),
+		Stream *file = stream_new( fd, true, path );
+		return continuation_new( cons( V_READ_EVAL, (Value)file ),
 								 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
 	}
 	assert(0);
@@ -323,27 +324,28 @@ static Value _exit( Value args, Value cont, Value *result )
 static Value _display( Value bundle, Value v, Value rest )
 {
 	char buf[10240];
-	Value port;
-	bind1arg( rest, port );
-	if( !port ) port = bundle_get( bundle, SYM_CURRENT_OUTPUT_PORT, NULL );
+	Value vport;
+	bind1arg( rest, vport );
+	if( !vport ) vport = bundle_get( bundle, SYM_CURRENT_OUTPUT_PORT, NULL );
+	Stream *port = V2STREAM(vport);
 	
 	switch( TYPE_OF(v) ){
 	case TYPE_CHAR:
 		{
 			int c = V2CHAR(v);
 			if( c >= 32 && c <= 126 ){
-				fputc( c, STREAM_FD(port) );
+				fputc( c, port->fd );
 			}else{
-				fprintf( STREAM_FD(port), "#\\%02x", c );
+				fprintf( port->fd, "#\\%02x", c );
 			}
 		}
 		break;
 	case TYPE_STRING:
-		fputs( STRING_STR(v), STREAM_FD(port) );
+		fputs( STRING_STR(v), port->fd );
 		break;
 	default:
 		value_to_str(buf, sizeof(buf), v);
-		fputs( buf, STREAM_FD(port) );
+		fputs( buf, port->fd );
 	}
 	return NIL;
 }
@@ -353,7 +355,7 @@ static Value _write( Value bundle, Value v, Value rest )
 	Value port;
 	bind1arg( rest, port );
 	if( !port ) port = bundle_get( bundle, SYM_CURRENT_OUTPUT_PORT, NULL );
-	stream_write( port, v );
+	stream_write( V2STREAM(port), v );
 	return NIL;
 }
 
@@ -362,7 +364,7 @@ static Value _read( Value bundle, Value v, Value rest )
 	Value port;
 	bind1arg( rest, port );
 	if( !port ) port = bundle_get( bundle, SYM_CURRENT_INPUT_PORT, NULL );
-	return stream_read(port);
+	return stream_read(V2STREAM(port));
 }
 
 static Value _char_eq_p( Value bundle, Value first, Value rest )

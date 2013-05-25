@@ -74,9 +74,14 @@ typedef Value (*CFunction5)( Value bundle, Value v1, Value v2, Value v3, Value v
 typedef Value (*CFunction6)( Value bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6 );
 typedef Value (*CFunction7)( Value bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6, Value v7 );
 
-#define CELL_HEADER char type; char marked; int16_t flag;
+typedef struct {
+	char type;
+	char marked;
+	int16_t flag;
+} CellHeader;
+
 typedef struct Cell {
-	CELL_HEADER
+	CellHeader h;
 	union {
 		int64_t number;
 		struct {
@@ -113,36 +118,31 @@ typedef struct Cell {
 			Value bundle;
 			Value data; // (code . next )
 		} continuation;
-		struct {
-			FILE *fd;
-            Value filename;
-		} stream;
 	} d;
 } Cell;
 
 typedef struct Stream {
-	CELL_HEADER
+	CellHeader h;
+	char close;
 	int line;
 	int pos;
 	FILE *fd;
 	Value filename;
-	int dummy;
-	int dummy2;
 } Stream;
 
-#define TYPE_OF(v) ((Type)v->type)
+#define TYPE_OF(v) ((Type)v->h.type)
 
-#define IS_INT(v) (v->type==TYPE_INT)
-#define IS_CHAR(v) (v->type==TYPE_CHAR)
-#define IS_SYMBOL(v) ((v)->type==TYPE_SYMBOL)
-#define IS_STRING(v) ((v)->type==TYPE_STRING)
-#define IS_PAIR(v) ((v)->type==TYPE_PAIR)
-#define IS_LAMBDA(v) ((v)->type==TYPE_LAMBDA)
-#define IS_CFUNC(v) ((v)->type==TYPE_CFUNC)
-#define IS_BUNDLE(v) ((v)->type==TYPE_BUNDLE)
-#define IS_CONTINUATION(v) ((v)->type==TYPE_CONTINUATION)
-#define IS_SPECIAL(v) ((v)->type==TYPE_SPECIAL)
-#define IS_STREAM(v) ((v)->type==TYPE_STREAM)
+#define IS_INT(v) (v->h.type==TYPE_INT)
+#define IS_CHAR(v) (v->h.type==TYPE_CHAR)
+#define IS_SYMBOL(v) ((v)->h.type==TYPE_SYMBOL)
+#define IS_STRING(v) ((v)->h.type==TYPE_STRING)
+#define IS_PAIR(v) ((v)->h.type==TYPE_PAIR)
+#define IS_LAMBDA(v) ((v)->h.type==TYPE_LAMBDA)
+#define IS_CFUNC(v) ((v)->h.type==TYPE_CFUNC)
+#define IS_BUNDLE(v) ((v)->h.type==TYPE_BUNDLE)
+#define IS_CONTINUATION(v) ((v)->h.type==TYPE_CONTINUATION)
+#define IS_SPECIAL(v) ((v)->h.type==TYPE_SPECIAL)
+#define IS_STREAM(v) ((v)->h.type==TYPE_STREAM)
 
 #define V2INT(v) (assert(IS_INT(v)),v->d.number)
 #define INT2V(v) (int_new(v))
@@ -156,7 +156,7 @@ typedef struct Stream {
 #define V2BUNDLE(v) (assert(IS_BUNDLE(v)),v)
 #define V2CONTINUATION(v) (assert(IS_CONTINUATION(v)),v)
 #define V2SPECIAL(v) (assert(IS_SPECIAL(v)),v)
-#define V2STREAM(v) (assert(IS_STREAM(v)),(Stream*)v)
+inline Stream* V2STREAM(Value v){ assert(IS_STREAM(v)); return (Stream*)v; }
 
 size_t value_to_str( char *buf, int len, Value v );
 char* v2s( Value v );
@@ -180,10 +180,8 @@ void gc_init();
 void gc_finalize();
 void gc_run( int verbose );
 
-#define retain(v) (retain_inner((Value)v),v)
-#define release(v) (release_inner((Value)v),v)
-Value retain_inner( Value v );
-Value release_inner( Value v );
+Value retain( Value v );
+Value release( Value v );
 
 // Dictionary ( hashtable ) in dict.c
 
@@ -237,7 +235,7 @@ Value string_new_len( char *str, int len );
 
 // Lambda
 
-#define LAMBDA_TYPE(v) (V2LAMBDA(v)->flag)
+#define LAMBDA_TYPE(v) (V2LAMBDA(v)->h.flag)
 #define LAMBDA_DATA(v) (V2LAMBDA(v)->d.lambda.data)
 #define LAMBDA_NAME(v) (CAR(V2LAMBDA(v)->d.lambda.data))
 #define LAMBDA_ARGS(v) (CAR(CDR(V2LAMBDA(v)->d.lambda.data)))
@@ -248,7 +246,7 @@ Value lambda_new();
 
 // CFunc
 
-#define CFUNC_ARITY(v) (V2CFUNC(v)->flag)
+#define CFUNC_ARITY(v) (V2CFUNC(v)->h.flag)
 #define CFUNC_NAME(v) (V2CFUNC(v)->d.cfunc.name)
 #define CFUNC_FUNC(v) (V2CFUNC(v)->d.cfunc.func)
 
@@ -330,12 +328,6 @@ Value continuation_new( Value code, Value bundle, Value next );
 #define SPECIAL_STR(v) (V2SPECIAL(v)->d.special.str)
 
 // Stream
-
-#define STREAM_MASK_CLOSE (1>>0)
-#define STREAM_FD(v) (V2STREAM(v)->fd)
-#define STREAM_CLOSE(v) ((V2STREAM(v)->flag) & STREAM_MASK_CLOSE)
-#define STREAM_FILENAME(v) (V2STREAM(v)->filename)
-#define STREAM_LINE(v) (V2STREAM(v)->line)
 
 Stream* stream_new( FILE *fd, bool close, char *filename );
 int stream_getc( Stream *s );

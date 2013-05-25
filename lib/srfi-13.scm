@@ -141,25 +141,23 @@
 (define (string-parse-start+end proc s args)
   (if (not (string? s)) (error "Non-string value" proc s))
   (let ((slen (string-length s)))
-    (if (pair? args)
-
-	(let ((start (car args))
-	      (args (cdr args)))
-	  (if (and (integer? start) (exact? start) (>= start 0))
-	      (receive (end args)
-		  (if (pair? args)
-		      (let ((end (car args))
-			    (args (cdr args)))
-			(if (and (integer? end) (exact? end) (<= end slen))
-			    (values end args)
-			    (error "Illegal substring END spec" proc end s)))
-		      (values slen args))
-		(if (<= start end) (values args start end)
-		    (error "Illegal substring START/END spec"
-			   proc start end s)))
-	      (error "Illegal substring START spec" proc start s)))
-
-	(values '() 0 slen))))
+	(if (pair? args)
+		(let ((start (car args)) (args (cdr args)))
+		  (if (and (integer? start) (exact? start) (>= start 0))
+			  (call-with-values
+				  (lambda ()
+					(if (pair? args)
+						(let ((end (car args)) (args (cdr args)))
+						  (if (and (integer? end) (exact? end) (<= end slen))
+							  (values end args)
+							  (error "Illegal substring END spec" proc end s)))
+						(values slen args)))
+				(lambda (end args)
+				  (if (<= start end)
+					  (values args start end)
+					  (error "Illegal substring START/END spec" proc start end s))))
+			  (error "Illegal substring START spec" proc start s)))
+		(values (quote ()) 0 slen))))
 
 (define (string-parse-final-start+end proc s args)
   (receive (rest start end) (string-parse-start+end proc s args)
@@ -487,7 +485,6 @@
 
 	  (else (error "Second param is neither char-set, char, or predicate procedure."
 		       string-every criterion)))))
-
 
 (define (string-any criterion s . maybe-start+end)
   (let-string-start+end (start end) string-any s maybe-start+end

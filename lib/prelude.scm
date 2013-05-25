@@ -92,7 +92,7 @@
 	))
 		
 (define (error . mes)
-  (apply puts (cons "error:" mes))
+  (apply puts (list "error:" mes))
   (backtrace)
   (exit 1))
 

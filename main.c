@@ -51,7 +51,6 @@ int main( int argc, char **argv )
 	}
 	bundle_define( bundle_cur, intern("*argv*"), CDR(args) );
 
-
 	// run script
 	int result = 0;
 	if( strcmp(argv[n],"-") == 0 ){

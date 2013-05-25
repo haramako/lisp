@@ -31,6 +31,8 @@ const char* LAMBDA_TYPE_NAME[] = {
 	"MACRO",
 };
 
+extern inline Stream* V2STREAM(Value v);
+
 //********************************************************
 // Utility
 //********************************************************
@@ -165,7 +167,7 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		n += snprintf( buf+n, len-n, "%s", SPECIAL_STR(v) );
 		break;
 	case TYPE_STREAM:
-		n += snprintf( buf+n, len-n, "(STREAM:%s)", STRING_STR(STREAM_FILENAME(v)) );
+		n += snprintf( buf+n, len-n, "(STREAM:%s)", STRING_STR(V2STREAM(v)->filename) );
 		break;
 	default:
 		assert(0);
@@ -823,25 +825,28 @@ int _parse( Stream *s, Value *result )
 
 Stream* stream_new( FILE *fd, bool close, char *filename )
 {
-	Stream *v = V2STREAM(gc_new( TYPE_STREAM ));
-	STREAM_FD(v) = fd;
-	v->flag = ( v->flag & ~STREAM_MASK_CLOSE ) | (close?1:0)<<15; // STREAM_CLOSE(v) = close;
-	STREAM_FILENAME(v) = string_new(filename);
-	STREAM_LINE(v) = 1;
-	return v;
+	Value v = gc_new( TYPE_STREAM );
+	Stream *s = V2STREAM(v);
+	// printf( "stream_new: %s %p\n", filename, s );
+	s->fd = fd;
+	s->close = close;
+	s->filename = string_new(filename);
+	s->line = 1;
+	s->pos = 0;
+	return s;
 }
 
 int stream_getc( Stream *s )
 {
-	int c = fgetc( STREAM_FD(s) );
-	if( c == '\n' ) STREAM_LINE(s) += 1;
+	int c = fgetc( s->fd );
+	if( c == '\n' ) s->line += 1;
 	return c;
 }
 
 void stream_ungetc( int c, Stream *s )
 {
-	if( c == '\n' ) STREAM_LINE(s) -= 1;
-	ungetc( c, STREAM_FD(s) );
+	if( c == '\n' ) s->line -= 1;
+	ungetc( c, s->fd );
 }
 
 Value stream_read( Stream *s )
@@ -859,13 +864,13 @@ Value stream_write( Stream *s, Value v )
 {
 	char buf[10240];
 	value_to_str(buf, sizeof(buf), v);
-	fputs( buf, STREAM_FD(s) );
+	fputs( buf, s->fd );
 	return NIL;
 }
 
 size_t stream_read_chars( Stream *s, char *buf, size_t len )
 {
-	size_t read_len = fread( buf, len, 1, STREAM_FD(s) );
+	size_t read_len = fread( buf, len, 1, s->fd );
 	assert( read_len >= 0 );
 	return read_len;
 }
@@ -998,7 +1003,7 @@ static void handler(int sig) {
 	fprintf(stderr, "\nError: signal %d:\n", sig);
 	backtrace_symbols_fd(array+3, (int)size-3, 2/*=stderr*/);
 	if( V_SRC_FILE ){
-		printf( "%s:%d: error\n", STRING_STR(STREAM_FILENAME( V_SRC_FILE )), STREAM_LINE( V_SRC_FILE ) );
+		printf( "%s:%d: error\n", STRING_STR(V_SRC_FILE->filename), V_SRC_FILE->line );
 	}
 	exit(1);
 }
@@ -1075,8 +1080,10 @@ void init_prelude( const char *argv0, bool with_prelude )
 	symbol_root = bundle_new( NIL );
 	
 	V_EOF = retain(gc_new(TYPE_SPECIAL));
-	V_STDIN = retain(stream_new(stdin, false, "stdin" ));
-	V_STDOUT = retain(stream_new(stdout, false, "stdout" ));
+	V_STDIN = stream_new(stdin, false, "stdin" );
+	retain( (Value)V_STDIN );
+	V_STDOUT = stream_new(stdout, false, "stdout" );
+	retain( (Value)V_STDOUT );
 	V_END_OF_LINE = string_new("\n");
 	V_BEGIN = _operator("begin", OP_BEGIN);
 	V_CALL0 = _operator("*call0*", OP_CALL0);

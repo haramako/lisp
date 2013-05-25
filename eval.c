@@ -164,25 +164,25 @@ Value normalize_let( Value code )
 	return new_code;
 }
 
-Value eval_loop( Stream *s )
+Value eval_loop( Stream *stream )
 {
 	int gc_count = 10000;
 	Value result = NIL;
-	Value cont = CONT_OP( V_READ_EVAL, s, bundle_cur, NIL );
+	Value cont = CONT_OP( V_READ_EVAL, (Value)stream, bundle_cur, NIL );
  _loop:
-	
+
 	if( gc_count-- <= 0 ){
-		retain( cont );
-		retain( result );
+		cont = retain( cont );
+		result = retain( result );
 		gc_run( opt_trace?1:0 );
-		release( result );
-		release( cont );
+		result = release( result );
+		cont = release( cont );
 		gc_count = 10000;
 	}
 
 	if( cont == NIL ) return result;
-	// printf( "> %s\n", v2s_limit(C_CODE(cont), 80) );
-	// display_val( "=> ", result );
+	// printf( "> %s => %s\n", v2sn(result,20), v2sn(C_CODE(cont), 80) );
+	
 	switch( TYPE_OF(C_CODE(cont)) ){
 	case TYPE_UNUSED:
 	case TYPE_MAX:
@@ -206,7 +206,8 @@ Value eval_loop( Stream *s )
 		}
 	case TYPE_PAIR:
 		if( !IS_SPECIAL(CAR(C_CODE(cont))) ){
-			NEXT_DIRECT( CAR(C_CODE(cont)),
+			Value v = CAR(C_CODE(cont));
+			NEXT_DIRECT( v,
 						 CONT_OP( V_CALL0, CDR(C_CODE(cont)), C_BUNDLE(cont), C_NEXT(cont) ) );
 		}
 		
@@ -228,7 +229,7 @@ Value eval_loop( Stream *s )
 			NEXT( C_NEXT(cont), CAR(code) );
 			
 		case OP_CALL0:
-			// display_val( "OP_CALL0: ", cons( result, C_CODE(cont) ) );
+			// printf( "OP_CALL0: %s %s\n", v2sn(result,20), v2sn(C_CODE(cont),80) );
 			switch( TYPE_OF(result) ){
 			case TYPE_LAMBDA:
 				switch( LAMBDA_TYPE(result) ){
@@ -265,6 +266,8 @@ Value eval_loop( Stream *s )
 						  NIL );
 				}
 			default:
+				printf( "hogeeeee %s %s\n", v2s(result), v2s(code) );
+				assert(0);
 				FAIL();
 				printf( "OP_CALL0: result: %s code: %s\n", v2s(result), v2s(C_CODE(cont)) );
 				assert(0);
@@ -328,7 +331,7 @@ Value eval_loop( Stream *s )
 		case OP_LET:
 		case OP_LET_A:
 		case OP_LETREC:
-			// display_val( "LET: ", code );
+			//printf( "LET: %s\n", v2sn(code,80) );
 			// TODO: read/eval時に変換するようにする
 			if( op == OP_LET && IS_SYMBOL( CAR(code) ) ){
 				Value tmp_code = cons( SYM_LET, code);
@@ -440,7 +443,7 @@ Value eval_loop( Stream *s )
 				
 		case OP_READ_EVAL:
 			{
-				Value stat = stream_read( code );
+				Value stat = stream_read( V2STREAM(code) );
 				if( opt_trace ) printf( "trace: %s\n", v2s_limit(stat,100) );
 				if( stat != V_EOF ){
 					// stat = syntax_expand1( stat );
@@ -449,7 +452,7 @@ Value eval_loop( Stream *s )
 					if( compile_hook != NIL ){
 						// *compile-hook* があればコンパイルする
 						stat = cons3( compile_hook, cons3( V_QUOTE, stat, NIL ), NIL );
-						// display_val( "READ_EVAL: ", stat );
+						// printf( "READ_EVAL: %s\n", v2s(stat) );
 						NEXT( CONT( stat, C_BUNDLE(cont),
 									CONT_OP( V_READ_EVAL2, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
 					}else{

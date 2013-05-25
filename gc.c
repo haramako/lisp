@@ -5,7 +5,7 @@
 #include <math.h>
 #include "lisp.h"
 
-#define ARENA_SIZE 256*1024
+#define ARENA_SIZE 64*1024
 
 typedef struct Arena {
 	struct Arena *next;
@@ -13,7 +13,7 @@ typedef struct Arena {
 	int count;
 } Arena;
 
-#define ARENA_ENTRY(a) (((char*)a)+sizeof(Arena))
+#define ARENA_ENTRY(a) (((void*)a)+sizeof(Arena))
 
 static int _color = 0;
 static Arena *_arena_root[2] = { NULL, NULL };
@@ -21,23 +21,23 @@ static Value _cell_next[2] = { NULL, NULL };
 static int _arena_size[2] = { 0, 0 };
 Value retained = NULL;
 
-Arena* arena_new( int cell_size )
+Arena* arena_new( int arena_idx )
 {
-	int arena_idx = (cell_size <= sizeof(Cell))?0:1;
 	Arena *arena = malloc(ARENA_SIZE);
+	int cell_size = _arena_size[arena_idx];
 	int count = ( ARENA_SIZE - sizeof(Arena) ) / cell_size;
 	void *cur = ARENA_ENTRY(arena);
-	// printf( "arena_new: %d %d\n", cell_size, count );
+	// printf( "arena_new: %d %d %p\n", cell_size, count, cur );
 	for( int i=0; i<count; i++, cur += cell_size ){
-		((Cell*)cur)->type = TYPE_UNUSED;
-		((Cell*)cur)->d.unused.next = (i<count-1)?(cur+cell_size):(NULL);
+		((Cell*)cur)->h.type = TYPE_UNUSED;
+		((Cell*)cur)->d.unused.next = (i<(count-1))?(cur+cell_size):(NULL);
 	}
 	arena->size = cell_size;
 	arena->count = count;
 	arena->next = _arena_root[arena_idx];
 	_arena_root[arena_idx] = arena;
-	_cell_next[arena_idx] = (Cell*)ARENA_ENTRY(arena);
-	prof.size += ARENA_SIZE;
+	_cell_next[arena_idx] = ARENA_ENTRY(arena);
+	prof.size += count;
 	return arena;
 }
 
@@ -51,27 +51,28 @@ Value gc_new( Type type )
 	default:
 		arena_idx = 0;
 	}
-	if( !_cell_next[arena_idx] ) arena_new( _arena_size[arena_idx] );
+	if( !_cell_next[arena_idx] ) arena_new( arena_idx );
 	
 	// cellのallocate
 	Cell *cell = _cell_next[arena_idx];
-	assert( cell->type == TYPE_UNUSED );
+	assert( cell->h.type == TYPE_UNUSED );
 	_cell_next[arena_idx] = cell->d.unused.next;
-	cell->type = type;
-	cell->marked = -1;
+	cell->h.type = type;
+	cell->h.marked = -1;
 	prof.use++;
 	prof.alloc_count++;
 	prof.cell_count[type]++;
+
 	return cell;
 }
 
-Value retain_inner( Value v )
+Value retain( Value v )
 {
 	retained = cons( v, retained );
 	return v;
 }
 
-Value release_inner( Value v )
+Value release( Value v )
 {
 	for( Value *cur=&retained; *cur != NIL; cur = &CDR(*cur) ){
 		if( CAR(*cur) != v ) continue;
@@ -103,9 +104,9 @@ static void _mark( Value v )
 	if( !v ) return;
 	
 	// printf( "mark: %p\n", p );
-	if( v->marked == _color ) return;
+	if( v->h.marked == _color ) return;
 	// printf( "mark %p\n", p );
-	v->marked = _color;
+	v->h.marked = _color;
 	
 	// display_val( "mark: ", (Value)p );
 	switch( TYPE_OF(v) ){
@@ -144,7 +145,7 @@ static void _mark( Value v )
 		_mark( CONTINUATION_DATA(v) );
 		break;
 	case TYPE_STREAM:
-		_mark( STREAM_FILENAME(v) );
+		_mark( V2STREAM(v)->filename );
 		break;
 	}
 }
@@ -160,9 +161,9 @@ static void _free( void *p )
 		dict_free( BUNDLE_DICT(v) );
 		break;
 	case TYPE_STREAM:
-		if( STREAM_CLOSE(v) ){
-			// display_val( "_free: close ", v );
-			fclose( STREAM_FD(v) );
+		{
+			Stream *s = V2STREAM(v);
+			if( s->close ) fclose( s->fd );
 		}
 		break;
 	default:
@@ -210,9 +211,9 @@ void gc_run( int verbose )
 				if( TYPE_OF(cur) == TYPE_UNUSED ) continue;
 				all++;
 
-				if( cur->marked != _color ){
+				if( cur->h.marked != _color ){
 					_free( cur );
-					cur->type = TYPE_UNUSED;
+					cur->h.type = TYPE_UNUSED;
 					cur->d.unused.next = _cell_next[arena_idx];
 					_cell_next[arena_idx] = cur;
 					prof.use--;
