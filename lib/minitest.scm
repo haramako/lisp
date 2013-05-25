@@ -4,7 +4,7 @@
 
 (define-syntax inc!
   (syntax-rules ()
-	((_ x) (set! x (+ 1 x)))))
+	((_ ?x) (set! ?x (+ 1 ?x)))))
 
 (define (minitest-dot)
   (inc! *minitest-count*)
@@ -13,27 +13,27 @@
   
 (define-syntax assert
   (syntax-rules ()
-	((_ _expect _test)
-	 (assert _expect _test equal?))
-	((_ _expect _test elt=)
+	((_ ?expect ?test)
+	 (assert ?expect ?test equal?))
+	((_ ?expect ?test ?elt=)
 	 (begin
 	   (minitest-dot)
-	   (let ((*test* _test)
-			  (*expect* _expect))
-		 (if (elt= *test* *expect*) #t
+	   (let ((*test* ?test)
+			  (*expect* ?expect))
+		 (if (?elt= *test* *expect*) #t
 			 (newline)
-			 (puts "FAILED:" '_test "EXPECT" *expect* "BUT" *test*)
+			 (puts "FAILED:" '?test "EXPECT" *expect* "BUT" *test*)
 			 (inc! *minitest-failed*)))))
 	))
 
 (define-syntax assert-exception
   (syntax-rules ()
-	((_ _exeption _test)
+	((_ ?exeption ?test)
 	 (try (lambda (x) )
 		  (minitest-dot)
-		  _test
+		  ?test
 		  (newline)
-		  (puts "FAILED:" '_test "EXPECT RAISE" '_exception "BUT NOT" )
+		  (puts "FAILED:" '?test "EXPECT RAISE" '?exception "BUT NOT" )
 		  (inc! *minitest-failed*)))
 	))
 

@@ -1,18 +1,18 @@
 
+* 本物の多値
 * retainをCのポインタベースにする
-* 関数の引数チェックでエラーを出す
-* stringリテラルのエスケープ
-* string表示のエスケープ
 * syntax のシンボルを保護的に
 * syntax を別オブジェクトに
-* syntax, macro を別名前空間に
-* syntaxのキーワード対応
 * define-macro を scheme的に
-* string関係の関数
 * string stream
 * intを埋め込みに
 * 継続をもうちょっと能率的に
 
+- 関数の引数チェックでエラーを出す
+- string関係の関数
+- syntaxのキーワード対応
+- stringリテラルのエスケープ
+- string表示のエスケープ
 - デバッグ用の変数を指定する関数 (*runtime-option* "trace" 1) みたいな
 - #!対応
 - let と let*の区別

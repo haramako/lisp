@@ -125,11 +125,11 @@
 
 (define-syntax require
   (syntax-rules ()
-	((_ mod) (%require 'mod))))
+	((_ ?mod) (%require '?mod))))
 
 (define-syntax when 
   (syntax-rules ()
-	  ((_ cnd body ...) (if cnd (begin body ...)))))
+	  ((_ ?cnd ?body ...) (if ?cnd (begin ?body ...)))))
 
 (define (reverse lis)
   (let recur ((r '()) (lis lis))
@@ -239,19 +239,19 @@
 
 (define-syntax receive
   (syntax-rules ()
-	((_ (binds ...) val body ...)
-	 (call-with-values (lambda () val)
-	   (lambda (binds ...) body ...)))))
+	((_ ?formals ?expression ?body ...)
+	 (call-with-values (lambda () ?expression)
+	   (lambda ?formals ?body ...)))))
 
 (define-syntax let-values
   (syntax-rules ()
-	((_ (((args ...) val)) body ...)
-	 (call-with-values (lambda () val)
-	   (lambda (args ...) body ...)))
-	((_ (((args ...) val) rest ...) body ...)
-	 (call-with-values (lambda () val)
-	   (lambda (args ...)
-	  	 (let-values (rest ...) body ...))))
+	((_ (((?args ...) ?val)) ?body ...)
+	 (call-with-values (lambda () ?val)
+	   (lambda (?args ...) ?body ...)))
+	((_ (((?args ...) ?val) ?rest ...) ?body ...)
+	 (call-with-values (lambda () ?val)
+	   (lambda (?args ...)
+	  	 (let-values (?rest ...) ?body ...))))
 	))
 
 ;; number
@@ -282,8 +282,8 @@
 
 (define-syntax let1
   (syntax-rules ()
-	((_ var body ...)
-	 (let (var) body ...))))
+	((_ ?var ?body ...)
+	 (let (?var) ?body ...))))
 
 (define (trace)
   (runtime-value-set! 'trace 1))
