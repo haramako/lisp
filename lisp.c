@@ -167,7 +167,14 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		n += snprintf( buf+n, len-n, "%s", SPECIAL_STR(v) );
 		break;
 	case TYPE_STREAM:
-		n += snprintf( buf+n, len-n, "(STREAM:%s)", STRING_STR(V2STREAM(v)->filename) );
+		{
+			Stream *s = V2STREAM(v);
+			if( s->stream_type == STREAM_TYPE_FILE ){
+				n += snprintf( buf+n, len-n, "(STREAM:%s)", STRING_STR(V2STREAM(v)->u.file.filename) );
+			}else{
+				n += snprintf( buf+n, len-n, "(STREAM:str)" );
+			}
+		}
 		break;
 	default:
 		assert(0);
@@ -825,20 +832,36 @@ int _parse( Stream *s, Value *result )
 
 Stream* stream_new( FILE *fd, bool close, char *filename )
 {
-	Value v = gc_new( TYPE_STREAM );
-	Stream *s = V2STREAM(v);
-	// printf( "stream_new: %s %p\n", filename, s );
-	s->fd = fd;
-	s->close = close;
-	s->filename = string_new(filename);
+	Stream *s = V2STREAM(gc_new( TYPE_STREAM ));
 	s->line = 1;
 	s->pos = 0;
+	s->stream_type = STREAM_TYPE_FILE;
+	s->u.file.close = close;
+	s->u.file.fd = fd;
+	s->u.file.filename = string_new(filename);
+	return s;
+}
+
+Stream* stream_new_str( Value str )
+{
+	Stream *s = V2STREAM(gc_new( TYPE_STREAM ));
+	s->line = 1;
+	s->pos = 0;
+	s->stream_type = STREAM_TYPE_STRING;
+	s->u.str = str;
 	return s;
 }
 
 int stream_getc( Stream *s )
 {
-	int c = fgetc( s->fd );
+	int c;
+	if( s->stream_type == STREAM_TYPE_FILE ){
+		c = fgetc( s->u.file.fd );
+	}else{
+		char *str = STRING_STR(s->u.str);
+		c = str[s->pos];
+	}
+	s->pos++;
 	if( c == '\n' ) s->line += 1;
 	return c;
 }
@@ -846,7 +869,10 @@ int stream_getc( Stream *s )
 void stream_ungetc( int c, Stream *s )
 {
 	if( c == '\n' ) s->line -= 1;
-	ungetc( c, s->fd );
+	s->pos--;
+	if( s->stream_type == STREAM_TYPE_FILE ){
+		ungetc( c, s->u.file.fd );
+	}
 }
 
 Value stream_read( Stream *s )
@@ -863,16 +889,38 @@ Value stream_read( Stream *s )
 Value stream_write( Stream *s, Value v )
 {
 	char buf[10240];
-	value_to_str(buf, sizeof(buf), v);
-	fputs( buf, s->fd );
+	size_t len = value_to_str(buf, sizeof(buf), v);
+	stream_write_chars( s, buf, len );
 	return NIL;
 }
 
 size_t stream_read_chars( Stream *s, char *buf, size_t len )
 {
-	size_t read_len = fread( buf, len, 1, s->fd );
+	size_t read_len;
+	if( s->stream_type == STREAM_TYPE_FILE ){
+		read_len = fread( buf, len, 1, s->u.file.fd );
+	}else{
+		read_len = len;
+		strncpy( buf, STRING_STR(s->u.str), len );
+	}
 	assert( read_len >= 0 );
 	return read_len;
+}
+
+size_t stream_write_chars( Stream *s, char *buf, size_t len )
+{
+	size_t write_len;
+	if( s->stream_type == STREAM_TYPE_FILE ){
+		write_len = fwrite( buf, len, 1, s->u.file.fd );
+	}else{
+		write_len = len;
+		char *str = STRING_STR(s->u.str);
+		memcpy( str+s->pos, buf, len );
+		str[s->pos+len] = '\0';
+	}
+	s->pos += write_len;
+	assert( write_len >= 0 );
+	return write_len;
 }
 
 //********************************************************
@@ -1003,7 +1051,11 @@ static void handler(int sig) {
 	fprintf(stderr, "\nError: signal %d:\n", sig);
 	backtrace_symbols_fd(array+3, (int)size-3, 2/*=stderr*/);
 	if( V_SRC_FILE ){
-		printf( "%s:%d: error\n", STRING_STR(V_SRC_FILE->filename), V_SRC_FILE->line );
+		if( V_SRC_FILE->stream_type == STREAM_TYPE_FILE ){
+			printf( "%s:%d: error\n", STRING_STR(V_SRC_FILE->u.file.filename), V_SRC_FILE->line );
+		}else{
+			printf( "(str):%d: error\n", V_SRC_FILE->line );
+		}
 	}
 	exit(1);
 }

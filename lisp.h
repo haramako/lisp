@@ -121,13 +121,24 @@ typedef struct Cell {
 	} d;
 } Cell;
 
+typedef enum {
+	STREAM_TYPE_FILE,
+	STREAM_TYPE_STRING,
+} StreamType;
+
 typedef struct Stream {
 	CellHeader h;
-	char close;
+	StreamType stream_type;
 	int line;
 	int pos;
-	FILE *fd;
-	Value filename;
+	union {
+		struct {
+			FILE *fd;
+			Value filename;
+			char close;
+		} file;
+		Value str;
+	} u;
 } Stream;
 
 #define TYPE_OF(v) ((Type)v->h.type)
@@ -330,12 +341,14 @@ Value continuation_new( Value code, Value bundle, Value next );
 // Stream
 
 Stream* stream_new( FILE *fd, bool close, char *filename );
+Stream* stream_new_str( Value str );
 int stream_getc( Stream *s );
 void stream_ungetc( int c, Stream *s );
 int stream_peekc( Stream *s );
 Value stream_read( Stream *s );
 Value stream_write( Stream *s, Value v );
 size_t stream_read_chars( Stream *s, char *buf, size_t len );
+size_t stream_write_chars( Stream *s, char *buf, size_t len );
 	
 // Eval in eval.c
 

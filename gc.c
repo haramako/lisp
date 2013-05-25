@@ -145,7 +145,14 @@ static void _mark( Value v )
 		_mark( CONTINUATION_DATA(v) );
 		break;
 	case TYPE_STREAM:
-		_mark( V2STREAM(v)->filename );
+		{
+			Stream *s = V2STREAM(v);
+			if( s->stream_type == STREAM_TYPE_FILE ){
+				_mark( s->u.file.filename );
+			}else{
+				_mark( s->u.str );
+			}
+		}
 		break;
 	}
 }
@@ -163,7 +170,9 @@ static void _free( void *p )
 	case TYPE_STREAM:
 		{
 			Stream *s = V2STREAM(v);
-			if( s->close ) fclose( s->fd );
+			if( s->stream_type == STREAM_TYPE_FILE ){
+				if( s->u.file.close ) fclose( s->u.file.fd );
+			}
 		}
 		break;
 	default:

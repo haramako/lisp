@@ -1,13 +1,14 @@
 
+* stringをNULL終端ではなく、長さベースに
 * 本物の多値
 * retainをCのポインタベースにする
 * syntax のシンボルを保護的に
 * syntax を別オブジェクトに
 * define-macro を scheme的に
-* string stream
 * intを埋め込みに
 * 継続をもうちょっと能率的に
 
+- string stream
 - 関数の引数チェックでエラーを出す
 - string関係の関数
 - syntaxのキーワード対応

@@ -264,7 +264,7 @@ static Value _backtrace( Value args, Value cont, Value *result )
 		Value code = CONTINUATION_CODE(cur);
 		if( IS_PAIR(code) && CAR(code) == V_READ_EVAL ){
 			Stream *s = V2STREAM(CDR(code));
-			printf( "  %s:%d: *read-eval*\n", STRING_STR(s->filename), s->line );
+			printf( "  %s:%d: *read-eval*\n", STRING_STR(s->u.file.filename), s->line );
 		}else{
 			printf( "  %s in %s\n",
 					v2s_limit(code, 60),
@@ -324,6 +324,7 @@ static Value _exit( Value args, Value cont, Value *result )
 static Value _display( Value bundle, Value v, Value rest )
 {
 	char buf[10240];
+	size_t len;
 	Value vport;
 	bind1arg( rest, vport );
 	if( !vport ) vport = bundle_get( bundle, SYM_CURRENT_OUTPUT_PORT, NULL );
@@ -334,18 +335,23 @@ static Value _display( Value bundle, Value v, Value rest )
 		{
 			int c = V2CHAR(v);
 			if( c >= 32 && c <= 126 ){
-				fputc( c, port->fd );
+				buf[0] = c;
+				stream_write_chars( port, buf, 1 );
 			}else{
-				fprintf( port->fd, "#\\%02x", c );
+				len = sprintf( buf, "#\\%02x", c );
+				stream_write_chars( port, buf, len );
 			}
 		}
 		break;
 	case TYPE_STRING:
-		fputs( STRING_STR(v), port->fd );
+		{
+			char *str = STRING_STR(v);
+			stream_write_chars( port, str, strlen(str) );
+		}
 		break;
 	default:
-		value_to_str(buf, sizeof(buf), v);
-		fputs( buf, port->fd );
+		len = value_to_str(buf, sizeof(buf), v);
+		stream_write_chars( port, buf, len );
 	}
 	return NIL;
 }
@@ -359,12 +365,31 @@ static Value _write( Value bundle, Value v, Value rest )
 	return NIL;
 }
 
-static Value _read( Value bundle, Value v, Value rest )
+static Value _read( Value bundle, Value rest )
 {
 	Value port;
 	bind1arg( rest, port );
 	if( !port ) port = bundle_get( bundle, SYM_CURRENT_INPUT_PORT, NULL );
 	return stream_read(V2STREAM(port));
+}
+
+static Value _open_input_string( Value bundle, Value str )
+{
+	Stream *s = stream_new_str( str );
+	return (Value)s;
+}
+
+static Value _open_output_string( Value bundle )
+{
+	Stream *s = stream_new_str( string_new_len("",8192) );
+	return (Value)s;
+}
+
+static Value _get_output_string( Value bundle, Value v )
+{
+	Stream *s = V2STREAM(v);
+	assert( s->stream_type == STREAM_TYPE_STRING );
+	return s->u.str;
 }
 
 static Value _char_eq_p( Value bundle, Value first, Value rest )
@@ -603,10 +628,13 @@ void cfunc_init()
 	defun( "%require", CFUNC_VARIABLE, _require );
 	defun( "exit", CFUNC_VARIABLE, _exit );
 
-	// I/O
+	// Port
 	defun( "display", -2, _display );
 	defun( "write", -2, _write );
-	defun( "read", -2, _read );
+	defun( "read", -1, _read );
+	defun( "open-input-string", 1, _open_input_string );
+	defun( "open-output-string", 0, _open_output_string );
+	defun( "get-output-string", 1, _get_output_string );
 
 	// char
 	defun( "char=?", -2, _char_eq_p );

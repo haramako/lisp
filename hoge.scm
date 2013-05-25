@@ -1,14 +1,23 @@
 #!/usr/bin/env mlisp
 
-#p(try (lambda x (puts "catch!" 4))
+(define is (open-input-string "(1 2) #t"))
+(puts is)
+#p(read is)
+#p(read is)
+
+(define os (open-output-string))
+(write "hoge" os)
+(write '(1 2) os)
+(display "hoge-fuga" os)
+(puts (get-output-string os))
+(exit)
+
+(try (lambda x (puts "catch!" 4))
 	 (puts 1)
 	 (puts 2)
 	 ;;(error 1)
 	 (puts 3)
 	 )
-
-(exit)
-
 
 (write "\n \t \" \r \x41")
 (puts (string->list "hoge"))
