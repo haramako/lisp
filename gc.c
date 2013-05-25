@@ -2,38 +2,61 @@
 #include <stdlib.h>
 #include <malloc/malloc.h>
 #include <stdint.h>
+#include <math.h>
 #include "lisp.h"
 
-#define ARENA_SIZE ((64*1024-sizeof(void*))/sizeof(Cell))
+#define ARENA_SIZE 256*1024
+
 typedef struct Arena {
 	struct Arena *next;
-	Cell cells[ARENA_SIZE];
+	int size;
+	int count;
 } Arena;
 
+#define ARENA_ENTRY(a) (((char*)a)+sizeof(Arena))
+
 static int _color = 0;
-static Arena *_arena_root = NULL;
-static Value _cell_next = NULL;
+static Arena *_arena_root[2] = { NULL, NULL };
+static Value _cell_next[2] = { NULL, NULL };
+static int _arena_size[2] = { 0, 0 };
 Value retained = NULL;
+
+Arena* arena_new( int cell_size )
+{
+	int arena_idx = (cell_size <= sizeof(Cell))?0:1;
+	Arena *arena = malloc(ARENA_SIZE);
+	int count = ( ARENA_SIZE - sizeof(Arena) ) / cell_size;
+	void *cur = ARENA_ENTRY(arena);
+	// printf( "arena_new: %d %d\n", cell_size, count );
+	for( int i=0; i<count; i++, cur += cell_size ){
+		((Cell*)cur)->type = TYPE_UNUSED;
+		((Cell*)cur)->d.unused.next = (i<count-1)?(cur+cell_size):(NULL);
+	}
+	arena->size = cell_size;
+	arena->count = count;
+	arena->next = _arena_root[arena_idx];
+	_arena_root[arena_idx] = arena;
+	_cell_next[arena_idx] = (Cell*)ARENA_ENTRY(arena);
+	prof.size += ARENA_SIZE;
+	return arena;
+}
 
 Value gc_new( Type type )
 {
-	// 残りがない！
-	if( !_cell_next ){
-		Arena *arena = malloc(sizeof(Arena));
-		for( int i=0; i<ARENA_SIZE; i++ ){
-			arena->cells[i].type = TYPE_UNUSED;
-			arena->cells[i].d.unused.next = (i < ARENA_SIZE-1)?(&arena->cells[i+1]):(NULL);
-		}
-		_cell_next = &arena->cells[0];
-		arena->next = _arena_root;
-		_arena_root = arena;
-		prof.size += ARENA_SIZE;
+	int arena_idx;
+	switch( type ){
+	case TYPE_STREAM:
+		arena_idx = 1;
+		break;
+	default:
+		arena_idx = 0;
 	}
-
+	if( !_cell_next[arena_idx] ) arena_new( _arena_size[arena_idx] );
+	
 	// cellのallocate
-	Cell *cell = _cell_next;
+	Cell *cell = _cell_next[arena_idx];
 	assert( cell->type == TYPE_UNUSED );
-	_cell_next = cell->d.unused.next;
+	_cell_next[arena_idx] = cell->d.unused.next;
 	cell->type = type;
 	cell->marked = -1;
 	prof.use++;
@@ -42,13 +65,13 @@ Value gc_new( Type type )
 	return cell;
 }
 
-Value retain( Value v )
+Value retain_inner( Value v )
 {
 	retained = cons( v, retained );
 	return v;
 }
 
-Value release( Value v )
+Value release_inner( Value v )
 {
 	for( Value *cur=&retained; *cur != NIL; cur = &CDR(*cur) ){
 		if( CAR(*cur) != v ) continue;
@@ -145,24 +168,25 @@ static void _free( void *p )
 	default:
 		break;
 	}
-	v->type = TYPE_UNUSED;
-	v->d.unused.next = _cell_next;
-	_cell_next = v;
-	prof.use--;
 }
 
 void gc_init()
 {
+	_arena_size[0] = sizeof(Cell);
+	_arena_size[1] = sizeof(Cell);
+	if( _arena_size[1] < sizeof(Stream) ) _arena_size[1] = sizeof(Stream);
 }
 
 void gc_finalize()
 {
-    while( _arena_root != NULL ){
-        Arena *cur = _arena_root;
-        _arena_root = _arena_root->next;
-        // printf( "free arena %p\n", cur );
-        free( cur );
-    }
+	for( int arena_idx = 0; arena_idx<2; arena_idx++ ){
+		while( _arena_root[arena_idx] != NULL ){
+			Arena *cur = _arena_root[arena_idx];
+			_arena_root[arena_idx] = _arena_root[arena_idx]->next;
+			// printf( "free arena %p\n", cur );
+			free( cur );
+		}
+	}
 }
 
 void gc_run( int verbose )
@@ -176,15 +200,24 @@ void gc_run( int verbose )
 
 	// sweep
 	int all = 0, kill = 0;
-	for( Arena *arena = _arena_root; arena != NULL; arena = arena->next ){
-		for( int i=0; i<ARENA_SIZE; i++){
-			Value cur = &arena->cells[i];
-			if( TYPE_OF(cur) == TYPE_UNUSED ) continue;
-			all++;
+	for( int arena_idx=0; arena_idx<2; arena_idx++ ){
+		for( Arena *arena = _arena_root[arena_idx]; arena != NULL; arena = arena->next ){
+			void *p = ARENA_ENTRY(arena);
+			int count = arena->count;
+			int size = arena->size;
+			for( int i=0; i<count; i++, p+=size){
+				Value cur = (Cell*)p;
+				if( TYPE_OF(cur) == TYPE_UNUSED ) continue;
+				all++;
 
-			if( cur->marked != _color ){
-				_free( cur );
-				kill++;
+				if( cur->marked != _color ){
+					_free( cur );
+					cur->type = TYPE_UNUSED;
+					cur->d.unused.next = _cell_next[arena_idx];
+					_cell_next[arena_idx] = cur;
+					prof.use--;
+					kill++;
+				}
 			}
 		}
 	}

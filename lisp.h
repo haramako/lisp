@@ -74,10 +74,9 @@ typedef Value (*CFunction5)( Value bundle, Value v1, Value v2, Value v3, Value v
 typedef Value (*CFunction6)( Value bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6 );
 typedef Value (*CFunction7)( Value bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6, Value v7 );
 
+#define CELL_HEADER char type; char marked; int16_t flag;
 typedef struct Cell {
-	char type;
-	char marked;
-	int16_t flag;
+	CELL_HEADER
 	union {
 		int64_t number;
 		struct {
@@ -121,6 +120,16 @@ typedef struct Cell {
 	} d;
 } Cell;
 
+typedef struct Stream {
+	CELL_HEADER
+	int line;
+	int pos;
+	FILE *fd;
+	Value filename;
+	int dummy;
+	int dummy2;
+} Stream;
+
 #define TYPE_OF(v) ((Type)v->type)
 
 #define IS_INT(v) (v->type==TYPE_INT)
@@ -147,7 +156,7 @@ typedef struct Cell {
 #define V2BUNDLE(v) (assert(IS_BUNDLE(v)),v)
 #define V2CONTINUATION(v) (assert(IS_CONTINUATION(v)),v)
 #define V2SPECIAL(v) (assert(IS_SPECIAL(v)),v)
-#define V2STREAM(v) (assert(IS_STREAM(v)),v)
+#define V2STREAM(v) (assert(IS_STREAM(v)),(Stream*)v)
 
 size_t value_to_str( char *buf, int len, Value v );
 char* v2s( Value v );
@@ -171,8 +180,10 @@ void gc_init();
 void gc_finalize();
 void gc_run( int verbose );
 
-Value retain( Value v );
-Value release( Value v );
+#define retain(v) (retain_inner((Value)v),v)
+#define release(v) (release_inner((Value)v),v)
+Value retain_inner( Value v );
+Value release_inner( Value v );
 
 // Dictionary ( hashtable ) in dict.c
 
@@ -320,26 +331,25 @@ Value continuation_new( Value code, Value bundle, Value next );
 
 // Stream
 
-#define STREAM_MASK_CLOSE (1>>15)
-#define STREAM_MASK_LINE ((1>>15)-1)
-#define STREAM_FD(v) (V2STREAM(v)->d.stream.fd)
+#define STREAM_MASK_CLOSE (1>>0)
+#define STREAM_FD(v) (V2STREAM(v)->fd)
 #define STREAM_CLOSE(v) ((V2STREAM(v)->flag) & STREAM_MASK_CLOSE)
-#define STREAM_FILENAME(v) (V2STREAM(v)->d.stream.filename)
-#define STREAM_LINE(v) (V2STREAM(v)->flag & STREAM_MASK_LINE)
+#define STREAM_FILENAME(v) (V2STREAM(v)->filename)
+#define STREAM_LINE(v) (V2STREAM(v)->line)
 
-Value stream_new( FILE *fd, bool close, char *filename );
-int stream_getc( Value s );
-void stream_ungetc( int c, Value s );
-int stream_peekc( Value s );
-Value stream_read( Value s );
-Value stream_write( Value s, Value v );
-size_t stream_read_chars( Value s, char *buf, size_t len );
+Stream* stream_new( FILE *fd, bool close, char *filename );
+int stream_getc( Stream *s );
+void stream_ungetc( int c, Stream *s );
+int stream_peekc( Stream *s );
+Value stream_read( Stream *s );
+Value stream_write( Stream *s, Value v );
+size_t stream_read_chars( Stream *s, char *buf, size_t len );
 	
 // Eval in eval.c
 
 Value call( Value lmd, Value vals, Value cont, Value *result );
 Value compile( Value code );
-Value eval_loop( Value v );
+Value eval_loop( Stream *s );
 Value syntax_expand1( Value code );
 Value normalize_let( Value code );
 
@@ -357,7 +367,8 @@ extern Value NIL;
 extern Value VALUE_T;
 extern Value VALUE_F;
 extern Value V_EOF;
-extern Value V_STDOUT, V_STDIN, V_SRC_FILE, V_END_OF_LINE;
+extern Value V_END_OF_LINE;
+extern Stream *V_STDOUT, *V_STDIN, *V_SRC_FILE;
 
 extern Value V_BEGIN;
 extern Value V_CALL0;

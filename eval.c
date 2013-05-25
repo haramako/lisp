@@ -164,11 +164,11 @@ Value normalize_let( Value code )
 	return new_code;
 }
 
-Value eval_loop( Value code )
+Value eval_loop( Stream *s )
 {
 	int gc_count = 10000;
 	Value result = NIL;
-	Value cont = CONT_OP( V_READ_EVAL, code, bundle_cur, NIL );
+	Value cont = CONT_OP( V_READ_EVAL, s, bundle_cur, NIL );
  _loop:
 	
 	if( gc_count-- <= 0 ){

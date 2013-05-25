@@ -497,9 +497,9 @@ Value continuation_new( Value code, Value bundle, Value next )
 // Parsing
 //********************************************************
 
-int _parse( Value s, Value *result );
+int _parse( Stream *s, Value *result );
 	
-void _skip_space( Value s )
+void _skip_space( Stream *s )
 {
 	for(;;){
 		int c = stream_getc(s);
@@ -519,7 +519,7 @@ void _skip_space( Value s )
 	}
 }
 
-int _parse_list( Value s, Value *result )
+int _parse_list( Stream *s, Value *result )
 {
 	_skip_space(s);
 	int c, err;
@@ -561,7 +561,7 @@ static inline bool _is_val_char( int c )
 	}
 }
 
-static int _read_token( Value s, char *buf )
+static int _read_token( Stream *s, char *buf )
 {
 	int c;
 	int i = 0;
@@ -589,7 +589,7 @@ static Value _parse_token( char *str )
 	}
 }
 
-static int _unescape_char( Value s )
+static int _unescape_char( Stream *s )
 {
 	int c = stream_getc(s);
 	char buf[9];
@@ -640,7 +640,7 @@ static int _unescape_char( Value s )
 	}
 }
 
-static Value _read_string( Value s )
+static Value _read_string( Stream *s )
 {
 	char buf[1024];
 	int i = 0;
@@ -661,7 +661,7 @@ static Value _read_string( Value s )
 	}
 }
 
-int _parse( Value s, Value *result )
+int _parse( Stream *s, Value *result )
 {
 	int err;
 	_skip_space( s );
@@ -821,30 +821,30 @@ int _parse( Value s, Value *result )
 // Stream
 //********************************************************
 
-Value stream_new( FILE *fd, bool close, char *filename )
+Stream* stream_new( FILE *fd, bool close, char *filename )
 {
-	Value v = gc_new( TYPE_STREAM );
+	Stream *v = V2STREAM(gc_new( TYPE_STREAM ));
 	STREAM_FD(v) = fd;
 	v->flag = ( v->flag & ~STREAM_MASK_CLOSE ) | (close?1:0)<<15; // STREAM_CLOSE(v) = close;
 	STREAM_FILENAME(v) = string_new(filename);
-	v->flag = ( v->flag & ~STREAM_MASK_LINE ) | 1; // STREAM_LINE(v) = 1;
+	STREAM_LINE(v) = 1;
 	return v;
 }
 
-int stream_getc( Value s )
+int stream_getc( Stream *s )
 {
 	int c = fgetc( STREAM_FD(s) );
-	if( c == '\n' ) s->flag = ( s->flag & ~STREAM_MASK_LINE ) | (STREAM_LINE(s) + 1);
+	if( c == '\n' ) STREAM_LINE(s) += 1;
 	return c;
 }
 
-void stream_ungetc( int c, Value s )
+void stream_ungetc( int c, Stream *s )
 {
-	if( c == '\n' ) s->flag = ( s->flag & ~STREAM_MASK_LINE ) | (STREAM_LINE(s) - 1);
+	if( c == '\n' ) STREAM_LINE(s) -= 1;
 	ungetc( c, STREAM_FD(s) );
 }
 
-Value stream_read( Value s )
+Value stream_read( Stream *s )
 {
 	Value val = V_EOF;
 	int err = _parse( s, &val );
@@ -855,7 +855,7 @@ Value stream_read( Value s )
 	return val;
 }
 
-Value stream_write( Value s, Value v )
+Value stream_write( Stream *s, Value v )
 {
 	char buf[10240];
 	value_to_str(buf, sizeof(buf), v);
@@ -863,7 +863,7 @@ Value stream_write( Value s, Value v )
 	return NIL;
 }
 
-size_t stream_read_chars( Value s, char *buf, size_t len )
+size_t stream_read_chars( Stream *s, char *buf, size_t len )
 {
 	size_t read_len = fread( buf, len, 1, STREAM_FD(s) );
 	assert( read_len >= 0 );
@@ -1007,10 +1007,8 @@ Value NIL = NULL;
 Value VALUE_T = NULL;
 Value VALUE_F = NULL;
 Value V_EOF = NULL;
-Value V_STDOUT = NULL;
-Value V_STDIN = NULL;
-Value V_SRC_FILE = NULL;
 Value V_END_OF_LINE = NULL;
+Stream *V_STDOUT, *V_STDIN, *V_SRC_FILE;
 Value V_BEGIN;
 Value V_CALL0;
 Value V_CALL1;
@@ -1125,8 +1123,8 @@ void init_prelude( const char *argv0, bool with_prelude )
 	SYM_LET = intern("let");
 	SYM_LETREC = intern("letrec");
 
-	bundle_define( bundle_cur, SYM_CURRENT_INPUT_PORT, V_STDIN );
-	bundle_define( bundle_cur, SYM_CURRENT_OUTPUT_PORT, V_STDOUT );
+	bundle_define( bundle_cur, SYM_CURRENT_INPUT_PORT, (Value)V_STDIN );
+	bundle_define( bundle_cur, SYM_CURRENT_OUTPUT_PORT, (Value)V_STDOUT );
 	bundle_define( bundle_cur, SYM_END_OF_LINE, V_END_OF_LINE );
 
 	cfunc_init();
