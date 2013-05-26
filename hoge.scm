@@ -41,6 +41,8 @@
 
 
 (require srfi-1)
+(require srfi-1)
+(require srfi-1)
 (require srfi-13)
 
 (mac (when 1 1))
@@ -95,8 +97,6 @@
   )
 
 ; (puts (fib 29))
-
-(puts (xcons 1 2))
 
 '(begin
   (define break #f)

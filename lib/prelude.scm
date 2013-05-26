@@ -129,9 +129,30 @@
 (define *compile-hook* macro-expand-all)
 ;; ここからマクロが有効化
 
+;; require
+(define %require-loaded-modules '())
+
+(define (%require mod)
+  ;; check already loaded
+  (define (loaded? lis)
+	(if (null? lis) #f
+		(if (eqv? mod (car lis)) #t
+			(loaded? (cdr lis)))))
+  (if (loaded? %require-loaded-modules) #f
+	  ;; not yet load
+	  (set! %require-loaded-modules (cons mod %require-loaded-modules))
+	  (let loop ((paths runtime-load-path))
+		(if (null? paths)
+			(error "cannot require" mod)
+			(let ((path (string-append (car paths) "/" (symbol->string mod) ".scm")))
+			  (if (file-exists? path)
+				  (load path)
+				  (loop (cdr paths))))))))
+
 (define-syntax require
   (syntax-rules ()
 	((_ ?mod) (%require '?mod))))
+
 
 (define-syntax when 
   (syntax-rules ()

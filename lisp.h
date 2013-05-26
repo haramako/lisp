@@ -63,7 +63,7 @@ extern const char* LAMBDA_TYPE_NAME[];
 
 typedef struct Cell* Value;
 
-#define CFUNC_VARIABLE 127
+#define CFUNC_ARITY_RAW 127
 
 typedef Value (*CFunction)( Value args, Value cont, Value *result );
 typedef Value (*CFunction0)( Value bundle );
@@ -89,16 +89,16 @@ typedef struct Cell {
 			Value next;
 		} unused;
 		struct {
-			Value car;
-			Value cdr;
-		} pair;
-		struct {
 			Value str;
 		} symbol;
 		struct {
 			int len;
 			char *str;
 		} string;
+		struct {
+			Value car;
+			Value cdr;
+		} pair;
 		struct {
 			struct Dict *dict;
 			Value data; // ( upper . lambda )
@@ -165,8 +165,8 @@ typedef struct Stream {
 
 #define V2INT(v) (assert(IS_INT(v)),v->d.number)
 #define INT2V(v) (int_new(v))
-#define V2CHAR(v) (assert(IS_CHAR(v)),v->d.number)
-#define CHAR2V(v) (char_new(v))
+#define V2CHAR(v) (assert(IS_CHAR(v)),(int)v->d.number)
+#define CHAR2V(v) (char_new((int)v))
 #define V2SYMBOL(v) (assert(IS_SYMBOL(v)),v)
 #define V2STRING(v) (assert(IS_STRING(v)),v)
 #define V2PAIR(v) (assert(IS_PAIR(v)),v)
@@ -355,7 +355,7 @@ int stream_getc( Stream *s );
 void stream_ungetc( int c, Stream *s );
 int stream_peekc( Stream *s );
 Value stream_read_value( Stream *s );
-Value stream_write_value( Stream *s, Value v );
+void stream_write_value( Stream *s, Value v );
 size_t stream_read( Stream *s, char *buf, size_t len );
 size_t stream_write( Stream *s, char *buf, size_t len );
 

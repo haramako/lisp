@@ -41,7 +41,7 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 		{
 			void *func = CFUNC_FUNC(lmd);
 			int arity = CFUNC_ARITY(lmd);
-			if( arity == CFUNC_VARIABLE ){
+			if( arity == CFUNC_ARITY_RAW ){
 				return ((CFunction)func)( vals, cont, result );
 			}else{
 				Value bundle = CONTINUATION_BUNDLE(cont);
@@ -87,7 +87,7 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 		Value _code = C_CODE(cont);										\
 		NEXT( CONT( cons4( SYM_ERROR, string_new(mes), cons3(V_QUOTE,_code,NIL), NIL ), \
 					C_BUNDLE(cont), C_NEXT(cont)), NIL); }while(0)
-#define CHECK(x) do{ if(!x){ ERROR("invalid form"); } }while(0)
+#define CHECK(x) if(!x){ ERROR("invalid form"); }
 #define FAIL() CHECK(0)
 
 #define CONT continuation_new
@@ -166,16 +166,18 @@ Value normalize_let( Value code )
 
 Value eval_loop( Stream *stream )
 {
-	int gc_count = 10000;
+	int GC_FREQUENCY = 10000;
+	int gc_count = GC_FREQUENCY;
 	Value result = NIL;
 	Value cont = CONT_OP( V_READ_EVAL, (Value)stream, bundle_cur, NIL );
 	retain( &result );
 	retain( &cont );
+
  _loop:
 
 	if( gc_count-- <= 0 ){
 		gc_run( opt_trace?1:0 );
-		gc_count = 10000;
+		gc_count = GC_FREQUENCY;
 	}
 
 	if( cont == NIL ){
@@ -269,11 +271,7 @@ Value eval_loop( Stream *stream )
 						  NIL );
 				}
 			default:
-				printf( "hogeeeee %s %s\n", v2s(result), v2s(code) );
-				assert(0);
 				FAIL();
-				printf( "OP_CALL0: result: %s code: %s\n", v2s(result), v2s(C_CODE(cont)) );
-				assert(0);
 			}
 			
 		case OP_CALL1:

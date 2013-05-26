@@ -42,7 +42,7 @@ extern inline Pointer* V2POINTER(Value v);
 static size_t _escape_str( char *buf, size_t len, char *str )
 {
 	int n = 0;
-	int slen = strlen(str);
+	size_t slen = strlen(str);
 	for( int i=0; i<slen; i++ ){
 		char c = str[i];
 		if( c < 32 || c >= 127 ){
@@ -339,7 +339,7 @@ Value intern( char *sym )
 
 Value string_new( char *str )
 {
-	return string_new_len( str, strlen(str) );
+	return string_new_len( str, (int)strlen(str) );
 }
 
 Value string_new_len( char *str, int len )
@@ -895,12 +895,11 @@ Value stream_read_value( Stream *s )
 	return val;
 }
 
-Value stream_write_value( Stream *s, Value v )
+void stream_write_value( Stream *s, Value v )
 {
 	char buf[10240];
 	size_t len = value_to_str(buf, sizeof(buf), v);
 	stream_write( s, buf, len );
-	return NIL;
 }
 
 size_t stream_read( Stream *s, char *buf, size_t len )
@@ -936,7 +935,7 @@ size_t stream_write( Stream *s, char *buf, size_t len )
 // Syntax
 //********************************************************
 
-Value _syntax_expand_body( Value body, Dict *bundle )
+static Value _syntax_expand_body( Value body, Dict *bundle )
 {
 	body = list_copy(body);
 	for( Value cur=body; cur != NIL; cur=CDR(cur) ){
@@ -963,7 +962,7 @@ Value _syntax_expand_body( Value body, Dict *bundle )
 	return body;
 }
 
-bool _syntax_match( Value keywords, Value rule, Value code, Dict *bundle )
+static bool _syntax_match( Value keywords, Value rule, Value code, Dict *bundle )
 {
 	// printf( "syntax_match: %s %s\n", v2s(rule), v2s(code) );
 	for( Value c = rule; c != NIL; c=CDR(c), code=CDR(code) ){
@@ -1135,17 +1134,24 @@ void init_prelude( const char *argv0, bool with_prelude )
 	
 	gc_init();
 
+	retained = NULL;
+	
 	NIL = gc_new(TYPE_NIL);
+	retain( &NIL );
 	VALUE_T = gc_new(TYPE_BOOL);
+	retain( &VALUE_T );
 	VALUE_F = gc_new(TYPE_BOOL);
+	retain( &VALUE_F );
 	
 	bundle_cur = bundle_new( NIL );
-	retained = NULL;
+	retain( &bundle_cur );
 	symbol_root = bundle_new( NIL );
+	retain( &symbol_root );
 	
 	V_EOF = gc_new(TYPE_SPECIAL);
 	retain( &V_EOF );
 	SPECIAL_STR(V_EOF) = "#<eof>";
+	retain( &V_EOF );
 	V_STDIN = stream_new(stdin, false, "stdin" );
 	retain( (Value*)&V_STDIN );
 	V_STDOUT = stream_new(stdout, false, "stdout" );

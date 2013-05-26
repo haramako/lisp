@@ -48,6 +48,7 @@ Value gc_new( Type type )
 {
 	int arena_idx;
 	switch( type ){
+	case TYPE_POINTER:
 	case TYPE_STREAM:
 		arena_idx = 1;
 		break;
@@ -106,12 +107,9 @@ static void _mark( Value v )
 {
 	if( !v ) return;
 	
-	// printf( "mark: %p\n", p );
 	if( v->h.marked == _color ) return;
-	// printf( "mark %p\n", p );
 	v->h.marked = _color;
 	
-	// display_val( "mark: ", (Value)p );
 	switch( TYPE_OF(v) ){
 	case TYPE_UNUSED:
 	case TYPE_MAX:
@@ -160,17 +158,17 @@ static void _mark( Value v )
 	case TYPE_POINTER:
 		{
 			Pointer *p = V2POINTER(v);
-			// printf( "%p %p\n", *p->ptr, p->next );
-			_mark( *p->ptr );
+			// printf( "mark pointer: %p %p\n", *p->ptr, p->next );
+			_mark( *(p->ptr) );
 			_mark( (Value)p->next );
 		}
 		break;
 	}
 }
 
-static void _free( void *p )
+static void _free( Value v )
 {
-	Value v = p;
+	// printf( "_free: %s\n", TYPE_NAMES[TYPE_OF(v)] );
 	switch( TYPE_OF(v) ){
 	case TYPE_STRING:
 		free( STRING_STR(v) );
@@ -216,8 +214,6 @@ void gc_run( int verbose )
 	
 	// root mark
 	_mark( (Value)retained );
-	_mark( (Value)bundle_cur );
-	_mark( (Value)symbol_root );
 
 	// sweep
 	int all = 0, kill = 0;
@@ -228,7 +224,8 @@ void gc_run( int verbose )
 			int size = arena->size;
 			for( int i=0; i<count; i++, p+=size){
 				Value cur = (Cell*)p;
-				if( TYPE_OF(cur) == TYPE_UNUSED ) continue;
+				//if( TYPE_OF(cur) == TYPE_UNUSED ) continue;
+				if( cur->h.type == TYPE_UNUSED ) continue;
 				all++;
 
 				if( cur->h.marked != _color ){
@@ -242,6 +239,7 @@ void gc_run( int verbose )
 			}
 		}
 	}
+	
 	if( verbose ) printf( "finish gc. %d - %d => %d\n", all, kill, all-kill );
 }
 

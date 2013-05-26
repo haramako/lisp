@@ -3,6 +3,7 @@
 #include <string.h>
 #include <limits.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 static Value _identity( Value bundle, Value v )
 {
@@ -297,27 +298,7 @@ static Value _load( Value args, Value cont, Value *result )
 	if( !fd ) assert(0);
 	Stream *file = stream_new( fd, true, STRING_STR(filename) );
 	return continuation_new( cons( V_READ_EVAL, (Value)file ),
-							 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
-}
-
-static Value _require( Value args, Value cont, Value *result )
-{
-	Value modname;
-	bind1arg( args, modname);
-    assert(modname);
-	if( IS_SYMBOL(modname) ) modname = SYMBOL_STR(modname);
-	Value load_path = bundle_get( CONTINUATION_BUNDLE(cont), SYM_RUNTIME_LOAD_PATH, NULL );
-	for( Value cur=load_path; cur != NIL; cur = CDR(cur) ){
-		char path[PATH_MAX];
-		sprintf( path, "%s/%s.scm", STRING_STR(CAR(cur)), STRING_STR(modname) );
-		// printf( "require: %s\n", path );
-		FILE *fd = fopen( path, "r" );
-		if( !fd ) continue;
-		Stream *file = stream_new( fd, true, path );
-		return continuation_new( cons( V_READ_EVAL, (Value)file ),
-								 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
-	}
-	assert(0);
+							 bundle_cur, CONTINUATION_NEXT(cont) );
 }
 
 static Value _exit( Value args, Value cont, Value *result )
@@ -539,7 +520,7 @@ static Value _string( Value bundle, Value cs )
 static Value _make_string( Value bundle, Value _len, Value rest )
 {
 	char buf[1024];
-	int len = V2INT(_len);
+	int len = (int)V2INT(_len);
 	int c = '\0';
 	Value _c;
 	bind1arg( rest, _c );
@@ -563,14 +544,14 @@ static Value _string_length( Value bundle, Value v )
 static Value _string_ref( Value bundle, Value v, Value _idx )
 {
 	char *str = STRING_STR(v);
-	int idx = V2INT(_idx);
+	int idx = (int)V2INT(_idx);
 	return CHAR2V( str[idx] );
 }
 
 static Value _string_set_i( Value bundle, Value v, Value _idx, Value _c )
 {
 	char *str = STRING_STR(v);
-	int idx = V2INT(_idx);
+	int idx = (int)V2INT(_idx);
 	if( idx >= STRING_LEN(v) ){ printf("%d %d\n", (int)idx, STRING_LEN(v) ); assert(0); }
 	str[idx] = V2CHAR(_c);
 	return NIL;
@@ -578,11 +559,11 @@ static Value _string_set_i( Value bundle, Value v, Value _idx, Value _c )
 
 static Value _substring( Value bundle, Value v, Value _start, Value rest )
 {
-	int start = V2INT(_start);
+	int start = (int)V2INT(_start);
 	int end = STRING_LEN(v);
 	Value _end;
 	bind1arg( rest, _end );
-	if( _end ) end = V2INT(_end);
+	if( _end ) end = (int)V2INT(_end);
 	return string_new_len(STRING_STR(v)+start, end-start );
 }
 
@@ -594,6 +575,15 @@ static Value _sys_getenv( Value bundle, Value name )
 	}else{
 		return VALUE_F;
 	}
+}
+
+static Value _file_exists_p( Value bundle, Value _path )
+{
+	char *path = STRING_STR(_path);
+	struct stat file_stat;
+	int err = stat( path, &file_stat );
+	if( err ) return VALUE_F;
+	return VALUE_T;
 }
 
 static Value _runtime_value_set_i( Value bundle, Value _name, Value val )
@@ -665,18 +655,17 @@ void cfunc_init()
 	defun( "macro?", 1, _macro_p );
 
 	//
-	defun( "apply", CFUNC_VARIABLE, _apply );
+	defun( "apply", CFUNC_ARITY_RAW, _apply );
 	defun( "syntax-expand1", 1, _syntax_expand1 );
 
 	//
-	defun( "eval", CFUNC_VARIABLE, _eval );
-	defun( "current-environment", CFUNC_VARIABLE, _current_environment );
-	defun( "backtrace", CFUNC_VARIABLE, _backtrace );
-	defun( "call/cc", CFUNC_VARIABLE, _call_cc );
-	defun( "call-with-current-continuation", CFUNC_VARIABLE, _call_cc );
-	defun( "load", CFUNC_VARIABLE, _load );
-	defun( "%require", CFUNC_VARIABLE, _require );
-	defun( "exit", CFUNC_VARIABLE, _exit );
+	defun( "eval", CFUNC_ARITY_RAW, _eval );
+	defun( "current-environment", CFUNC_ARITY_RAW, _current_environment );
+	defun( "backtrace", CFUNC_ARITY_RAW, _backtrace );
+	defun( "call/cc", CFUNC_ARITY_RAW, _call_cc );
+	defun( "call-with-current-continuation", CFUNC_ARITY_RAW, _call_cc );
+	defun( "load", CFUNC_ARITY_RAW, _load );
+	defun( "exit", CFUNC_ARITY_RAW, _exit );
 
 	// Port
 	defun( "eof-object?", 1, _eof_object_p );
@@ -718,6 +707,9 @@ void cfunc_init()
 	// os
 	defun( "sys-getenv", 1, _sys_getenv );
 	//defun( "sys-environ", 1, _sys_environ );
+
+	// filesystem
+	defun( "file-exists?", 1, _file_exists_p );
 	
 	// debug
 	defun( "runtime-value-set!", 2, _runtime_value_set_i );
