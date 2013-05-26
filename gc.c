@@ -5,7 +5,7 @@
 #include <math.h>
 #include "lisp.h"
 
-#define ARENA_SIZE 64*1024
+#define ARENA_SIZE 256*1024
 
 typedef struct Arena {
 	struct Arena *next;

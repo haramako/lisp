@@ -345,10 +345,10 @@ Stream* stream_new_str( Value str );
 int stream_getc( Stream *s );
 void stream_ungetc( int c, Stream *s );
 int stream_peekc( Stream *s );
-Value stream_read( Stream *s );
-Value stream_write( Stream *s, Value v );
-size_t stream_read_chars( Stream *s, char *buf, size_t len );
-size_t stream_write_chars( Stream *s, char *buf, size_t len );
+Value stream_read_value( Stream *s );
+Value stream_write_value( Stream *s, Value v );
+size_t stream_read( Stream *s, char *buf, size_t len );
+size_t stream_write( Stream *s, char *buf, size_t len );
 	
 // Eval in eval.c
 

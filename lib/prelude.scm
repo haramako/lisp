@@ -29,6 +29,12 @@
 (define (cdddar x) (cdr (cddar x)))
 (define (cddddr x) (cdr (cdddr x)))
 
+(define (nth n lis)
+  (if (eqv? 0 n) (car lis) (nth (- n 1) (cdr lis))))
+
+(define (nthcdr n lis)
+  (if (eqv? 0 n) lis (nth (- n 1) (cdr lis))))
+
 (define define-macro
   (macro form
 		 (list 'define

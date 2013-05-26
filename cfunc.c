@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+#include <stdlib.h>
 
 static Value _identity( Value bundle, Value v )
 {
@@ -101,6 +102,11 @@ _INT_COMPARE_FUNC( _less, <, INT64_MIN )
 _INT_COMPARE_FUNC( _less_eq, <=, INT64_MIN )
 _INT_COMPARE_FUNC( _greater, >, INT64_MAX )
 _INT_COMPARE_FUNC( _greater_eq, >=, INT64_MAX )
+
+static Value _symbol_to_string( Value bundle, Value v )
+{
+	return SYMBOL_STR(v);
+}
 
 static Value _car( Value bundle, Value v )
 {
@@ -321,6 +327,11 @@ static Value _exit( Value args, Value cont, Value *result )
 	return NIL;
 }
 
+static Value _eof_object_p( Value bundle, Value v )
+{
+	return (v==V_EOF)?VALUE_T:VALUE_F;
+}
+
 static Value _display( Value bundle, Value v, Value rest )
 {
 	char buf[10240];
@@ -336,22 +347,22 @@ static Value _display( Value bundle, Value v, Value rest )
 			int c = V2CHAR(v);
 			if( c >= 32 && c <= 126 ){
 				buf[0] = c;
-				stream_write_chars( port, buf, 1 );
+				stream_write( port, buf, 1 );
 			}else{
 				len = sprintf( buf, "#\\%02x", c );
-				stream_write_chars( port, buf, len );
+				stream_write( port, buf, len );
 			}
 		}
 		break;
 	case TYPE_STRING:
 		{
 			char *str = STRING_STR(v);
-			stream_write_chars( port, str, strlen(str) );
+			stream_write( port, str, strlen(str) );
 		}
 		break;
 	default:
 		len = value_to_str(buf, sizeof(buf), v);
-		stream_write_chars( port, buf, len );
+		stream_write( port, buf, len );
 	}
 	return NIL;
 }
@@ -361,7 +372,7 @@ static Value _write( Value bundle, Value v, Value rest )
 	Value port;
 	bind1arg( rest, port );
 	if( !port ) port = bundle_get( bundle, SYM_CURRENT_OUTPUT_PORT, NULL );
-	stream_write( V2STREAM(port), v );
+	stream_write_value( V2STREAM(port), v );
 	return NIL;
 }
 
@@ -370,7 +381,33 @@ static Value _read( Value bundle, Value rest )
 	Value port;
 	bind1arg( rest, port );
 	if( !port ) port = bundle_get( bundle, SYM_CURRENT_INPUT_PORT, NULL );
-	return stream_read(V2STREAM(port));
+	return stream_read_value(V2STREAM(port));
+}
+
+static Value _write_char( Value bundle, Value v, Value rest )
+{
+	Value port;
+	bind1arg( rest, port );
+	if( !port ) port = bundle_get( bundle, SYM_CURRENT_OUTPUT_PORT, NULL );
+	char c = V2CHAR(v);
+	stream_write( V2STREAM(port), &c, 1 );
+	return NIL;
+}
+
+static Value _open_input_file( Value bundle, Value _filename )
+{
+	char *filename = STRING_STR(_filename);
+	FILE *fd = fopen( filename, "r" );
+	assert( fd );
+	return (Value)stream_new( fd, true, filename );
+}
+
+static Value _open_output_file( Value bundle, Value _filename )
+{
+	char *filename = STRING_STR(_filename);
+	FILE *fd = fopen( filename, "a" );
+	assert( fd );
+	return (Value)stream_new( fd, true, filename );
 }
 
 static Value _open_input_string( Value bundle, Value str )
@@ -549,6 +586,16 @@ static Value _substring( Value bundle, Value v, Value _start, Value rest )
 	return string_new_len(STRING_STR(v)+start, end-start );
 }
 
+static Value _sys_getenv( Value bundle, Value name )
+{
+	char *str = getenv( STRING_STR(name) );
+	if( str ){
+		return string_new( str );
+	}else{
+		return VALUE_F;
+	}
+}
+
 static Value _runtime_value_set_i( Value bundle, Value _name, Value val )
 {
 	char *name;
@@ -590,6 +637,9 @@ void cfunc_init()
 	defun( ">", -1, _greater );
 	defun( ">=", -1, _greater_eq );
 
+	// symbol
+	defun( "symbol->string", 1, _symbol_to_string );
+
 	// pair/list
 	defun( "car", 1, _car );
 	defun( "cdr", 1, _cdr );
@@ -629,9 +679,13 @@ void cfunc_init()
 	defun( "exit", CFUNC_VARIABLE, _exit );
 
 	// Port
+	defun( "eof-object?", 1, _eof_object_p );
 	defun( "display", -2, _display );
 	defun( "write", -2, _write );
 	defun( "read", -1, _read );
+	defun( "write-char", -2, _write_char );
+	defun( "open-input-file", 1, _open_input_file );
+	defun( "open-output-file", 1, _open_output_file );
 	defun( "open-input-string", 1, _open_input_string );
 	defun( "open-output-string", 0, _open_output_string );
 	defun( "get-output-string", 1, _get_output_string );
@@ -661,6 +715,10 @@ void cfunc_init()
 	defun( "string-set!", 3, _string_set_i );
 	defun( "substring", -3, _substring );
 
+	// os
+	defun( "sys-getenv", 1, _sys_getenv );
+	//defun( "sys-environ", 1, _sys_environ );
+	
 	// debug
 	defun( "runtime-value-set!", 2, _runtime_value_set_i );
 	

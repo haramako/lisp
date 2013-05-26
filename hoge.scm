@@ -10,7 +10,6 @@
 (write '(1 2) os)
 (display "hoge-fuga" os)
 (puts (get-output-string os))
-(exit)
 
 (try (lambda x (puts "catch!" 4))
 	 (puts 1)

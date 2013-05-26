@@ -536,6 +536,7 @@ int _parse_list( Stream *s, Value *result )
 	switch( c = stream_getc(s) ){
 	case -1:
 	case ')':
+	case ']':
 	case '\0':
 		stream_ungetc(c,s);
 		*result = NIL;
@@ -563,7 +564,7 @@ int _parse_list( Stream *s, Value *result )
 static inline bool _is_val_char( int c )
 {
 	switch( c ){
-	case ' ': case '\t': case '\n': case '\r': case '\x0c': case '(': case ')': case '\0': case -1:
+	case ' ': case '\t': case '\n': case '\r': case '\x0c': case '(': case ')': case '[': case ']': case '\0': case -1:
 		return false;
 	default:
 		return true;
@@ -611,17 +612,17 @@ static int _unescape_char( Stream *s )
 	case 't': return '\t';
 	case '0': return '\0';
 	case 'x':
-		stream_read_chars(s,buf,2);
+		stream_read(s,buf,2);
 		buf[2] = '\0';
 		sscanf( buf, "%x", &c );
 		return c;
 	case 'u':
-		stream_read_chars(s,buf,4);
+		stream_read(s,buf,4);
 		buf[4] = '\0';
 		sscanf( buf, "%x", &c );
 		return c;
 	case 'U':
-		stream_read_chars(s,buf,8);
+		stream_read(s,buf,8);
 		buf[8] = '\0';
 		sscanf( buf, "%x", &c );
 		return c;
@@ -674,16 +675,19 @@ int _parse( Stream *s, Value *result )
 {
 	int err;
 	_skip_space( s );
-	int c;
+	int c, c2;
 	int level;
 	switch( c = stream_getc(s) ){
 	case -1:
 	case '\0':
 		return 0;
 	case '(':
+	case '[':
 		err = _parse_list( s, result );
 		if( err ) return err;
-		if( stream_getc(s) != ')' ) return -2;
+		c2 = stream_getc(s);
+		if( c == '(' && c2 != ')' ) return -2;
+		if( c == '[' && c2 != ']' ) return -2;
 		return 0;
 	case ')':
 		assert(!"paren not matched");
@@ -723,11 +727,14 @@ int _parse( Stream *s, Value *result )
 			}
 			return 0;
 		case '(':
+		case '[':
 			// vector literal
 			// とりあえず、リストにする
 			err = _parse_list( s, result );
 			if( err ) return err;
-			if( stream_getc(s) != ')' ) return -2;
+			c2 = stream_getc(s);
+			if( c == '(' && c2 != ')' ) return -2;
+			if( c == '[' && c2 != ']' ) return -2;
 			return 0;
 		case '!':
 			// shebang
@@ -875,7 +882,7 @@ void stream_ungetc( int c, Stream *s )
 	}
 }
 
-Value stream_read( Stream *s )
+Value stream_read_value( Stream *s )
 {
 	Value val = V_EOF;
 	int err = _parse( s, &val );
@@ -886,15 +893,15 @@ Value stream_read( Stream *s )
 	return val;
 }
 
-Value stream_write( Stream *s, Value v )
+Value stream_write_value( Stream *s, Value v )
 {
 	char buf[10240];
 	size_t len = value_to_str(buf, sizeof(buf), v);
-	stream_write_chars( s, buf, len );
+	stream_write( s, buf, len );
 	return NIL;
 }
 
-size_t stream_read_chars( Stream *s, char *buf, size_t len )
+size_t stream_read( Stream *s, char *buf, size_t len )
 {
 	size_t read_len;
 	if( s->stream_type == STREAM_TYPE_FILE ){
@@ -907,7 +914,7 @@ size_t stream_read_chars( Stream *s, char *buf, size_t len )
 	return read_len;
 }
 
-size_t stream_write_chars( Stream *s, char *buf, size_t len )
+size_t stream_write( Stream *s, char *buf, size_t len )
 {
 	size_t write_len;
 	if( s->stream_type == STREAM_TYPE_FILE ){
@@ -1104,7 +1111,11 @@ static void _get_home_path( const char *argv0, char *out_path )
 {
 	char cwd[PATH_MAX], path[PATH_MAX];
 	getcwd( cwd, sizeof(cwd) );
-	sprintf( path, "%s/%s/..", cwd, argv0 );
+	if( argv0[0] == '/' ){
+		sprintf( path, "%s/..", argv0 );
+	}else{
+		sprintf( path, "%s/%s/..", cwd, argv0 );
+	}
 	realpath( path, out_path );
 }
 
@@ -1132,6 +1143,7 @@ void init_prelude( const char *argv0, bool with_prelude )
 	symbol_root = bundle_new( NIL );
 	
 	V_EOF = retain(gc_new(TYPE_SPECIAL));
+	SPECIAL_STR(V_EOF) = "#<eof>";
 	V_STDIN = stream_new(stdin, false, "stdin" );
 	retain( (Value)V_STDIN );
 	V_STDOUT = stream_new(stdout, false, "stdout" );
@@ -1189,11 +1201,12 @@ void init_prelude( const char *argv0, bool with_prelude )
 	cfunc_init();
 
 	// define runtime-home-path, runtime-lib-path
-	char lib_path[PATH_MAX];
+	char lib_path[PATH_MAX], lib_path2[PATH_MAX];
 	bundle_define( bundle_cur, SYM_RUNTIME_HOME_PATH, string_new(home_path) );
 	sprintf( lib_path, "%s/lib", home_path );
+	printf( "lib_path: %s %s\n", lib_path, home_path );
 	bundle_define( bundle_cur, SYM_RUNTIME_LOAD_PATH, cons3( string_new("."), string_new(lib_path), NIL ) );
-	sprintf( lib_path, "lib" );
+	sprintf( lib_path2, "lib" );
    	bundle_define( bundle_cur, SYM_RUNTIME_LOAD_PATH, cons3( string_new("."), string_new(lib_path), NIL ) );
     
 	if( with_prelude ){
