@@ -21,6 +21,7 @@ typedef enum {
 	TYPE_CONTINUATION,
 	TYPE_SPECIAL,
 	TYPE_STREAM,
+	TYPE_POINTER,
 	TYPE_MAX,
 } Type;
 
@@ -121,6 +122,12 @@ typedef struct Cell {
 	} d;
 } Cell;
 
+typedef struct Pointer {
+	CellHeader h;
+	Value *ptr;
+	struct Pointer *next;
+} Pointer;
+
 typedef enum {
 	STREAM_TYPE_FILE,
 	STREAM_TYPE_STRING,
@@ -154,6 +161,7 @@ typedef struct Stream {
 #define IS_CONTINUATION(v) ((v)->h.type==TYPE_CONTINUATION)
 #define IS_SPECIAL(v) ((v)->h.type==TYPE_SPECIAL)
 #define IS_STREAM(v) ((v)->h.type==TYPE_STREAM)
+#define IS_POINTER(v) ((v)->h.type==TYPE_POINTER)
 
 #define V2INT(v) (assert(IS_INT(v)),v->d.number)
 #define INT2V(v) (int_new(v))
@@ -168,6 +176,7 @@ typedef struct Stream {
 #define V2CONTINUATION(v) (assert(IS_CONTINUATION(v)),v)
 #define V2SPECIAL(v) (assert(IS_SPECIAL(v)),v)
 inline Stream* V2STREAM(Value v){ assert(IS_STREAM(v)); return (Stream*)v; }
+inline Pointer* V2POINTER(Value v){ assert(IS_POINTER(v)); return (Pointer*)v; }
 
 size_t value_to_str( char *buf, int len, Value v );
 char* v2s( Value v );
@@ -184,15 +193,15 @@ unsigned int hash_equal( Value v );
 
 // Gabage collection in gc.c
 
-extern Value retained;
+extern Pointer* retained;
 
 Value gc_new( Type type );
 void gc_init();
 void gc_finalize();
 void gc_run( int verbose );
 
-Value retain( Value v );
-Value release( Value v );
+void retain( Value *v );
+void release( Value *v );
 
 // Dictionary ( hashtable ) in dict.c
 
@@ -349,7 +358,7 @@ Value stream_read_value( Stream *s );
 Value stream_write_value( Stream *s, Value v );
 size_t stream_read( Stream *s, char *buf, size_t len );
 size_t stream_write( Stream *s, char *buf, size_t len );
-	
+
 // Eval in eval.c
 
 Value call( Value lmd, Value vals, Value cont, Value *result );
@@ -386,7 +395,7 @@ extern Value V_LAMBDA, V_MACRO, V_DEFINE_SYNTAX;
 extern Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 extern Value V_READ_EVAL, V_READ_EVAL2;
 
-extern Value SYM_A_DEBUG_A, SYM_A_COMPILE_HOOK_A, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
+extern Value SYM_A_COMPILE_HOOK_A, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
 	SYM_CURRENT_INPUT_PORT, SYM_CURRENT_OUTPUT_PORT, SYM_END_OF_LINE, SYM_VALUES,
 	SYM_DOT, SYM_DOT3, SYM_ERROR, SYM_SYNTAX_RULES, SYM_SYNTAX_REST,
 	SYM_RUNTIME_LOAD_PATH, SYM_RUNTIME_HOME_PATH, SYM_LAMBDA, SYM_LET, SYM_LETREC;

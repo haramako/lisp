@@ -169,22 +169,25 @@ Value eval_loop( Stream *stream )
 	int gc_count = 10000;
 	Value result = NIL;
 	Value cont = CONT_OP( V_READ_EVAL, (Value)stream, bundle_cur, NIL );
+	retain( &result );
+	retain( &cont );
  _loop:
 
 	if( gc_count-- <= 0 ){
-		cont = retain( cont );
-		result = retain( result );
 		gc_run( opt_trace?1:0 );
-		result = release( result );
-		cont = release( cont );
 		gc_count = 10000;
 	}
 
-	if( cont == NIL ) return result;
+	if( cont == NIL ){
+		release( &result );
+		release( &cont );
+		return result;
+	}
 	// printf( "> %s => %s\n", v2sn(result,20), v2sn(C_CODE(cont), 80) );
 	
 	switch( TYPE_OF(C_CODE(cont)) ){
 	case TYPE_UNUSED:
+	case TYPE_POINTER:
 	case TYPE_MAX:
 		assert(0);
 	case TYPE_NIL:

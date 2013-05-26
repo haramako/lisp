@@ -19,26 +19,29 @@ static int _color = 0;
 static Arena *_arena_root[2] = { NULL, NULL };
 static Value _cell_next[2] = { NULL, NULL };
 static int _arena_size[2] = { 0, 0 };
-Value retained = NULL;
+Pointer* retained = NULL;
 
-Arena* arena_new( int arena_idx )
+static Cell* _alloc( int arena_idx )
 {
-	Arena *arena = malloc(ARENA_SIZE);
-	int cell_size = _arena_size[arena_idx];
-	int count = ( ARENA_SIZE - sizeof(Arena) ) / cell_size;
-	void *cur = ARENA_ENTRY(arena);
-	// printf( "arena_new: %d %d %p\n", cell_size, count, cur );
-	for( int i=0; i<count; i++, cur += cell_size ){
-		((Cell*)cur)->h.type = TYPE_UNUSED;
-		((Cell*)cur)->d.unused.next = (i<(count-1))?(cur+cell_size):(NULL);
+	if( !_cell_next[arena_idx] ){
+		Arena *arena = malloc(ARENA_SIZE);
+		int cell_size = _arena_size[arena_idx];
+		int count = ( ARENA_SIZE - sizeof(Arena) ) / cell_size;
+		void *cur = ARENA_ENTRY(arena);
+		// printf( "arena_new: %d %d %p\n", cell_size, count, cur );
+		for( int i=0; i<count; i++, cur += cell_size ){
+			((Cell*)cur)->h.type = TYPE_UNUSED;
+			((Cell*)cur)->d.unused.next = (i<(count-1))?(cur+cell_size):(NULL);
+		}
+		arena->size = cell_size;
+		arena->count = count;
+		arena->next = _arena_root[arena_idx];
+		_arena_root[arena_idx] = arena;
+		_cell_next[arena_idx] = ARENA_ENTRY(arena);
+		prof.size += count;
 	}
-	arena->size = cell_size;
-	arena->count = count;
-	arena->next = _arena_root[arena_idx];
-	_arena_root[arena_idx] = arena;
-	_cell_next[arena_idx] = ARENA_ENTRY(arena);
-	prof.size += count;
-	return arena;
+	
+	return _cell_next[arena_idx];
 }
 
 Value gc_new( Type type )
@@ -51,10 +54,9 @@ Value gc_new( Type type )
 	default:
 		arena_idx = 0;
 	}
-	if( !_cell_next[arena_idx] ) arena_new( arena_idx );
 	
 	// cellのallocate
-	Cell *cell = _cell_next[arena_idx];
+	Cell *cell = _alloc(arena_idx);
 	assert( cell->h.type == TYPE_UNUSED );
 	_cell_next[arena_idx] = cell->d.unused.next;
 	cell->h.type = type;
@@ -66,24 +68,25 @@ Value gc_new( Type type )
 	return cell;
 }
 
-Value retain( Value v )
+void retain( Value *v )
 {
-	retained = cons( v, retained );
-	return v;
+	Pointer *p = V2POINTER(gc_new(TYPE_POINTER));
+	p->ptr = v;
+	p->next = retained;
+	retained = p;
 }
 
-Value release( Value v )
+void release( Value *v )
 {
-	for( Value *cur=&retained; *cur != NIL; cur = &CDR(*cur) ){
-		if( CAR(*cur) != v ) continue;
-		if( CDR(*cur) ){
-			CAR(*cur) = CADR(*cur);
-			CDR(*cur) = CDDR(*cur);
+	for( Pointer **cur=&retained; *cur; cur = &((*cur)->next) ){
+		if( (*cur)->ptr != v ) continue;
+		if( (*cur)->next ){
+			(*cur)->ptr = (*cur)->next->ptr;
+			(*cur)->next = (*cur)->next->next;
 		}else{
-			*cur = NIL;
+			*cur = NULL;
 		}
 	}
-	return v;
 }
 
 static void _mark( Value v );
@@ -154,6 +157,14 @@ static void _mark( Value v )
 			}
 		}
 		break;
+	case TYPE_POINTER:
+		{
+			Pointer *p = V2POINTER(v);
+			// printf( "%p %p\n", *p->ptr, p->next );
+			_mark( *p->ptr );
+			_mark( (Value)p->next );
+		}
+		break;
 	}
 }
 
@@ -204,9 +215,9 @@ void gc_run( int verbose )
 	_color = 1 - _color;
 	
 	// root mark
-	_mark( (void*)retained );
-	_mark( (void*)bundle_cur );
-	_mark( (void*)symbol_root );
+	_mark( (Value)retained );
+	_mark( (Value)bundle_cur );
+	_mark( (Value)symbol_root );
 
 	// sweep
 	int all = 0, kill = 0;

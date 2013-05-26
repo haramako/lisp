@@ -10,28 +10,30 @@
 Profile prof;
 
 const char *TYPE_NAMES[] = {
-	"UNUSED",
-	"NIL",
-	"BOOL",
-	"INT",
-	"CHAR",
-	"SYMBOL",
-	"STRING",
-	"PAIR",
-	"LAMBDA",
-	"CFUNC",
-	"BUNDLE",
-	"CONTINUATION",
-	"SPECIAL",
-	"STREAM",
+	"unused",
+	"nil",
+	"bool",
+	"int",
+	"char",
+	"symbol",
+	"string",
+	"pair",
+	"lambda",
+	"cfunc",
+	"bundle",
+	"continuation",
+	"special",
+	"port",
+	"pointer",
 };
 
 const char* LAMBDA_TYPE_NAME[] = {
-	"LAMBDA",
-	"MACRO",
+	"lambda",
+	"macro",
 };
 
 extern inline Stream* V2STREAM(Value v);
+extern inline Pointer* V2POINTER(Value v);
 
 //********************************************************
 // Utility
@@ -113,17 +115,17 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		break;
 	case TYPE_LAMBDA:
 		if( LAMBDA_NAME(v) != NIL ){
-			n += snprintf( buf, len, "(%s:%s:%p)",
+			n += snprintf( buf, len, "#<%s:%s:%p>",
 						   LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], STRING_STR(SYMBOL_STR(LAMBDA_NAME(v))), v );
 		}else{
-			n += snprintf( buf, len, "(%s:%p)", LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], v );
+			n += snprintf( buf, len, "#<%s:%p>", LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], v );
 		}
 		break;
 	case TYPE_CFUNC:
 		if( CFUNC_NAME(v) != NIL ){
-			n += snprintf( buf, len, "(CFUNC:%s)", STRING_STR(SYMBOL_STR(CFUNC_NAME(v))) );
+			n += snprintf( buf, len, "#<cfunc:%s>", STRING_STR(SYMBOL_STR(CFUNC_NAME(v))) );
 		}else{
-			n += snprintf( buf, len, "(CFUNC:%p)", CFUNC_FUNC(v) );
+			n += snprintf( buf, len, "#<cfunc:%p>", CFUNC_FUNC(v) );
 		}
 		break;
 	case TYPE_PAIR:
@@ -158,10 +160,10 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		n += snprintf( buf+n, len-n, ")" );
 		break;
 	case TYPE_BUNDLE:
-		n += snprintf( buf+n, len-n, "(BUNDLE:%p)", v );
+		n += snprintf( buf+n, len-n, "#<bundle:%p>", v );
 		break;
 	case TYPE_CONTINUATION:
-		n += snprintf( buf+n, len-n, "(CONTINUATION:%p)", v );
+		n += snprintf( buf+n, len-n, "#<continuation:%p>", v );
 		break;
 	case TYPE_SPECIAL:
 		n += snprintf( buf+n, len-n, "%s", SPECIAL_STR(v) );
@@ -170,9 +172,9 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		{
 			Stream *s = V2STREAM(v);
 			if( s->stream_type == STREAM_TYPE_FILE ){
-				n += snprintf( buf+n, len-n, "(STREAM:%s)", STRING_STR(V2STREAM(v)->u.file.filename) );
+				n += snprintf( buf+n, len-n, "#<port:%s>", STRING_STR(V2STREAM(v)->u.file.filename) );
 			}else{
-				n += snprintf( buf+n, len-n, "(STREAM:str)" );
+				n += snprintf( buf+n, len-n, "#<port>" );
 			}
 		}
 		break;
@@ -1084,7 +1086,6 @@ Value V_LAMBDA, V_MACRO, V_DEFINE_SYNTAX;
 Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 Value V_READ_EVAL, V_READ_EVAL2;
 
-Value SYM_A_DEBUG_A;
 Value SYM_A_COMPILE_HOOK_A;
 Value SYM_QUASIQUOTE;
 Value SYM_UNQUOTE;
@@ -1096,13 +1097,13 @@ Value SYM_VALUES;
 Value SYM_DOT, SYM_DOT3, SYM_ERROR, SYM_SYNTAX_RULES, SYM_SYNTAX_REST,
 	SYM_RUNTIME_LOAD_PATH, SYM_RUNTIME_HOME_PATH, SYM_LAMBDA, SYM_LET, SYM_LETREC;
 
-Value _operator( char *sym, Operator op ){
-	Value v = gc_new(TYPE_SPECIAL);
-	SPECIAL_OP(v) = op;
-	SPECIAL_STR(v) = sym;
-	bundle_define( bundle_cur, intern(sym), v );
-	return retain(v);
-}
+#define _INIT_OPERATOR(v,sym,op) do{\
+	v = gc_new(TYPE_SPECIAL);		\
+	SPECIAL_OP(v) = op;				\
+	SPECIAL_STR(v) = sym;			\
+	bundle_define( bundle_cur, intern(sym), v );\
+	retain(&v);						\
+	}while(0);
 
 bool opt_trace = false;
 bool opt_debug = false;
@@ -1139,42 +1140,44 @@ void init_prelude( const char *argv0, bool with_prelude )
 	VALUE_F = gc_new(TYPE_BOOL);
 	
 	bundle_cur = bundle_new( NIL );
-	retained = NIL;
+	retained = NULL;
 	symbol_root = bundle_new( NIL );
 	
-	V_EOF = retain(gc_new(TYPE_SPECIAL));
+	V_EOF = gc_new(TYPE_SPECIAL);
+	retain( &V_EOF );
 	SPECIAL_STR(V_EOF) = "#<eof>";
 	V_STDIN = stream_new(stdin, false, "stdin" );
-	retain( (Value)V_STDIN );
+	retain( (Value*)&V_STDIN );
 	V_STDOUT = stream_new(stdout, false, "stdout" );
-	retain( (Value)V_STDOUT );
+	retain( (Value*)&V_STDOUT );
 	V_END_OF_LINE = string_new("\n");
-	V_BEGIN = _operator("begin", OP_BEGIN);
-	V_CALL0 = _operator("*call0*", OP_CALL0);
-	V_CALL1 = _operator("*call1*", OP_CALL1);
-	V_QUOTE = _operator("quote", OP_QUOTE);
-	V_DEFINE = _operator("define", OP_DEFINE);
-	V_DEFINE2 = _operator("*define2*", OP_DEFINE2);
-	V_SET_I = _operator("set!", OP_SET_I);
-	V_SET_I2 = _operator("*set!2*", OP_SET_I2);
-	V_LET = _operator("let", OP_LET);
-	V_LET_A = _operator("let*", OP_LET_A);
-	V_LETREC = _operator("letrec", OP_LETREC);
-	V_LET2 = _operator("*let2*", OP_LET2);
-	V_LET3 = _operator("*let3*", OP_LET3);
-	V_LAMBDA = _operator("lambda", OP_LAMBDA);
-	V_MACRO = _operator("macro", OP_MACRO);
-	V_DEFINE_SYNTAX = _operator("define-syntax", OP_DEFINE_SYNTAX);
-	V_IF = _operator("if", OP_IF);
-	V_IF2 = _operator("*if2*", OP_IF2);
-	V_AND = _operator("and", OP_AND);
-	V_AND2 = _operator("*and2*", OP_AND2);
-	V_OR = _operator("or", OP_OR);
-	V_OR2 = _operator("*or2*", OP_OR2);
-	V_READ_EVAL = _operator("*read-eval*", OP_READ_EVAL);
-	V_READ_EVAL2 = _operator("*read-eval2*", OP_READ_EVAL2);
+	retain( &V_END_OF_LINE );
+	
+	_INIT_OPERATOR(V_BEGIN, "begin", OP_BEGIN);
+	_INIT_OPERATOR(V_CALL0, "#<call0>", OP_CALL0);
+	_INIT_OPERATOR(V_CALL1, "#<call1>", OP_CALL1);
+	_INIT_OPERATOR(V_QUOTE, "quote", OP_QUOTE);
+	_INIT_OPERATOR(V_DEFINE, "define", OP_DEFINE);
+	_INIT_OPERATOR(V_DEFINE2, "#<define2>", OP_DEFINE2);
+	_INIT_OPERATOR(V_SET_I, "set!", OP_SET_I);
+	_INIT_OPERATOR(V_SET_I2, "#<set!2>", OP_SET_I2);
+	_INIT_OPERATOR(V_LET, "let", OP_LET);
+	_INIT_OPERATOR(V_LET_A, "let*", OP_LET_A);
+	_INIT_OPERATOR(V_LETREC, "letrec", OP_LETREC);
+	_INIT_OPERATOR(V_LET2, "#<let2>", OP_LET2);
+	_INIT_OPERATOR(V_LET3, "#<let3>", OP_LET3);
+	_INIT_OPERATOR(V_LAMBDA, "lambda", OP_LAMBDA);
+	_INIT_OPERATOR(V_MACRO, "macro", OP_MACRO);
+	_INIT_OPERATOR(V_DEFINE_SYNTAX, "define-syntax", OP_DEFINE_SYNTAX);
+	_INIT_OPERATOR(V_IF, "if", OP_IF);
+	_INIT_OPERATOR(V_IF2, "#<if2>", OP_IF2);
+	_INIT_OPERATOR(V_AND, "and", OP_AND);
+	_INIT_OPERATOR(V_AND2, "#<and2>", OP_AND2);
+	_INIT_OPERATOR(V_OR, "or", OP_OR);
+	_INIT_OPERATOR(V_OR2, "#<or2>", OP_OR2);
+	_INIT_OPERATOR(V_READ_EVAL, "#<read-eval>", OP_READ_EVAL);
+	_INIT_OPERATOR(V_READ_EVAL2, "#<read-eval2>", OP_READ_EVAL2);
 
-	SYM_A_DEBUG_A = intern("*debug*");
 	SYM_A_COMPILE_HOOK_A = intern("*compile-hook*");
 	SYM_QUASIQUOTE = intern("quasiquote");
 	SYM_UNQUOTE = intern("unquote");
@@ -1201,13 +1204,11 @@ void init_prelude( const char *argv0, bool with_prelude )
 	cfunc_init();
 
 	// define runtime-home-path, runtime-lib-path
-	char lib_path[PATH_MAX], lib_path2[PATH_MAX];
+	char lib_path[PATH_MAX];
 	bundle_define( bundle_cur, SYM_RUNTIME_HOME_PATH, string_new(home_path) );
 	sprintf( lib_path, "%s/lib", home_path );
-	printf( "lib_path: %s %s\n", lib_path, home_path );
-	bundle_define( bundle_cur, SYM_RUNTIME_LOAD_PATH, cons3( string_new("."), string_new(lib_path), NIL ) );
-	sprintf( lib_path2, "lib" );
-   	bundle_define( bundle_cur, SYM_RUNTIME_LOAD_PATH, cons3( string_new("."), string_new(lib_path), NIL ) );
+   	bundle_define( bundle_cur, SYM_RUNTIME_LOAD_PATH,
+				   cons4( string_new("."), string_new("lib"), string_new(lib_path),NIL ) );
     
 	if( with_prelude ){
 		char path[PATH_MAX];
@@ -1221,7 +1222,7 @@ void init_prelude( const char *argv0, bool with_prelude )
 				exit(1);
 			}
 		}
-		eval_loop( stream_new(fd,true,"prelude.sch") );
+		eval_loop( stream_new(fd,true,"prelude.scm") );
 	}
 }
 
