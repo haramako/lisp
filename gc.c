@@ -48,8 +48,9 @@ Value gc_new( Type type )
 {
 	int arena_idx;
 	switch( type ){
-	case TYPE_POINTER:
 	case TYPE_STREAM:
+	case TYPE_STRING:
+	case TYPE_STRING_BODY:
 		arena_idx = 1;
 		break;
 	default:
@@ -120,9 +121,12 @@ static void _mark( Value v )
 	case TYPE_BOOL:
 		break;
 	case TYPE_SYMBOL:
-		_mark( SYMBOL_STR(v) );
+		_mark( (Value)V2SYMBOL(v)->str );
+		break;
+	case TYPE_STRING_BODY:
 		break;
 	case TYPE_STRING:
+		_mark( (Value)V2STRING(v)->body );
 		break;
 	case TYPE_SPECIAL:
 		break;
@@ -149,9 +153,9 @@ static void _mark( Value v )
 		{
 			Stream *s = V2STREAM(v);
 			if( s->stream_type == STREAM_TYPE_FILE ){
-				_mark( s->u.file.filename );
+				_mark( (Value)s->u.file.filename );
 			}else{
-				_mark( s->u.str );
+				_mark( (Value)s->u.str );
 			}
 		}
 		break;
@@ -170,8 +174,8 @@ static void _free( Value v )
 {
 	// printf( "_free: %s\n", TYPE_NAMES[TYPE_OF(v)] );
 	switch( TYPE_OF(v) ){
-	case TYPE_STRING:
-		free( STRING_STR(v) );
+	case TYPE_STRING_BODY:
+		free( V2STRING_BODY(v)->buf );
 		break;
 	case TYPE_BUNDLE:
 		dict_free( BUNDLE_DICT(v) );
@@ -180,7 +184,7 @@ static void _free( Value v )
 		{
 			Stream *s = V2STREAM(v);
 			if( s->stream_type == STREAM_TYPE_FILE ){
-				if( s->u.file.close ) fclose( s->u.file.fd );
+				if( s->u.file.close && s->u.file.fd != 0 ) fclose( s->u.file.fd );
 			}
 		}
 		break;

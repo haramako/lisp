@@ -1,6 +1,5 @@
 
 * cfuncのエラー処理をちゃんとする
-* stringをNULL終端ではなく、長さベースに
 * 本物の多値
 * syntax のシンボルを保護的に
 * syntax を別オブジェクトに
@@ -8,6 +7,7 @@
 * intを埋め込みに
 * 継続をもうちょっと能率的に
 
+- stringをNULL終端ではなく、長さベースに
 - require を二度読み防止する
 - retainをCのポインタベースにする
 - string stream

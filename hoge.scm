@@ -4,6 +4,12 @@
 (puts is)
 #p(read is)
 #p(read is)
+(puts 'port (open-input-file "hoge.scm"))
+
+(define str (substring "hogefuga" 1 3))
+(puts 'str-length (string-length str) str)
+(write (substring "hogefuga" 1 3))
+(write "\n\n")
 
 (define os (open-output-string))
 (write "hoge" os)

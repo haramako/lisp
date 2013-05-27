@@ -2,26 +2,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-unsigned int value_hash( Value v )
-{
-	switch( TYPE_OF(v) ){
-	case TYPE_INT:
-		return (unsigned int)V2INT(v);
-	case TYPE_STRING:
-		{
-			char *str = STRING_STR(v);
-			size_t len = strlen(str);
-			int hash = 0;
-			for( int i=0; i<len; i++ ){
-				hash = hash * 31 + str[i];
-			}
-			return hash;
-		}
-	default:
-		return (unsigned int)(((uintptr_t)v) >> 4) * 31;
-	}
-}
-
 #define DICT_INIT_SIZE 15
 
 Dict* dict_new_size( int size, HashFunction hash_func, CompareFunction comp_func )

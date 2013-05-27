@@ -46,7 +46,7 @@ int main( int argc, char **argv )
 	Value args = cons(NIL,NIL);
 	Value tail = args;
 	for( int m=n+1; m < argc; m++ ){
-		CDR(tail) = cons( string_new(argv[m]), NIL );
+		CDR(tail) = cons( (Value)string_new(argv[m]), NIL );
 		tail = CDR(tail);
 	}
 	bundle_define( bundle_cur, intern("*argv*"), CDR(args) );

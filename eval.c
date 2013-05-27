@@ -6,7 +6,7 @@
 
 Value cont_error( char *str, Value cont )
 {
-	return continuation_new( cons3( SYM_ERROR, string_new(str), NIL ),
+	return continuation_new( cons3( SYM_ERROR, (Value)string_new(str), NIL ),
 							 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
 }
 
@@ -85,7 +85,7 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 #define NEXT(_cont,_v) do{ Value r = _v; cont = _cont; result = (r); goto _loop; }while(0)
 #define ERROR(mes) do{													\
 		Value _code = C_CODE(cont);										\
-		NEXT( CONT( cons4( SYM_ERROR, string_new(mes), cons3(V_QUOTE,_code,NIL), NIL ), \
+		NEXT( CONT( cons4( SYM_ERROR, (Value)string_new(mes), cons3(V_QUOTE,_code,NIL), NIL ), \
 					C_BUNDLE(cont), C_NEXT(cont)), NIL); }while(0)
 #define CHECK(x) if(!x){ ERROR("invalid form"); }
 #define FAIL() CHECK(0)
@@ -190,6 +190,7 @@ Value eval_loop( Stream *stream )
 	switch( TYPE_OF(C_CODE(cont)) ){
 	case TYPE_UNUSED:
 	case TYPE_POINTER:
+	case TYPE_STRING_BODY:
 	case TYPE_MAX:
 		assert(0);
 	case TYPE_NIL:

@@ -106,7 +106,7 @@ _INT_COMPARE_FUNC( _greater_eq, >=, INT64_MAX )
 
 static Value _symbol_to_string( Value bundle, Value v )
 {
-	return SYMBOL_STR(v);
+	return (Value)V2SYMBOL(v)->str;
 }
 
 static Value _car( Value bundle, Value v )
@@ -271,7 +271,7 @@ static Value _backtrace( Value args, Value cont, Value *result )
 		Value code = CONTINUATION_CODE(cur);
 		if( IS_PAIR(code) && CAR(code) == V_READ_EVAL ){
 			Stream *s = V2STREAM(CDR(code));
-			printf( "  %s:%d: *read-eval*\n", STRING_STR(s->u.file.filename), s->line );
+			printf( "  %s:%d: *read-eval*\n", STRING_BUF(s->u.file.filename), s->line );
 		}else{
 			printf( "  %s in %s\n",
 					v2s_limit(code, 60),
@@ -291,12 +291,13 @@ static Value _call_cc( Value args, Value cont, Value *result )
 
 static Value _load( Value args, Value cont, Value *result )
 {
-	Value filename;
-	bind1arg( args, filename);
-    assert(filename);
-	FILE *fd = fopen( STRING_STR(filename), "r" );
+	Value vfilename;
+	bind1arg( args, vfilename);
+    assert(vfilename);
+	String *filename = V2STRING(vfilename);
+	FILE *fd = fopen( STRING_BUF(filename), "r" );
 	if( !fd ) assert(0);
-	Stream *file = stream_new( fd, true, STRING_STR(filename) );
+	Stream *file = stream_new( fd, true, STRING_BUF(filename) );
 	return continuation_new( cons( V_READ_EVAL, (Value)file ),
 							 bundle_cur, CONTINUATION_NEXT(cont) );
 }
@@ -337,8 +338,8 @@ static Value _display( Value bundle, Value v, Value rest )
 		break;
 	case TYPE_STRING:
 		{
-			char *str = STRING_STR(v);
-			stream_write( port, str, strlen(str) );
+			String *s = V2STRING(v);
+			stream_write( port, s->body->buf + s->start, s->len );
 		}
 		break;
 	default:
@@ -377,7 +378,7 @@ static Value _write_char( Value bundle, Value v, Value rest )
 
 static Value _open_input_file( Value bundle, Value _filename )
 {
-	char *filename = STRING_STR(_filename);
+	char *filename = STRING_BUF(V2STRING(_filename));
 	FILE *fd = fopen( filename, "r" );
 	assert( fd );
 	return (Value)stream_new( fd, true, filename );
@@ -385,7 +386,7 @@ static Value _open_input_file( Value bundle, Value _filename )
 
 static Value _open_output_file( Value bundle, Value _filename )
 {
-	char *filename = STRING_STR(_filename);
+	char *filename = STRING_BUF(V2STRING(_filename));
 	FILE *fd = fopen( filename, "a" );
 	assert( fd );
 	return (Value)stream_new( fd, true, filename );
@@ -393,7 +394,7 @@ static Value _open_output_file( Value bundle, Value _filename )
 
 static Value _open_input_string( Value bundle, Value str )
 {
-	Stream *s = stream_new_str( str );
+	Stream *s = stream_new_str( V2STRING(str) );
 	return (Value)s;
 }
 
@@ -403,11 +404,18 @@ static Value _open_output_string( Value bundle )
 	return (Value)s;
 }
 
+static Value _close_input_port( Value bundle, Value v )
+{
+	Stream *s = V2STREAM(v);
+	stream_close( s );
+	return NIL;
+}
+
 static Value _get_output_string( Value bundle, Value v )
 {
 	Stream *s = V2STREAM(v);
 	assert( s->stream_type == STREAM_TYPE_STRING );
-	return s->u.str;
+	return (Value)string_substr( s->u.str, 0, s->pos );
 }
 
 static Value _char_eq_p( Value bundle, Value first, Value rest )
@@ -458,13 +466,13 @@ static Value _number_to_string( Value bundle, Value v )
 {
 	char buf[32];
 	sprintf( buf, "%lld", V2INT(v) );
-	return string_new(buf);
+	return (Value)string_new(buf);
 }
 
 static Value _string_to_number( Value bundle, Value v )
 {
 	int num;
-	sscanf( STRING_STR(v), "%d", &num );
+	sscanf( STRING_BUF(V2STRING(v)), "%d", &num );
 	return INT2V(num);
 }
 
@@ -473,14 +481,14 @@ static Value _string_append( Value bundle, Value args )
 	char buf[10240];
 	char *tail = buf;
 	for( Value cur=args; cur != NIL; cur=CDR(cur) ){
-		tail += sprintf( tail, "%s", STRING_STR(CAR(cur)) );
+		tail += sprintf( tail, "%s", STRING_BUF(V2STRING(CAR(cur))) );
 	}
-	return string_new(buf);
+	return (Value)string_new(buf);
 }
 
 static Value _string_to_list( Value bundle, Value v )
 {
-	char *str = STRING_STR(v);
+	char *str = STRING_BUF(V2STRING(v));
 	if( str[0] == '\0' ) return NIL;
 	
 	Value r = cons(CHAR2V(str[0]),NIL);
@@ -493,7 +501,7 @@ static Value _string_to_list( Value bundle, Value v )
 
 static Value _list_to_string( Value bundle, Value v )
 {
-	if( v == NIL ) return string_new(" ");
+	if( v == NIL ) return (Value)string_new("");
 	char buf[1024];
 	int i=0;
 	LIST_EACH(cur,v){
@@ -501,12 +509,12 @@ static Value _list_to_string( Value bundle, Value v )
 		i++;
 	}
 	buf[i] = '\0';
-	return string_new(buf);
+	return (Value)string_new(buf);
 }
 
 static Value _string( Value bundle, Value cs )
 {
-	if( cs == NIL ) return string_new("");
+	if( cs == NIL ) return (Value)string_new("");
 	char buf[1024];
 	int i = 0;
 	LIST_EACH(c,cs){
@@ -514,7 +522,7 @@ static Value _string( Value bundle, Value cs )
 		i++;
 	}
 	buf[i] = '\0';
-	return string_new(buf);
+	return (Value)string_new(buf);
 }
 
 static Value _make_string( Value bundle, Value _len, Value rest )
@@ -527,32 +535,32 @@ static Value _make_string( Value bundle, Value _len, Value rest )
 	if( _c ) c = V2CHAR(_c);
 	memset( buf, c, len );
 	buf[len] = '\0';
-	return string_new_len(buf, len);
+	return (Value)string_new_len(buf, len);
 }
 
 static Value _string_null_p( Value bundle, Value v )
 {
-	char *str = STRING_STR(v);
+	char *str = STRING_BUF(V2STRING(v));
 	return (*str == '\0')?VALUE_T:VALUE_F;
 }
 
 static Value _string_length( Value bundle, Value v )
 {
-	return INT2V( strlen( STRING_STR(v) ) );
+	return INT2V( V2STRING(v)->len );
 }
 
 static Value _string_ref( Value bundle, Value v, Value _idx )
 {
-	char *str = STRING_STR(v);
+	char *str = STRING_BUF(V2STRING(v));
 	int idx = (int)V2INT(_idx);
 	return CHAR2V( str[idx] );
 }
 
 static Value _string_set_i( Value bundle, Value v, Value _idx, Value _c )
 {
-	char *str = STRING_STR(v);
+	char *str = STRING_BUF(V2STRING(v));
 	int idx = (int)V2INT(_idx);
-	if( idx >= STRING_LEN(v) ){ printf("%d %d\n", (int)idx, STRING_LEN(v) ); assert(0); }
+	if( idx >= V2STRING(v)->len ){ printf("%d %zd\n", (int)idx, V2STRING(v)->len ); assert(0); }
 	str[idx] = V2CHAR(_c);
 	return NIL;
 }
@@ -560,18 +568,19 @@ static Value _string_set_i( Value bundle, Value v, Value _idx, Value _c )
 static Value _substring( Value bundle, Value v, Value _start, Value rest )
 {
 	int start = (int)V2INT(_start);
-	int end = STRING_LEN(v);
+	int end = V2STRING(v)->len;
 	Value _end;
 	bind1arg( rest, _end );
 	if( _end ) end = (int)V2INT(_end);
-	return string_new_len(STRING_STR(v)+start, end-start );
+	String *s = V2STRING(v);
+	return (Value)string_substr( s, start, end-start );
 }
 
 static Value _sys_getenv( Value bundle, Value name )
 {
-	char *str = getenv( STRING_STR(name) );
+	char *str = getenv( STRING_BUF(V2STRING(name)) );
 	if( str ){
-		return string_new( str );
+		return (Value)string_new( str );
 	}else{
 		return VALUE_F;
 	}
@@ -579,7 +588,7 @@ static Value _sys_getenv( Value bundle, Value name )
 
 static Value _file_exists_p( Value bundle, Value _path )
 {
-	char *path = STRING_STR(_path);
+	char *path = STRING_BUF(V2STRING(_path));
 	struct stat file_stat;
 	int err = stat( path, &file_stat );
 	if( err ) return VALUE_F;
@@ -590,9 +599,9 @@ static Value _runtime_value_set_i( Value bundle, Value _name, Value val )
 {
 	char *name;
 	if( IS_SYMBOL(_name) ){
-		name = STRING_STR(SYMBOL_STR(_name));
+		name = STRING_BUF(V2SYMBOL(_name)->str);
 	}else if( IS_STRING(_name) ){
-		name = STRING_STR(_name);
+		name = STRING_BUF(V2STRING(_name));
 	}else{
 		assert(0);
 	}
@@ -677,6 +686,8 @@ void cfunc_init()
 	defun( "open-output-file", 1, _open_output_file );
 	defun( "open-input-string", 1, _open_input_string );
 	defun( "open-output-string", 0, _open_output_string );
+	defun( "close-input-port", 1, _close_input_port );
+	defun( "close-output-port", 1, _close_input_port ); // TODO: inputと変える
 	defun( "get-output-string", 1, _get_output_string );
 
 	// char

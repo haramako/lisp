@@ -14,6 +14,7 @@ typedef enum {
 	TYPE_CHAR,
 	TYPE_SYMBOL,
 	TYPE_STRING,
+	TYPE_STRING_BODY,
 	TYPE_PAIR,
 	TYPE_LAMBDA,
 	TYPE_CFUNC,
@@ -89,13 +90,6 @@ typedef struct Cell {
 			Value next;
 		} unused;
 		struct {
-			Value str;
-		} symbol;
-		struct {
-			int len;
-			char *str;
-		} string;
-		struct {
 			Value car;
 			Value cdr;
 		} pair;
@@ -122,11 +116,23 @@ typedef struct Cell {
 	} d;
 } Cell;
 
-typedef struct Pointer {
+typedef struct {
 	CellHeader h;
-	Value *ptr;
-	struct Pointer *next;
-} Pointer;
+	struct String *str;
+} Symbol;
+
+typedef struct {
+	CellHeader h;
+	size_t len;
+	char *buf;
+} StringBody;
+
+typedef struct String {
+	CellHeader h;
+	StringBody *body;
+	size_t start;
+	size_t len;
+} String;
 
 typedef enum {
 	STREAM_TYPE_FILE,
@@ -141,19 +147,26 @@ typedef struct Stream {
 	union {
 		struct {
 			FILE *fd;
-			Value filename;
+			String *filename;
 			char close;
 		} file;
-		Value str;
+		String *str;
 	} u;
 } Stream;
 
+typedef struct Pointer {
+	CellHeader h;
+	Value *ptr;
+	struct Pointer *next;
+} Pointer;
+
 #define TYPE_OF(v) ((Type)v->h.type)
 
-#define IS_INT(v) (v->h.type==TYPE_INT)
-#define IS_CHAR(v) (v->h.type==TYPE_CHAR)
+#define IS_INT(v) ((v)->h.type==TYPE_INT)
+#define IS_CHAR(v) ((v)->h.type==TYPE_CHAR)
 #define IS_SYMBOL(v) ((v)->h.type==TYPE_SYMBOL)
 #define IS_STRING(v) ((v)->h.type==TYPE_STRING)
+#define IS_STRING_BODY(v) ((v)->h.type==TYPE_STRING_BODY)
 #define IS_PAIR(v) ((v)->h.type==TYPE_PAIR)
 #define IS_LAMBDA(v) ((v)->h.type==TYPE_LAMBDA)
 #define IS_CFUNC(v) ((v)->h.type==TYPE_CFUNC)
@@ -167,8 +180,9 @@ typedef struct Stream {
 #define INT2V(v) (int_new(v))
 #define V2CHAR(v) (assert(IS_CHAR(v)),(int)v->d.number)
 #define CHAR2V(v) (char_new((int)v))
-#define V2SYMBOL(v) (assert(IS_SYMBOL(v)),v)
-#define V2STRING(v) (assert(IS_STRING(v)),v)
+inline Symbol* V2SYMBOL(Value v){ assert(IS_SYMBOL(v)); return (Symbol*)v; }
+inline String* V2STRING(Value v){ assert(IS_STRING(v)); return (String*)v; }
+inline StringBody* V2STRING_BODY(Value v){ assert(IS_STRING_BODY(v)); return (StringBody*)v; }
 #define V2PAIR(v) (assert(IS_PAIR(v)),v)
 #define V2LAMBDA(v) (assert(IS_LAMBDA(v)),v)
 #define V2CFUNC(v) (assert(IS_CFUNC(v)),v)
@@ -247,11 +261,13 @@ Value intern( char *sym );
 
 // String
 
-#define STRING_STR(v) (V2STRING(v)->d.string.str)
-#define STRING_LEN(v) (V2STRING(v)->d.string.len)
+#define STRING_BUF(s) (s->body->buf+s->start)
 
-Value string_new( char *str );
-Value string_new_len( char *str, int len );
+String* string_new( char *str );
+String* string_new_len( char *str, int len );
+size_t string_puts( String *s, char *buf, size_t len );
+size_t string_puts_escape( String *s, char *buf, size_t len );
+String* string_substr( String *s, int start, int len );
 
 // Lambda
 
@@ -350,7 +366,7 @@ Value continuation_new( Value code, Value bundle, Value next );
 // Stream
 
 Stream* stream_new( FILE *fd, bool close, char *filename );
-Stream* stream_new_str( Value str );
+Stream* stream_new_str( String *str );
 int stream_getc( Stream *s );
 void stream_ungetc( int c, Stream *s );
 int stream_peekc( Stream *s );
@@ -358,6 +374,7 @@ Value stream_read_value( Stream *s );
 void stream_write_value( Stream *s, Value v );
 size_t stream_read( Stream *s, char *buf, size_t len );
 size_t stream_write( Stream *s, char *buf, size_t len );
+void stream_close( Stream *s );
 
 // Eval in eval.c
 

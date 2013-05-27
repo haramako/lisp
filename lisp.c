@@ -17,6 +17,7 @@ const char *TYPE_NAMES[] = {
 	"char",
 	"symbol",
 	"string",
+	"string-body",
 	"pair",
 	"lambda",
 	"cfunc",
@@ -32,42 +33,15 @@ const char* LAMBDA_TYPE_NAME[] = {
 	"macro",
 };
 
+extern inline Symbol* V2SYMBOL(Value v);
+extern inline String* V2STRING(Value v);
+extern inline StringBody* V2STRING_BODY(Value v);
 extern inline Stream* V2STREAM(Value v);
 extern inline Pointer* V2POINTER(Value v);
 
 //********************************************************
 // Utility
 //********************************************************
-
-static size_t _escape_str( char *buf, size_t len, char *str )
-{
-	int n = 0;
-	size_t slen = strlen(str);
-	for( int i=0; i<slen; i++ ){
-		char c = str[i];
-		if( c < 32 || c >= 127 ){
-			char *escaped = NULL;
-			switch( c ){
-			case '"': escaped = "\\\""; break;
-			case '\\': escaped = "\\\\"; break;
-			case '\n': escaped = "\\n"; break;
-			case '\r': escaped = "\\r"; break;
-			case '\f': escaped = "\\f"; break;
-			case '\t': escaped = "\\t"; break;
-			case '\0': escaped = "\\0"; break;
-			}
-			if( escaped ){
-				n += snprintf( buf+n, len-n, "%s", escaped );
-			}else{
-				n += snprintf( buf+n, len-n, "\\x%02x", c );
-			}
-		}else{
-			buf[n++] = c;
-		}
-		if( n >= len ) break;
-	}
-	return n;
-}
 
 static size_t _value_to_str( char *buf, int len, Value v )
 {
@@ -104,26 +78,30 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		}
 		break;
 	case TYPE_SYMBOL:
-		n += snprintf( buf, len, "%s", STRING_STR(SYMBOL_STR(v)) );
+		n += string_puts( V2SYMBOL(v)->str, buf, len );
 		break;
 	case TYPE_STRING:
-		n += snprintf( buf, len, "\"" );
+		buf[n++] = '"';
 		if( n >= len ) return len;
-		n += _escape_str( buf+n, len-n, STRING_STR(v) );
+		n += string_puts_escape( V2STRING(v), buf+n, len-n );
 		if( n >= len ) return len;
-		n += snprintf( buf+n, len-n, "\"" );
+		buf[n++] = '"';
 		break;
 	case TYPE_LAMBDA:
 		if( LAMBDA_NAME(v) != NIL ){
+			char str[128];
+			string_puts_escape( V2SYMBOL(LAMBDA_NAME(v))->str, str, sizeof(str)-1 );
 			n += snprintf( buf, len, "#<%s:%s:%p>",
-						   LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], STRING_STR(SYMBOL_STR(LAMBDA_NAME(v))), v );
+						   LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], str, v );
 		}else{
 			n += snprintf( buf, len, "#<%s:%p>", LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], v );
 		}
 		break;
 	case TYPE_CFUNC:
 		if( CFUNC_NAME(v) != NIL ){
-			n += snprintf( buf, len, "#<cfunc:%s>", STRING_STR(SYMBOL_STR(CFUNC_NAME(v))) );
+			char str[128];
+			string_puts_escape( V2SYMBOL(CFUNC_NAME(v))->str, str, sizeof(str)-1 );
+			n += snprintf( buf, len, "#<cfunc:%s>", str );
 		}else{
 			n += snprintf( buf, len, "#<cfunc:%p>", CFUNC_FUNC(v) );
 		}
@@ -172,9 +150,11 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		{
 			Stream *s = V2STREAM(v);
 			if( s->stream_type == STREAM_TYPE_FILE ){
-				n += snprintf( buf+n, len-n, "#<port:%s>", STRING_STR(V2STREAM(v)->u.file.filename) );
+				char str[PATH_MAX];
+				string_puts_escape( s->u.file.filename, str, sizeof(str)-1 );
+				n += snprintf( buf+n, len-n, "#<port:\"%s\">", str );
 			}else{
-				n += snprintf( buf+n, len-n, "#<port>" );
+				n += snprintf( buf+n, len-n, "#<port:string>" );
 			}
 		}
 		break;
@@ -204,7 +184,8 @@ char* v2s_limit( Value v, int limit )
 	assert( limit < sizeof(buf) );
 	size_t len = value_to_str(buf, limit, v);
 	if( len >= (limit-1) ) strcpy( buf+limit-4, "..." );
-	return STRING_STR(string_new(buf));
+	String *str = string_new(buf);
+	return str->body->buf;
 }
 
 void vdump( Value v )
@@ -233,7 +214,11 @@ bool eqv( Value a, Value b )
 	switch( TYPE_OF(a) ){
 	case TYPE_STRING:
 		if( !IS_STRING(b) ) return false;
-		return ( strcmp(STRING_STR(a),STRING_STR(b)) == 0 );
+		String *sa = V2STRING(a);
+		String *sb = V2STRING(b);
+		return (sa->len==sb->len) &&
+			( sa->body->buf == sb->body->buf ||
+			  (strncmp(sa->body->buf+sa->start, sb->body->buf+sb->start, sa->len) == 0) );
 	default:
 		return false;
 	}
@@ -270,10 +255,10 @@ unsigned int hash_eqv( Value v )
 	switch( TYPE_OF(v) ){
 	case TYPE_STRING:
 		{
-			char *str = STRING_STR(v);
-			size_t len = strlen(str);
+			String *s = V2STRING(v);
+			char *str = s->body->buf + s->start;
 			int hash = 0;
-			for( int i=0; i<len; i++ ){
+			for( int i=0; i<s->len; i++ ){
 				hash = hash * 31 + str[i];
 			}
 			return hash;
@@ -323,12 +308,12 @@ Value symbol_root = NULL;
 
 Value intern( char *sym )
 {
-	Value str = string_new(sym);
-	DictEntry *entry = bundle_find( symbol_root, str, false, true );
+	String* str = string_new(sym);
+	DictEntry *entry = bundle_find( symbol_root, (Value)str, false, true );
 	if( entry->val == NIL ){
-		Value val = gc_new(TYPE_SYMBOL);
-		SYMBOL_STR(val) = str;
-		entry->val = val;
+		Symbol* val = V2SYMBOL(gc_new(TYPE_SYMBOL));
+		val->str = str;
+		entry->val = (Value)val;
 	}
 	return entry->val;
 }
@@ -337,21 +322,76 @@ Value intern( char *sym )
 // String
 //********************************************************
 
-Value string_new( char *str )
+String* string_new( char *str )
 {
 	return string_new_len( str, (int)strlen(str) );
 }
 
-Value string_new_len( char *str, int len )
+String* string_new_len( char *str, int len )
 {
-	Value v = gc_new(TYPE_STRING);
-	char *s = malloc(len+1);
-	assert( s );
-	memcpy( s, str, len );
-	s[len] = '\0';
-	STRING_STR(v) = s;
-	STRING_LEN(v) = len;
-	return v;
+	StringBody *body = V2STRING_BODY(gc_new(TYPE_STRING_BODY));
+	body->buf = malloc( len+1 );
+	assert( body->buf);
+	memcpy( body->buf, str, len );
+	body->buf[len] = '\0';
+	body->len = len;
+		
+	String *s = V2STRING(gc_new(TYPE_STRING));
+	s->body = body;
+	s->start = 0;
+	s->len = len;
+	
+	return s;
+}
+
+size_t string_puts( String *s, char *buf, size_t len )
+{
+	if( len > s->len ) len = s->len;
+	memcpy( buf, s->body->buf + s->start, len );
+	buf[len] = '\0';
+	return len;
+}
+
+size_t string_puts_escape( String *s, char *buf, size_t len )
+{
+	size_t n = 0;
+	char *str = s->body->buf + s->start;
+	size_t slen = s->len;
+	for( int i=0; i<slen; i++ ){
+		char c = str[i];
+		if( c < 32 || c >= 127 ){
+			char *escaped = NULL;
+			switch( c ){
+			case '"': escaped = "\\\""; break;
+			case '\\': escaped = "\\\\"; break;
+			case '\n': escaped = "\\n"; break;
+			case '\r': escaped = "\\r"; break;
+			case '\f': escaped = "\\f"; break;
+			case '\t': escaped = "\\t"; break;
+			case '\0': escaped = "\\0"; break;
+			}
+			if( escaped ){
+				memcpy( buf+n, escaped, 2 );
+				n += 2;
+			}else{
+				n += snprintf( buf+n, len-n, "\\x%02x", c );
+			}
+		}else{
+			buf[n++] = c;
+		}
+		if( n >= len ) break;
+	}
+	buf[n] = '\0';
+	return n;
+}
+
+String* string_substr( String *s, int start, int len )
+{
+	String *new_str = V2STRING(gc_new(TYPE_STRING));
+	new_str->body = s->body;
+	new_str->start = s->start + start;
+	new_str->len = len;
+	return new_str;
 }
 
 //********************************************************
@@ -660,7 +700,7 @@ static Value _read_string( Stream *s )
 		int c = stream_getc(s);
 		switch( c ){
 		case '"':
-			return string_new_len(buf,i);
+			return (Value)string_new_len(buf,i);
 		case '\\':
 			c = _unescape_char(s);
 			break;
@@ -851,7 +891,7 @@ Stream* stream_new( FILE *fd, bool close, char *filename )
 	return s;
 }
 
-Stream* stream_new_str( Value str )
+Stream* stream_new_str( String *str )
 {
 	Stream *s = V2STREAM(gc_new( TYPE_STREAM ));
 	s->line = 1;
@@ -867,7 +907,7 @@ int stream_getc( Stream *s )
 	if( s->stream_type == STREAM_TYPE_FILE ){
 		c = fgetc( s->u.file.fd );
 	}else{
-		char *str = STRING_STR(s->u.str);
+		char *str = STRING_BUF(s->u.str);
 		c = str[s->pos];
 	}
 	s->pos++;
@@ -909,7 +949,7 @@ size_t stream_read( Stream *s, char *buf, size_t len )
 		read_len = fread( buf, len, 1, s->u.file.fd );
 	}else{
 		read_len = len;
-		strncpy( buf, STRING_STR(s->u.str), len );
+		strncpy( buf, STRING_BUF(s->u.str), len );
 	}
 	assert( read_len >= 0 );
 	return read_len;
@@ -922,13 +962,21 @@ size_t stream_write( Stream *s, char *buf, size_t len )
 		write_len = fwrite( buf, len, 1, s->u.file.fd );
 	}else{
 		write_len = len;
-		char *str = STRING_STR(s->u.str);
+		char *str = STRING_BUF(s->u.str);
 		memcpy( str+s->pos, buf, len );
 		str[s->pos+len] = '\0';
 	}
 	s->pos += write_len;
 	assert( write_len >= 0 );
 	return write_len;
+}
+
+void stream_close( Stream *s )
+{
+	if( s->stream_type == STREAM_TYPE_FILE ){
+		fclose( s->u.file.fd );
+		s->u.file.fd = 0;
+	}
 }
 
 //********************************************************
@@ -1060,7 +1108,7 @@ static void handler(int sig) {
 	backtrace_symbols_fd(array+3, (int)size-3, 2/*=stderr*/);
 	if( V_SRC_FILE ){
 		if( V_SRC_FILE->stream_type == STREAM_TYPE_FILE ){
-			printf( "%s:%d: error\n", STRING_STR(V_SRC_FILE->u.file.filename), V_SRC_FILE->line );
+			printf( "%s:%d: error\n", STRING_BUF(V_SRC_FILE->u.file.filename), V_SRC_FILE->line );
 		}else{
 			printf( "(str):%d: error\n", V_SRC_FILE->line );
 		}
@@ -1156,7 +1204,7 @@ void init_prelude( const char *argv0, bool with_prelude )
 	retain( (Value*)&V_STDIN );
 	V_STDOUT = stream_new(stdout, false, "stdout" );
 	retain( (Value*)&V_STDOUT );
-	V_END_OF_LINE = string_new("\n");
+	V_END_OF_LINE = (Value)string_new("\n");
 	retain( &V_END_OF_LINE );
 	
 	_INIT_OPERATOR(V_BEGIN, "begin", OP_BEGIN);
@@ -1211,10 +1259,10 @@ void init_prelude( const char *argv0, bool with_prelude )
 
 	// define runtime-home-path, runtime-lib-path
 	char lib_path[PATH_MAX];
-	bundle_define( bundle_cur, SYM_RUNTIME_HOME_PATH, string_new(home_path) );
+	bundle_define( bundle_cur, SYM_RUNTIME_HOME_PATH, (Value)string_new(home_path) );
 	sprintf( lib_path, "%s/lib", home_path );
    	bundle_define( bundle_cur, SYM_RUNTIME_LOAD_PATH,
-				   cons4( string_new("."), string_new("lib"), string_new(lib_path),NIL ) );
+				   cons4( (Value)string_new("."), (Value)string_new("lib"), (Value)string_new(lib_path),NIL ) );
     
 	if( with_prelude ){
 		char path[PATH_MAX];

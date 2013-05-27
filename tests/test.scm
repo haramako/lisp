@@ -52,6 +52,7 @@
 			(if (<= var 0) sum
 				(loop (+ sum var) (- var 1))))))
 
+;; test define
 (define one 1)
 (assert 2 (+ one 1))
 (assert #t (eq? one 1))
@@ -64,15 +65,18 @@
 (assert 2 (if #f 1 2))
 (assert 3 (if #f 1 2 3))
 
+;; test lambda
 (define +1 (lambda (x) (+ x 1)))
 (assert 4 (+1 3))
 
+;; test closure
 (define +n (lambda (x) (lambda (y) (+ x y))))
 (define +3 (+n 3))
 (define +4 (+n 4))
 (assert 4 (+3 1))
 (assert 7 (+3 (+4 0)))
 
+;; tesut quasiquote
 (define x 100)
 (assert '(1 (2 100)) `(1 (2 ,x)))
 (set! x '(100 200))
@@ -80,21 +84,17 @@
 (assert '(1 (2 100 200)) `(1 (2 ,@x)))
 (assert '(1 (2 100 200 3)) `(1 (2 ,@x 3)))
 
+;; test macro
 (define m+1 (macro (x) (list '+ x 1)))
 (assert 4 (m+1 3))
 (assert '(+ 2 1) (macro-expand '(m+1 2)))
-
-;; (define n 0)
-;; (loop
-;;  (display n)
-;;  (set! n (+ n 1))
-;;  (if (eq? n 10) (break)))
 
 ;; (display (gemsym))
 ;; (display (gemsym))
 ;; (define sym (gemsym))
 ;; (display (eq? sym sym))
 
+;; test car, cdr
 (assert 1 (car '(1 2)))
 (assert '(2 3) (cdr '(1 2 3)))
 
