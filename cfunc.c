@@ -111,27 +111,38 @@ static Value _eq( Value bundle, Value args ) /* -1 = */
 	return VALUE_T;
 }
 
-#define _INT_COMPARE_FUNC(name,cmp,first)								\
-	static Value name( Value bundle, Value ns ){						\
-	int64_t last = first;													\
+#define _INT_COMPARE_FUNC(cmp,first)									\
+	int64_t last = first;												\
 	LIST_EACH( n, ns ){													\
 		if( !(last cmp V2INT(n)) ){ return VALUE_F; }else{ last = V2INT(n); } \
 	}																	\
-	return VALUE_T;														\
-	}
+	return VALUE_T;
 
-_INT_COMPARE_FUNC( _less, <, INT64_MIN )
-_INT_COMPARE_FUNC( _less_eq, <=, INT64_MIN )
-_INT_COMPARE_FUNC( _greater, >, INT64_MAX )
-_INT_COMPARE_FUNC( _greater_eq, >=, INT64_MAX )
+static Value _less( Value bundle, Value ns ) /* -1 < */
+{
+	_INT_COMPARE_FUNC( <, INT64_MIN );
+}
+
+static Value _less_eq( Value bundle, Value ns ) /* -1 <= */
+{
+	_INT_COMPARE_FUNC( <=, INT64_MIN );
+}
+
+static Value _greater( Value bundle, Value ns ) /* -1 > */
+{
+	_INT_COMPARE_FUNC( >, INT64_MAX );
+}
+
+static Value _greater_eq( Value bundle, Value ns ) /* -1 >= */
+{
+	_INT_COMPARE_FUNC( >=, INT64_MAX );
+}
 
 static Value _symbol_to_string( Value bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_SYMBOL(v);
 	return (Value)V2SYMBOL(v)->str;
 }
-
-
 
 static Value _car( Value bundle, Value v ) /* 1 */
 {
@@ -310,7 +321,7 @@ static Value _backtrace( Value args, Value cont, Value *result ) /* CFUNC_ARITY_
 	return CONTINUATION_NEXT(cont);
 }
 
-static Value _call_cc( Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW */
+static Value _call_cc( Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW call/cc */
 {
 	*result = CAR(args);
 	return continuation_new( cons3( V_CALL0, CONTINUATION_NEXT(cont), NIL ),
@@ -464,20 +475,33 @@ static Value _char_eq_p( Value bundle, Value first, Value rest ) /* -2 char=? */
 	return VALUE_T;
 }
 
-#define _CHAR_COMPARE_FUNC(name,cmp,first)								\
-	static Value name( Value bundle, Value cs ){						\
+#define _CHAR_COMPARE_FUNC(cmp,first)								\
 	int last = first;													\
 	LIST_EACH( c, cs ){													\
 		ERROR_IF_NOT_CHAR(c);											\
 		if( !(last cmp V2CHAR(c)) ){ return VALUE_F; }else{ last = V2CHAR(c); } \
 	}																	\
-	return VALUE_T;														\
-	}
+	return VALUE_T;
 
-_CHAR_COMPARE_FUNC( _char_lt_p, < , INT_MIN )
-_CHAR_COMPARE_FUNC( _char_le_p, <=, INT_MIN )
-_CHAR_COMPARE_FUNC( _char_gt_p, > , INT_MAX )
-_CHAR_COMPARE_FUNC( _char_ge_p, >=, INT_MAX )
+static Value _char_lt_p( Value bundle, Value cs ) /* -1 char<? */
+{
+	_CHAR_COMPARE_FUNC( <, INT_MIN );
+}
+
+static Value _char_le_p( Value bundle, Value cs ) /* -1 char<=? */
+{
+	_CHAR_COMPARE_FUNC( <=, INT_MIN );
+}
+
+static Value _char_gt_p( Value bundle, Value cs ) /* -1 char>? */
+{
+	_CHAR_COMPARE_FUNC( >, INT_MAX );
+}
+
+static Value _char_ge_p( Value bundle, Value cs ) /* -1 char>=? */
+{
+	_CHAR_COMPARE_FUNC( >=, INT_MAX );
+}
 
 static Value _char_to_integer( Value bundle, Value v ) /* 1 */
 {
@@ -686,6 +710,10 @@ void cfunc_init()
 	defun( "/", -1, _div );
 	defun( "modulo", -1, _modulo );
 	defun( "=", -1, _eq );
+	defun( "<", -1, _less );
+	defun( "<=", -1, _less_eq );
+	defun( ">", -1, _greater );
+	defun( ">=", -1, _greater_eq );
 	defun( "symbol->string", 1, _symbol_to_string );
 	defun( "car", 1, _car );
 	defun( "cdr", 1, _cdr );
@@ -709,7 +737,7 @@ void cfunc_init()
 	defun( "eval", CFUNC_ARITY_RAW, _eval );
 	defun( "current-environment", CFUNC_ARITY_RAW, _current_environment );
 	defun( "backtrace", CFUNC_ARITY_RAW, _backtrace );
-	defun( "call-cc", CFUNC_ARITY_RAW, _call_cc );
+	defun( "call/cc", CFUNC_ARITY_RAW, _call_cc );
 	defun( "load", CFUNC_ARITY_RAW, _load );
 	defun( "exit", CFUNC_ARITY_RAW, _exit );
 	defun( "eof-object?", 1, _eof_object_p );
@@ -724,6 +752,10 @@ void cfunc_init()
 	defun( "close-input-port", 1, _close_input_port );
 	defun( "get-output-string", 1, _get_output_string );
 	defun( "char=?", -2, _char_eq_p );
+	defun( "char<?", -1, _char_lt_p );
+	defun( "char<=?", -1, _char_le_p );
+	defun( "char>?", -1, _char_gt_p );
+	defun( "char>=?", -1, _char_ge_p );
 	defun( "char->integer", 1, _char_to_integer );
 	defun( "integer->char", 1, _integer_to_char );
 	defun( "char-upcase", 1, _char_upcase );
@@ -744,17 +776,4 @@ void cfunc_init()
 	defun( "file-exists?", 1, _file_exists_p );
 	defun( "runtime-value-set!", 2, _runtime_value_set_i );
 	/*}}*/
-
-	defun( "integer?", 1, _number_p );
-	defun( "quotient", -1, _div );
-	defun( "<", -1, _less );
-	defun( "<=", -1, _less_eq );
-	defun( ">", -1, _greater );
-	defun( ">=", -1, _greater_eq );
-	defun( "call-with-current-continuation", CFUNC_ARITY_RAW, _call_cc );
-	defun( "char<?", -1, _char_lt_p );
-	defun( "char<=?", -1, _char_le_p );
-	defun( "char>?", -1, _char_gt_p );
-	defun( "char>=?", -1, _char_ge_p );
-
 }
