@@ -1,5 +1,11 @@
 #!/usr/bin/env mlisp
 
+(require text.tree)
+
+(write-tree '(1 ("2" 4) 3))
+
+(exit)
+
 (define is (open-input-string "(1 2) #t"))
 (puts is)
 #p(read is)

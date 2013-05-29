@@ -64,12 +64,7 @@
 	(display " ")
 	(apply puts (cdr x))))
 
-(define (putsn . x)
-  (if (not (pair? x)) #f
-	  (display (car x))
-	  (display " ")
-	  (apply putsn (cdr x))))
-
+;; #p macro
 (define (*tee* x)
   (puts "tee:" x)
   x)
@@ -106,7 +101,7 @@
 (define (macro-form? form)
   (and (pair? form)
 	   (symbol? (car form))
-	   (defined? (car form))
+	   (define? (car form))
 	   (macro? (eval (car form)))))
 
 (define (macro-expand form)
@@ -446,13 +441,11 @@
 	 (if (find (lambda (x) (eqv? x ?v)) '(?cond ...))
 		 (begin ?body ...)))
 	
-	
 	((_ ?v ((?cond ...) ?body ...) ?rest ...)
 	 (if (find (lambda (x) (eqv? x ?v)) '(?cond ...))
 		 (begin ?body ...)
 		 (%case ?v ?rest ...)))
 	
-	 
 	))
 
 (define-syntax case
@@ -464,6 +457,15 @@
 (define (string-list? ss)
   (or (null? ss)
 	  (and (pair? ss) (string? (car ss)) (string-list? (cdr ss)))))
+
+(define-syntax dolist
+  (syntax-rules ()
+	((_ (?v ?list) ?body ...)
+	 (let loop ((*list* ?list))
+	   (if (not (pair? *list*)) #f
+		   (let ((?v (car *list*)))
+			 ?body ...
+			 (loop (cdr *list*))))))))
 
 ;;(define (min . lis)
 ;;  (fold (lambda (a b) (if (< a b) a b)) list))
@@ -498,7 +500,7 @@
 
 ;;Guarded because we must only eval this once, because doing so
 ;;redefines call/cc in terms of old call/cc
-(unless (defined? 'dynamic-wind)
+(unless (define? 'dynamic-wind)
    (let
       ;;These functions are defined in the context of a private list of
       ;;pairs of before/after procs.

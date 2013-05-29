@@ -167,6 +167,8 @@ static void _mark( Value v )
 			_mark( (Value)p->next );
 		}
 		break;
+	case TYPE_ERROR:
+		_mark( (Value)V2ERROR(v)->str );
 	}
 }
 

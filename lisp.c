@@ -6,6 +6,7 @@
 #include <setjmp.h>
 #include <limits.h>
 #include <unistd.h>
+#include <stdarg.h>
 
 Profile prof;
 
@@ -26,6 +27,7 @@ const char *TYPE_NAMES[] = {
 	"special",
 	"port",
 	"pointer",
+	"error",
 };
 
 const char* LAMBDA_TYPE_NAME[] = {
@@ -38,6 +40,7 @@ extern inline String* V2STRING(Value v);
 extern inline StringBody* V2STRING_BODY(Value v);
 extern inline Stream* V2STREAM(Value v);
 extern inline Pointer* V2POINTER(Value v);
+extern inline Error* V2ERROR(Value v);
 
 //********************************************************
 // Utility
@@ -91,8 +94,7 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		if( LAMBDA_NAME(v) != NIL ){
 			char str[128];
 			string_puts_escape( V2SYMBOL(LAMBDA_NAME(v))->str, str, sizeof(str)-1 );
-			n += snprintf( buf, len, "#<%s:%s:%p>",
-						   LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], str, v );
+			n += snprintf( buf, len, "#<%s:%s>", LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], str );
 		}else{
 			n += snprintf( buf, len, "#<%s:%p>", LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], v );
 		}
@@ -156,6 +158,14 @@ static size_t _value_to_str( char *buf, int len, Value v )
 			}else{
 				n += snprintf( buf+n, len-n, "#<port:string>" );
 			}
+		}
+		break;
+	case TYPE_ERROR:
+		{
+			Error *err = V2ERROR(v);
+			char str[128];
+			string_puts_escape( err->str, str, sizeof(str)-1 );
+			n += snprintf( buf+n, len-n, "#<error:%s>", str );
 		}
 		break;
 	default:
@@ -980,6 +990,28 @@ void stream_close( Stream *s )
 }
 
 //********************************************************
+// Error
+//********************************************************
+
+Value error_new( char *str )
+{
+	Error *e = V2ERROR(gc_new( TYPE_ERROR ));
+	e->str = string_new( str );
+	return (Value)e;
+}
+
+Value error_newf( char *str, ... )
+{
+	char buf[1024];
+	va_list list;
+	va_start( list, str );
+	vsnprintf( buf, sizeof(buf)-1, str, list );
+	va_end( list );
+
+	return error_new( buf );
+}
+
+//********************************************************
 // Syntax
 //********************************************************
 
@@ -1133,6 +1165,7 @@ Value V_LAMBDA, V_MACRO, V_DEFINE_SYNTAX;
 Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 Value V_READ_EVAL, V_READ_EVAL2;
 
+/*{{ declare_symbols */
 Value SYM_A_COMPILE_HOOK_A;
 Value SYM_QUASIQUOTE;
 Value SYM_UNQUOTE;
@@ -1141,8 +1174,17 @@ Value SYM_CURRENT_INPUT_PORT;
 Value SYM_CURRENT_OUTPUT_PORT;
 Value SYM_END_OF_LINE;
 Value SYM_VALUES;
-Value SYM_DOT, SYM_DOT3, SYM_ERROR, SYM_SYNTAX_RULES, SYM_SYNTAX_REST,
-	SYM_RUNTIME_LOAD_PATH, SYM_RUNTIME_HOME_PATH, SYM_LAMBDA, SYM_LET, SYM_LETREC;
+Value SYM_ERROR;
+Value SYM_SYNTAX_RULES;
+Value SYM_SYNTAX_REST;
+Value SYM_RUNTIME_LOAD_PATH;
+Value SYM_RUNTIME_HOME_PATH;
+Value SYM_LAMBDA;
+Value SYM_LET;
+Value SYM_LETREC;
+Value SYM_DOT;
+Value SYM_DOT3;
+/*}}*/
 
 #define _INIT_OPERATOR(v,sym,op) do{\
 	v = gc_new(TYPE_SPECIAL);		\
@@ -1232,6 +1274,7 @@ void init_prelude( const char *argv0, bool with_prelude )
 	_INIT_OPERATOR(V_READ_EVAL, "#<read-eval>", OP_READ_EVAL);
 	_INIT_OPERATOR(V_READ_EVAL2, "#<read-eval2>", OP_READ_EVAL2);
 
+	/*{{ register_symbols */
 	SYM_A_COMPILE_HOOK_A = intern("*compile-hook*");
 	SYM_QUASIQUOTE = intern("quasiquote");
 	SYM_UNQUOTE = intern("unquote");
@@ -1239,17 +1282,18 @@ void init_prelude( const char *argv0, bool with_prelude )
 	SYM_CURRENT_INPUT_PORT = intern("current-input-port");
 	SYM_CURRENT_OUTPUT_PORT = intern("current-output-port");
 	SYM_END_OF_LINE = intern("end-of-line");
-	SYM_VALUES = intern("VALUES");
-	SYM_DOT = intern(".");
-	SYM_DOT3 = intern("...");
+	SYM_VALUES = intern("values");
 	SYM_ERROR = intern("error");
 	SYM_SYNTAX_RULES = intern("syntax-rules");
-	SYM_SYNTAX_REST = intern("*syntax-rest*");
+	SYM_SYNTAX_REST = intern("syntax-rest");
 	SYM_RUNTIME_LOAD_PATH = intern("runtime-load-path");
 	SYM_RUNTIME_HOME_PATH = intern("runtime-home-path");
 	SYM_LAMBDA = intern("lambda");
 	SYM_LET = intern("let");
 	SYM_LETREC = intern("letrec");
+	SYM_DOT = intern(".");
+	SYM_DOT3 = intern("...");
+	/*}}*/
 
 	bundle_define( bundle_cur, SYM_CURRENT_INPUT_PORT, (Value)V_STDIN );
 	bundle_define( bundle_cur, SYM_CURRENT_OUTPUT_PORT, (Value)V_STDOUT );

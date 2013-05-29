@@ -23,6 +23,7 @@ typedef enum {
 	TYPE_SPECIAL,
 	TYPE_STREAM,
 	TYPE_POINTER,
+	TYPE_ERROR,
 	TYPE_MAX,
 } Type;
 
@@ -160,6 +161,11 @@ typedef struct Pointer {
 	struct Pointer *next;
 } Pointer;
 
+typedef struct {
+	CellHeader h;
+	String *str;
+} Error;
+
 #define TYPE_OF(v) ((Type)v->h.type)
 
 #define IS_INT(v) ((v)->h.type==TYPE_INT)
@@ -175,6 +181,7 @@ typedef struct Pointer {
 #define IS_SPECIAL(v) ((v)->h.type==TYPE_SPECIAL)
 #define IS_STREAM(v) ((v)->h.type==TYPE_STREAM)
 #define IS_POINTER(v) ((v)->h.type==TYPE_POINTER)
+#define IS_ERROR(v) ((v)->h.type==TYPE_ERROR)
 
 #define V2INT(v) (assert(IS_INT(v)),v->d.number)
 #define INT2V(v) (int_new(v))
@@ -191,6 +198,7 @@ inline StringBody* V2STRING_BODY(Value v){ assert(IS_STRING_BODY(v)); return (St
 #define V2SPECIAL(v) (assert(IS_SPECIAL(v)),v)
 inline Stream* V2STREAM(Value v){ assert(IS_STREAM(v)); return (Stream*)v; }
 inline Pointer* V2POINTER(Value v){ assert(IS_POINTER(v)); return (Pointer*)v; }
+inline Error* V2ERROR(Value v){ assert(IS_ERROR(v)); return (Error*)v; }
 
 size_t value_to_str( char *buf, int len, Value v );
 char* v2s( Value v );
@@ -376,6 +384,18 @@ size_t stream_read( Stream *s, char *buf, size_t len );
 size_t stream_write( Stream *s, char *buf, size_t len );
 void stream_close( Stream *s );
 
+// Error
+#define ERROR_IF_NOT_INT(v) if( !IS_INT(v) ) return error_new( "not integer" );
+#define ERROR_IF_NOT_CHAR(v) if( !IS_CHAR(v) ) return error_new( "not char" );
+#define ERROR_IF_NOT_SYMBOL(v) if( !IS_SYMBOL(v) ) return error_new( "not symbol" );
+#define ERROR_IF_NOT_PAIR(v) if( !IS_PAIR(v) ) return error_new( "not pair" );
+#define ERROR_IF_NOT_STRING(v) if( !IS_STRING(v) ) return error_new( "not string" );
+#define ERROR_IF_NOT_STREAM(v) if( !IS_STREAM(v) ) return error_new( "not stream" );
+
+Value error_new( char *str );
+Value error_newf( char *str, ... );
+
+
 // Eval in eval.c
 
 Value call( Value lmd, Value vals, Value cont, Value *result );
@@ -412,10 +432,32 @@ extern Value V_LAMBDA, V_MACRO, V_DEFINE_SYNTAX;
 extern Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 extern Value V_READ_EVAL, V_READ_EVAL2;
 
-extern Value SYM_A_COMPILE_HOOK_A, SYM_QUASIQUOTE, SYM_UNQUOTE, SYM_UNQUOTE_SPLICING,
-	SYM_CURRENT_INPUT_PORT, SYM_CURRENT_OUTPUT_PORT, SYM_END_OF_LINE, SYM_VALUES,
-	SYM_DOT, SYM_DOT3, SYM_ERROR, SYM_SYNTAX_RULES, SYM_SYNTAX_REST,
-	SYM_RUNTIME_LOAD_PATH, SYM_RUNTIME_HOME_PATH, SYM_LAMBDA, SYM_LET, SYM_LETREC;
+/*{{ define_symbols(
+  %w( *compile-hook* quasiquote unquote unquote-splicing
+  current-input-port current-output-port end-of-line values
+  error syntax-rules syntax-rest
+  runtime-load-path runtime-home-path lambda let letrec ) +
+  [[".","SYM_DOT"], ["...","SYM_DOT3"]] )
+*/
+extern Value SYM_A_COMPILE_HOOK_A;
+extern Value SYM_QUASIQUOTE;
+extern Value SYM_UNQUOTE;
+extern Value SYM_UNQUOTE_SPLICING;
+extern Value SYM_CURRENT_INPUT_PORT;
+extern Value SYM_CURRENT_OUTPUT_PORT;
+extern Value SYM_END_OF_LINE;
+extern Value SYM_VALUES;
+extern Value SYM_ERROR;
+extern Value SYM_SYNTAX_RULES;
+extern Value SYM_SYNTAX_REST;
+extern Value SYM_RUNTIME_LOAD_PATH;
+extern Value SYM_RUNTIME_HOME_PATH;
+extern Value SYM_LAMBDA;
+extern Value SYM_LET;
+extern Value SYM_LETREC;
+extern Value SYM_DOT;
+extern Value SYM_DOT3;
+/*}}*/
 
 extern bool opt_trace;
 extern bool opt_debug;

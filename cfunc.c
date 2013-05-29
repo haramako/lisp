@@ -14,8 +14,8 @@ static Value _eq_p( Value bundle, Value args )
 {
 	if( args == NIL ) return VALUE_T;
 	Value v = CAR(args);
-	for( Value cur=CDR(args); cur != NIL; cur = CDR(cur) ){
-		if( !eq( v, CAR(cur) ) ) return VALUE_F;
+	LIST_EACH( x, CDR(args) ){
+		if( !eq( v, x ) ) return VALUE_F;
 	}
 	return VALUE_T;
 }
@@ -24,8 +24,8 @@ static Value _eqv_p( Value bundle, Value args )
 {
 	if( args == NIL ) return VALUE_T;
 	Value v = CAR(args);
-	for( Value cur=CDR(args); cur != NIL; cur = CDR(cur) ){
-		if( !eqv( v, CAR(cur) ) ) return VALUE_F;
+	LIST_EACH( x, CDR(args) ){
+		if( !eqv( v, x ) ) return VALUE_F;
 	}
 	return VALUE_T;
 }
@@ -34,31 +34,35 @@ static Value _equal_p( Value bundle, Value args )
 {
 	if( args == NIL ) return VALUE_T;
 	Value v = CAR(args);
-	for( Value cur=CDR(args); cur != NIL; cur = CDR(cur) ){
-		if( !equal( v, CAR(cur) ) ) return VALUE_F;
+	LIST_EACH( x, CDR(args) ){
+		if( !equal( v, x ) ) return VALUE_F;
 	}
 	return VALUE_T;
 }
 
-static Value _defined_p( Value bundle, Value sym )
+static Value _define_p( Value bundle, Value sym )
 {
+	ERROR_IF_NOT_SYMBOL( sym );
 	return bundle_find( bundle, sym, true, false )?VALUE_T:VALUE_F;
 }
 
 static Value _add( Value bundle, Value args )
 {
 	int sum = 0;
-	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
-		sum += V2INT(CAR(cur));
+	LIST_EACH( n, args ){
+		ERROR_IF_NOT_INT(n);
+		sum += V2INT(n);
 	}
 	return INT2V(sum);
 }
 
 static Value _sub( Value bundle, Value args )
 {
+	ERROR_IF_NOT_INT(CAR(args));
 	int64_t sum = V2INT(CAR(args));
-	for( Value cur = CDR(args); cur != NIL; cur = CDR(cur) ){
-		sum -= V2INT(CAR(cur));
+	LIST_EACH( n, CDR(args) ){
+		ERROR_IF_NOT_INT(n);
+		sum -= V2INT(n);
 	}
 	return INT2V(sum);
 }
@@ -66,28 +70,45 @@ static Value _sub( Value bundle, Value args )
 static Value _mul( Value bundle, Value args )
 {
 	int sum = 1;
-	for( Value cur = args; cur != NIL; cur = CDR(cur) ){
-		sum *= V2INT(CAR(cur));
+	LIST_EACH( n, args ){
+		ERROR_IF_NOT_INT(n);
+		sum *= V2INT(n);
 	}
 	return INT2V(sum);
 }
 
 static Value _div( Value bundle, Value args )
 {
+	ERROR_IF_NOT_INT(CAR(args));
 	int64_t sum = V2INT(CAR(args));
-	for( Value cur = CDR(args); cur != NIL; cur = CDR(cur) ){
-		sum /= V2INT(CAR(cur));
+	LIST_EACH( n, CDR(args) ){
+		ERROR_IF_NOT_INT(n);
+		sum /= V2INT(n);
 	}
 	return INT2V(sum);
 }
 
 static Value _modulo( Value bundle, Value args )
 {
+	ERROR_IF_NOT_INT(CAR(args));
 	int64_t sum = V2INT(CAR(args));
-	for( Value cur = CDR(args); cur != NIL; cur = CDR(cur) ){
-		sum %= V2INT(CAR(cur));
+	LIST_EACH( n, CDR(args) ){
+		ERROR_IF_NOT_INT(n);
+		sum %= V2INT(n);
 	}
 	return INT2V(sum);
+}
+
+static Value _eq( Value bundle, Value args )
+{
+	if( args == NIL ) return VALUE_T;
+	ERROR_IF_NOT_INT(CAR(args));
+	int64_t last = V2INT(CAR(args));
+	LIST_EACH( n, CDR(args) ){
+		ERROR_IF_NOT_INT(n);
+		if( !(last == V2INT(n)) ){ return VALUE_F; }else{ last = V2INT(n); }
+	}
+	return VALUE_T;
 }
 
 #define _INT_COMPARE_FUNC(name,cmp,first)								\
@@ -106,16 +127,21 @@ _INT_COMPARE_FUNC( _greater_eq, >=, INT64_MAX )
 
 static Value _symbol_to_string( Value bundle, Value v )
 {
+	ERROR_IF_NOT_SYMBOL(v);
 	return (Value)V2SYMBOL(v)->str;
 }
 
+
+
 static Value _car( Value bundle, Value v )
 {
+	ERROR_IF_NOT_PAIR(v);
 	return CAR(v);
 }
 
 static Value _cdr( Value bundle, Value v )
 {
+	ERROR_IF_NOT_PAIR(v);
 	return CDR(v);
 }
 
@@ -126,12 +152,14 @@ static Value _cons( Value bundle, Value v1, Value v2 )
 
 static Value _set_car_i( Value bundle, Value pair, Value v )
 {
+	ERROR_IF_NOT_PAIR(pair);
 	CAR(pair) = v;
 	return NIL;
 }
 
 static Value _set_cdr_i( Value bundle, Value pair, Value v )
 {
+	ERROR_IF_NOT_PAIR(pair);
 	CDR(pair) = v;
 	return NIL;
 }
@@ -321,6 +349,7 @@ static Value _display( Value bundle, Value v, Value rest )
 	Value vport;
 	bind1arg( rest, vport );
 	if( !vport ) vport = bundle_get( bundle, SYM_CURRENT_OUTPUT_PORT, NULL );
+	ERROR_IF_NOT_STREAM(vport);
 	Stream *port = V2STREAM(vport);
 	
 	switch( TYPE_OF(v) ){
@@ -354,6 +383,7 @@ static Value _write( Value bundle, Value v, Value rest )
 	Value port;
 	bind1arg( rest, port );
 	if( !port ) port = bundle_get( bundle, SYM_CURRENT_OUTPUT_PORT, NULL );
+	ERROR_IF_NOT_STREAM( port );
 	stream_write_value( V2STREAM(port), v );
 	return NIL;
 }
@@ -371,6 +401,7 @@ static Value _write_char( Value bundle, Value v, Value rest )
 	Value port;
 	bind1arg( rest, port );
 	if( !port ) port = bundle_get( bundle, SYM_CURRENT_OUTPUT_PORT, NULL );
+	ERROR_IF_NOT_CHAR(v);
 	char c = V2CHAR(v);
 	stream_write( V2STREAM(port), &c, 1 );
 	return NIL;
@@ -378,6 +409,7 @@ static Value _write_char( Value bundle, Value v, Value rest )
 
 static Value _open_input_file( Value bundle, Value _filename )
 {
+	ERROR_IF_NOT_STRING(_filename);
 	char *filename = STRING_BUF(V2STRING(_filename));
 	FILE *fd = fopen( filename, "r" );
 	assert( fd );
@@ -386,6 +418,7 @@ static Value _open_input_file( Value bundle, Value _filename )
 
 static Value _open_output_file( Value bundle, Value _filename )
 {
+	ERROR_IF_NOT_STRING(_filename);
 	char *filename = STRING_BUF(V2STRING(_filename));
 	FILE *fd = fopen( filename, "a" );
 	assert( fd );
@@ -394,6 +427,7 @@ static Value _open_output_file( Value bundle, Value _filename )
 
 static Value _open_input_string( Value bundle, Value str )
 {
+	ERROR_IF_NOT_STRING(str);
 	Stream *s = stream_new_str( V2STRING(str) );
 	return (Value)s;
 }
@@ -406,6 +440,7 @@ static Value _open_output_string( Value bundle )
 
 static Value _close_input_port( Value bundle, Value v )
 {
+	ERROR_IF_NOT_STREAM(v);
 	Stream *s = V2STREAM(v);
 	stream_close( s );
 	return NIL;
@@ -413,14 +448,17 @@ static Value _close_input_port( Value bundle, Value v )
 
 static Value _get_output_string( Value bundle, Value v )
 {
+	ERROR_IF_NOT_STREAM(v);
 	Stream *s = V2STREAM(v);
-	assert( s->stream_type == STREAM_TYPE_STRING );
+	if( s->stream_type != STREAM_TYPE_STRING ) return error_new("not string stream");
 	return (Value)string_substr( s->u.str, 0, s->pos );
 }
 
 static Value _char_eq_p( Value bundle, Value first, Value rest )
 {
+	ERROR_IF_NOT_CHAR(first);
 	LIST_EACH( c, rest ){
+		ERROR_IF_NOT_CHAR(c);
 		if( V2CHAR(first) != V2CHAR(c) ) return VALUE_F;
 	}
 	return VALUE_T;
@@ -430,6 +468,7 @@ static Value _char_eq_p( Value bundle, Value first, Value rest )
 	static Value name( Value bundle, Value cs ){						\
 	int last = first;													\
 	LIST_EACH( c, cs ){													\
+		ERROR_IF_NOT_CHAR(c);											\
 		if( !(last cmp V2CHAR(c)) ){ return VALUE_F; }else{ last = V2CHAR(c); } \
 	}																	\
 	return VALUE_T;														\
@@ -442,28 +481,33 @@ _CHAR_COMPARE_FUNC( _char_ge_p, >=, INT_MAX )
 
 static Value _char_to_integer( Value bundle, Value v )
 {
+	ERROR_IF_NOT_CHAR(v);
 	return INT2V(V2CHAR(v));
 }
 
 static Value _integer_to_char( Value bundle, Value v )
 {
+	ERROR_IF_NOT_INT(v);
 	return CHAR2V(V2INT(v));
 }
 
 static Value _char_upcase( Value bundle, Value v )
 {
+	ERROR_IF_NOT_CHAR(v);
 	int c = V2CHAR(v);
 	return ( c >= 'a' && c <= 'z' )?CHAR2V(c-32):v;
 }
 
 static Value _char_downcase( Value bundle, Value v )
 {
+	ERROR_IF_NOT_CHAR(v);
 	int c = V2CHAR(v);
 	return ( c >= 'A' && c <= 'Z' )?CHAR2V(c+32):v;
 }
 
 static Value _number_to_string( Value bundle, Value v )
 {
+	ERROR_IF_NOT_INT(v);
 	char buf[32];
 	sprintf( buf, "%lld", V2INT(v) );
 	return (Value)string_new(buf);
@@ -471,6 +515,7 @@ static Value _number_to_string( Value bundle, Value v )
 
 static Value _string_to_number( Value bundle, Value v )
 {
+	ERROR_IF_NOT_STRING(v);
 	int num;
 	sscanf( STRING_BUF(V2STRING(v)), "%d", &num );
 	return INT2V(num);
@@ -481,6 +526,7 @@ static Value _string_append( Value bundle, Value args )
 	char buf[10240];
 	char *tail = buf;
 	for( Value cur=args; cur != NIL; cur=CDR(cur) ){
+		ERROR_IF_NOT_STRING(CAR(cur));
 		tail += sprintf( tail, "%s", STRING_BUF(V2STRING(CAR(cur))) );
 	}
 	return (Value)string_new(buf);
@@ -488,9 +534,10 @@ static Value _string_append( Value bundle, Value args )
 
 static Value _string_to_list( Value bundle, Value v )
 {
+	ERROR_IF_NOT_STRING(v);
 	char *str = STRING_BUF(V2STRING(v));
 	if( str[0] == '\0' ) return NIL;
-	
+
 	Value r = cons(CHAR2V(str[0]),NIL);
 	Value tail = r;
 	for( int i=1; str[i]; i++ ){
@@ -502,6 +549,8 @@ static Value _string_to_list( Value bundle, Value v )
 static Value _list_to_string( Value bundle, Value v )
 {
 	if( v == NIL ) return (Value)string_new("");
+	
+	ERROR_IF_NOT_PAIR(v);
 	char buf[1024];
 	int i=0;
 	LIST_EACH(cur,v){
@@ -518,6 +567,7 @@ static Value _string( Value bundle, Value cs )
 	char buf[1024];
 	int i = 0;
 	LIST_EACH(c,cs){
+		ERROR_IF_NOT_CHAR(c);
 		buf[i] = (char)V2CHAR(c);
 		i++;
 	}
@@ -527,12 +577,16 @@ static Value _string( Value bundle, Value cs )
 
 static Value _make_string( Value bundle, Value _len, Value rest )
 {
+	ERROR_IF_NOT_INT(_len);
 	char buf[1024];
 	int len = (int)V2INT(_len);
 	int c = '\0';
 	Value _c;
 	bind1arg( rest, _c );
-	if( _c ) c = V2CHAR(_c);
+	if( _c ){
+		ERROR_IF_NOT_CHAR(_c);
+		c = V2CHAR(_c);
+	}
 	memset( buf, c, len );
 	buf[len] = '\0';
 	return (Value)string_new_len(buf, len);
@@ -540,17 +594,21 @@ static Value _make_string( Value bundle, Value _len, Value rest )
 
 static Value _string_null_p( Value bundle, Value v )
 {
-	char *str = STRING_BUF(V2STRING(v));
-	return (*str == '\0')?VALUE_T:VALUE_F;
+	ERROR_IF_NOT_STRING(v);
+	String *s = V2STRING(v);
+	return (s->len == 0)?VALUE_T:VALUE_F;
 }
 
 static Value _string_length( Value bundle, Value v )
 {
+	ERROR_IF_NOT_STRING(v);
 	return INT2V( V2STRING(v)->len );
 }
 
 static Value _string_ref( Value bundle, Value v, Value _idx )
 {
+	ERROR_IF_NOT_STRING(v);
+	ERROR_IF_NOT_INT(_idx);
 	char *str = STRING_BUF(V2STRING(v));
 	int idx = (int)V2INT(_idx);
 	return CHAR2V( str[idx] );
@@ -620,9 +678,8 @@ void cfunc_init()
 	defun( "identity", 1, _identity );
 	defun( "eq?", -1, _eq_p );
 	defun( "eqv?", -1, _eqv_p );
-	defun( "=", -1, _eqv_p );
 	defun( "equal?", -1, _equal_p );
-	defun( "defined?", 1, _defined_p );
+	defun( "define?", 1, _define_p );
 
 	// number
 	defun( "+", -1, _add );
@@ -631,6 +688,7 @@ void cfunc_init()
 	defun( "/", -1, _div );
 	defun( "quotient", -1, _div );
 	defun( "modulo", -1, _modulo );
+	defun( "=", -1, _eq );
 	defun( "<", -1, _less );
 	defun( "<=", -1, _less_eq );
 	defun( ">", -1, _greater );
@@ -676,7 +734,7 @@ void cfunc_init()
 	defun( "load", CFUNC_ARITY_RAW, _load );
 	defun( "exit", CFUNC_ARITY_RAW, _exit );
 
-	// Port
+	// port
 	defun( "eof-object?", 1, _eof_object_p );
 	defun( "display", -2, _display );
 	defun( "write", -2, _write );

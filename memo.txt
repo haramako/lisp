@@ -1,12 +1,13 @@
 
-* cfuncのエラー処理をちゃんとする
-* 本物の多値
+* pairにファイル：行番号の情報を与える
 * syntax のシンボルを保護的に
 * syntax を別オブジェクトに
 * define-macro を scheme的に
 * intを埋め込みに
+* 本物の多値
 * 継続をもうちょっと能率的に
 
+- cfuncのエラー処理をちゃんとする
 - stringをNULL終端ではなく、長さベースに
 - require を二度読み防止する
 - retainをCのポインタベースにする

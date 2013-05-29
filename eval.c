@@ -50,7 +50,7 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 				Value v[8] = {NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
 				
 				for( int i=0; i<arg_num; i++ ){
-					if( vals == NIL ){ printf("%s %d\n", v2s(lmd), i); assert(0); }
+					if( vals == NIL ) goto error_args;
 					v[i] = CAR(vals);
 					vals = CDR(vals);
 				}
@@ -59,7 +59,7 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 					v[arg_num] = vals;
 					arg_num++;
 				}else{
-					if( vals != NIL ) assert(0);
+					if( vals != NIL ) goto error_args;
 				}
 				
 				switch( arg_num ){
@@ -74,12 +74,26 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 				default:
 					assert(0);
 				}
-				return CONTINUATION_NEXT(cont);
+				
+				// handle error
+				if( IS_ERROR(*result) ){
+					Error *err = V2ERROR(*result);
+					*result = NIL;
+					char str[128];
+					snprintf( str, sizeof(str)-1, "in %s", v2s(CFUNC_NAME(lmd)));
+					return continuation_new( cons4( SYM_ERROR, (Value)err->str, (Value)string_new(str), NIL),
+											   CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
+				}else{
+					return CONTINUATION_NEXT(cont);
+				}
 			}
 		}
 	default:
 		assert(0);
 	}
+ error_args:
+	return continuation_new( cons4( SYM_ERROR, (Value)string_new("invalid argument number"), lmd, NIL),
+							 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
 }
 
 #define NEXT(_cont,_v) do{ Value r = _v; cont = _cont; result = (r); goto _loop; }while(0)
@@ -189,8 +203,9 @@ Value eval_loop( Stream *stream )
 	
 	switch( TYPE_OF(C_CODE(cont)) ){
 	case TYPE_UNUSED:
-	case TYPE_POINTER:
 	case TYPE_STRING_BODY:
+	case TYPE_POINTER:
+	case TYPE_ERROR:
 	case TYPE_MAX:
 		assert(0);
 	case TYPE_NIL:

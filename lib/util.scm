@@ -1,13 +1,5 @@
 
 ;;; (for (?v ?list) ?body ...)
-(define-syntax for
-  (syntax-rules ()
-	((_ (?v ?list) ?body ...)
-	 (let loop ((*list* ?list))
-	   (if (not (pair? *list*)) #f
-		   (let ((?v (car *list*)))
-			 ?body ...
-			 (loop (cdr *list*))))))))
 
 (define (with-output-string func)
   (let ((s (open-output-string)))
