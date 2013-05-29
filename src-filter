@@ -4,54 +4,58 @@ require 'pp'
 require 'fileutils'
 require 'tempfile'
 
-REPLACE_STR = {'*'=>'_A_', '-'=>'_', '?'=>'_P'}
+
+SCM2C = {'*'=>'_A_', '-'=>'_', '?'=>'_P'}
+C2SCM = {'_'=>'-', '_p'=>'?', '_i'=>'!', '_a'=>'*', '_to_'=>'->'}
+
+def scm2c( str )
+  str.gsub(/\*|-|\?/){|s| SCM2C[s]}.gsub(/^_|_$/,'')
+end
+
+def c2scm( str )
+  str.gsub(/_to_|_p$|_a$|_i$|_/){|s| C2SCM[s] }
+end
 
 $symbols = []
 
 def define_symbols( args )
   args.map! do |sym|
     if sym.is_a?( Array )
-      sym
+      {:sym => sym[0], :id => sym[1] }
     else
-      [sym, 'SYM_'+sym.upcase.gsub(/\*|-|\?/){|s| REPLACE_STR[s]}.gsub(/^_|_$/,'') ]
+      {:sym => sym, :id => 'SYM_'+scm2c(sym).upcase }
     end
   end
   $symbols = args
 
-  args.map do |sym_id|
-    sym, id = *sym_id
-    "extern Value #{id};"
+  args.map do |sym|
+    "extern Value #{sym[:id]};"
   end
 end
 
 def declare_symbols()
-  $symbols.map do |sym_id|
-    sym, id = *sym_id
-    "Value #{id};"
+  $symbols.map do |sym|
+    "Value #{sym[:id]};"
   end
 end
 
 def register_symbols()
-  $symbols.map do |sym_id|
-    sym, id = *sym_id
-    "#{id} = intern(\"#{sym}\");"
+  $symbols.map do |sym|
+    "#{sym[:id]} = intern(\"#{sym[:sym]}\");"
   end
 end
-
-C2SCHEME = {'_'=>'-', '_p'=>'?', '_i'=>'!', '_a'=>'*', '_to_'=>'->'}
 
 def register_cfunc(src)
   cfuncs = []
   src.gsub( /static Value ([\w\d_]+)\(.+?\)\s*\/\*\s*(.+?)\s*\*\// ) do |m|
-    func = $1
+    id = $1
     arity, sym = *($2.split(' '))
-    sym = func[1..-1].gsub(/_to_|_p$|_a$|_i$|_/){|s| C2SCHEME[s]} if !sym
-    data = [sym, arity, func]
-    cfuncs << data
+    sym = c2scm( id[1..-1] ) if !sym
+    cfuncs << {:id => id, :arity => arity, :sym => sym }
   end
   # pp cfuncs
   cfuncs.map do |f|
-    "defun( \"#{f[0]}\", #{f[1]}, #{f[2]} );"
+    "defun( \"#{f[:sym]}\", #{f[:arity]}, #{f[:id]} );"
   end
 end
 

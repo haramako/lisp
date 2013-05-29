@@ -457,6 +457,14 @@ static Value _close_input_port( Value bundle, Value v ) /* 1 */
 	return NIL;
 }
 
+static Value _close_output_port( Value bundle, Value v ) /* 1 */
+{
+	ERROR_IF_NOT_STREAM(v);
+	Stream *s = V2STREAM(v);
+	stream_close( s );
+	return NIL;
+}
+
 static Value _get_output_string( Value bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_STREAM(v);
@@ -750,6 +758,7 @@ void cfunc_init()
 	defun( "open-input-string", 1, _open_input_string );
 	defun( "open-output-string", 0, _open_output_string );
 	defun( "close-input-port", 1, _close_input_port );
+	defun( "close-output-port", 1, _close_output_port );
 	defun( "get-output-string", 1, _get_output_string );
 	defun( "char=?", -2, _char_eq_p );
 	defun( "char<?", -1, _char_lt_p );
