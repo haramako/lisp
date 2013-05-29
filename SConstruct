@@ -24,7 +24,7 @@ LISP_LIBS = ['lisp.c', 'eval.c', 'gc.c', 'dict.c', 'cfunc.c']
 env.Program('mlisp', ['main.c'] + LISP_LIBS)
 env.Program('test_mlisp', ['test.c'] + LISP_LIBS)
 
-env.Command('do_src_filter', [], './src-filter lisp.h lisp.c')
+env.Command('do_src_filter', [], './src-filter lisp.h lisp.c cfunc.c')
 env.Command('test', ['test_mlisp','mlisp'], ['./test_mlisp', do_test])
 env.Command('tags', [], ['gtags'])
 env.Clean('tags',['GPATH','GTAGS','GRTAGS'])

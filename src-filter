@@ -38,12 +38,29 @@ def register_symbols()
   end
 end
 
+C2SCHEME = {'_'=>'-', '_p'=>'?', '_i'=>'!', '_a'=>'*', '_to_'=>'->'}
+
+def register_cfunc(src)
+  cfuncs = []
+  src.gsub( /static Value ([\w\d_]+)\(.+?\)\s*\/\*\s*(.+?)\s*\*\// ) do |m|
+    func = $1
+    arity, sym = *($2.split(' '))
+    sym = func[1..-1].gsub(/_to_|_p$|_a$|_i$|_/){|s| C2SCHEME[s]} if !sym
+    data = [sym, arity, func]
+    cfuncs << data
+  end
+  # pp cfuncs
+  cfuncs.map do |f|
+    "defun( \"#{f[0]}\", #{f[1]}, #{f[2]} );"
+  end
+end
+
 ########################################################
 # SRC-FILTER
 ########################################################
 
-def parse( str )
-  str.gsub( /([ \t]*)\/\*{{(.+?)\*\/(.*?)\/\*}}\*\//m ) do |mo|
+def parse( src )
+  src.gsub( /([ \t]*)\/\*{{(.+?)\*\/(.*?)\/\*}}\*\//m ) do |mo|
     indent = $1
     code = $2
     raise if $3.match(/\/\*{{/)
