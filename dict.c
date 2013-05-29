@@ -6,7 +6,6 @@
 
 Dict* dict_new_size( int size, HashFunction hash_func, CompareFunction comp_func )
 {
-	// printf( "dict_new_size: %d\n", size );
 	Dict *dict = malloc(sizeof(Dict)+sizeof(DictEntry*)*(size-1));
 	dict->size = size;
 	dict->hash_func = hash_func;
@@ -34,8 +33,6 @@ void dict_free( Dict *d )
 
 Dict* dict_rehash( Dict *d )
 {
-    return d;
-	// printf( "rehash %p size:%d\n", d, d->size );
 	Dict *new_dict = dict_new_size( d->size * 1.7, d->hash_func, d->comp_func );
 	for( int i=0; i<d->size; i++ ){
 		for( DictEntry *cur = d->entry[i]; cur; cur = cur->next ){
@@ -51,7 +48,6 @@ DictEntry* dict_find( Dict *d, Value key, bool create )
 	int idx = d->hash_func( key ) % d->size;
 	assert( idx < d->size );
 	for( DictEntry *cur = d->entry[idx]; cur; cur = cur->next ){
-		// display_val( "dict_find: ", cons( cur->key, key ) );
 		if( d->comp_func( cur->key, key ) ) return cur;
 	}
 	if( create ){

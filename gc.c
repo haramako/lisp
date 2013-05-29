@@ -28,7 +28,6 @@ static Cell* _alloc( int arena_idx )
 		int cell_size = _arena_size[arena_idx];
 		int count = ( ARENA_SIZE - sizeof(Arena) ) / cell_size;
 		void *cur = ARENA_ENTRY(arena);
-		// printf( "arena_new: %d %d %p\n", cell_size, count, cur );
 		for( int i=0; i<count; i++, cur += cell_size ){
 			((Cell*)cur)->h.type = TYPE_UNUSED;
 			((Cell*)cur)->d.unused.next = (i<(count-1))?(cur+cell_size):(NULL);
@@ -57,7 +56,7 @@ Value gc_new( Type type )
 		arena_idx = 0;
 	}
 	
-	// cellのallocate
+	// allocate cell
 	Cell *cell = _alloc(arena_idx);
 	assert( cell->h.type == TYPE_UNUSED );
 	_cell_next[arena_idx] = cell->d.unused.next;
@@ -97,7 +96,6 @@ static void _mark_dict( Dict *d )
 {
 	for( int i=0; i<d->size; i++ ){
 		for( DictEntry *cur = d->entry[i]; cur; cur = cur->next ){
-			// display_val( "mark_dict: ", cons( cur->key, cur->val ) );
 			_mark( cur->key );
 			_mark( cur->val );
 		}
@@ -162,7 +160,6 @@ static void _mark( Value v )
 	case TYPE_POINTER:
 		{
 			Pointer *p = V2POINTER(v);
-			// printf( "mark pointer: %p %p\n", *p->ptr, p->next );
 			_mark( *(p->ptr) );
 			_mark( (Value)p->next );
 		}
@@ -174,7 +171,6 @@ static void _mark( Value v )
 
 static void _free( Value v )
 {
-	// printf( "_free: %s\n", TYPE_NAMES[TYPE_OF(v)] );
 	switch( TYPE_OF(v) ){
 	case TYPE_STRING_BODY:
 		free( V2STRING_BODY(v)->buf );
@@ -208,7 +204,6 @@ void gc_finalize()
 		while( _arena_root[arena_idx] != NULL ){
 			Arena *cur = _arena_root[arena_idx];
 			_arena_root[arena_idx] = _arena_root[arena_idx]->next;
-			// printf( "free arena %p\n", cur );
 			free( cur );
 		}
 	}
@@ -230,7 +225,6 @@ void gc_run( int verbose )
 			int size = arena->size;
 			for( int i=0; i<count; i++, p+=size){
 				Value cur = (Cell*)p;
-				//if( TYPE_OF(cur) == TYPE_UNUSED ) continue;
 				if( cur->h.type == TYPE_UNUSED ) continue;
 				all++;
 

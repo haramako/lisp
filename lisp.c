@@ -57,7 +57,6 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		return n;
 	}
 	
-	// printf( "%s\n", TYPE_NAMES[(int)TYPE_OF(v)] );
 	switch( TYPE_OF(v) ){
 	case TYPE_UNUSED:
 		assert(0);
