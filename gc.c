@@ -47,10 +47,11 @@ Value gc_new( Type type )
 {
 	int arena_idx;
 	switch( type ){
-	case TYPE_STREAM:
-	case TYPE_STRING:
 	case TYPE_STRING_BODY:
+	case TYPE_STRING:
+	case TYPE_LAMBDA:
 	case TYPE_BUNDLE:
+	case TYPE_STREAM:
 		arena_idx = 1;
 		break;
 	default:
@@ -134,18 +135,23 @@ static void _mark( Value v )
 		_mark( CDR(v) );
 		break;
 	case TYPE_LAMBDA:
-		_mark( LAMBDA_DATA(v) );
-		_mark( (Value)LAMBDA_BUNDLE(v) );
+		{
+			Lambda *lmd = V2LAMBDA(v);
+			_mark( V(lmd->bundle) );
+			_mark( V(lmd->name) );
+			_mark( lmd->args );
+			_mark( lmd->body );
+		}
 		break;
 	case TYPE_CFUNC:
-		_mark( CFUNC_NAME(v) );
+		_mark( V(CFUNC_NAME(v)) );
 		break;
 	case TYPE_BUNDLE:
 		{
 			Bundle *b = V2BUNDLE(v);
 			_mark_dict( b->dict );
 			_mark( (Value)b->upper );
-			_mark( b->lambda );
+			_mark( V(b->lambda) );
 		}
 		break;
 	case TYPE_CONTINUATION:
@@ -201,6 +207,7 @@ void gc_init()
 	_arena_size[0] = sizeof(Cell);
 	_arena_size[1] = sizeof(Cell);
 	if( _arena_size[1] < sizeof(Stream) ) _arena_size[1] = sizeof(Stream);
+	if( _arena_size[1] < sizeof(Lambda) ) _arena_size[1] = sizeof(Lambda);
 }
 
 void gc_finalize()
@@ -219,6 +226,7 @@ void gc_run( int verbose )
 	_color = 1 - _color;
 	
 	// root mark
+	_mark_dict( symbol_root );
 	_mark( (Value)retained );
 
 	// sweep
@@ -235,6 +243,7 @@ void gc_run( int verbose )
 
 				if( cur->h.marked != _color ){
 					_free( cur );
+					cur->h.flag = cur->h.type; // for debug: save h.type to h.flag;
 					cur->h.type = TYPE_UNUSED;
 					cur->d.unused.next = _cell_next[arena_idx];
 					_cell_next[arena_idx] = cur;

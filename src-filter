@@ -29,13 +29,13 @@ def define_symbols( args )
   $symbols = args
 
   args.map do |sym|
-    "extern Value #{sym[:id]};"
+    "extern Symbol *#{sym[:id]};"
   end
 end
 
 def declare_symbols()
   $symbols.map do |sym|
-    "Value #{sym[:id]};"
+    "Symbol * #{sym[:id]};"
   end
 end
 

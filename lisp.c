@@ -38,6 +38,7 @@ const char* LAMBDA_TYPE_NAME[] = {
 extern inline Symbol* V2SYMBOL(Value v);
 extern inline String* V2STRING(Value v);
 extern inline StringBody* V2STRING_BODY(Value v);
+extern inline Lambda* V2LAMBDA(Value v);
 extern inline Bundle* V2BUNDLE(Value v);
 extern inline Stream* V2STREAM(Value v);
 extern inline Pointer* V2POINTER(Value v);
@@ -91,18 +92,21 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		buf[n++] = '"';
 		break;
 	case TYPE_LAMBDA:
-		if( LAMBDA_NAME(v) != NIL ){
-			char str[128];
-			string_puts_escape( V2SYMBOL(LAMBDA_NAME(v))->str, str, sizeof(str)-1 );
-			n += snprintf( buf, len, "#<%s:%s>", LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], str );
-		}else{
-			n += snprintf( buf, len, "#<%s:%p>", LAMBDA_TYPE_NAME[LAMBDA_TYPE(v)], v );
+		{
+			Lambda *lmd = V2LAMBDA(v);
+			if( lmd->name != NULL ){
+				char str[128];
+				string_puts_escape( lmd->name->str, str, sizeof(str)-1 );
+				n += snprintf( buf, len, "#<%s:%s>", LAMBDA_TYPE_NAME[lmd->type], str );
+			}else{
+				n += snprintf( buf, len, "#<%s:%p>", LAMBDA_TYPE_NAME[lmd->type], v );
+			}
 		}
 		break;
 	case TYPE_CFUNC:
-		if( CFUNC_NAME(v) != NIL ){
+		if( CFUNC_NAME(v) ){
 			char str[128];
-			string_puts_escape( V2SYMBOL(CFUNC_NAME(v))->str, str, sizeof(str)-1 );
+			string_puts_escape( CFUNC_NAME(v)->str, str, sizeof(str)-1 );
 			n += snprintf( buf, len, "#<cfunc:%s>", str );
 		}else{
 			n += snprintf( buf, len, "#<cfunc:%p>", CFUNC_FUNC(v) );
@@ -314,18 +318,18 @@ Value char_new( int i )
 // Symbol
 //********************************************************
 
-Bundle *symbol_root = NULL;
+Dict *symbol_root = NULL;
 
-Value intern( char *sym )
+Symbol* intern( char *sym )
 {
 	String* str = string_new(sym);
-	DictEntry *entry = bundle_find( symbol_root, (Value)str, false, true );
+	DictEntry *entry = dict_find( symbol_root, V(str), true );
 	if( entry->val == NIL ){
 		Symbol* val = V2SYMBOL(gc_new(TYPE_SYMBOL));
 		val->str = str;
-		entry->val = (Value)val;
+		entry->val = V(val);
 	}
-	return entry->val;
+	return V2SYMBOL(entry->val);
 }
 
 //********************************************************
@@ -408,12 +412,15 @@ String* string_substr( String *s, int start, int len )
 // Lambda
 //********************************************************
 
-Value lambda_new()
+Lambda* lambda_new()
 {
-	Value v = gc_new(TYPE_LAMBDA);
-	LAMBDA_DATA(v) = NIL;
-	LAMBDA_BUNDLE(v) = NULL;
-	return v;
+	Lambda *lmd = V2LAMBDA(gc_new(TYPE_LAMBDA));
+	lmd->type = 0;
+	lmd->name = NULL;
+	lmd->args = NULL;
+	lmd->body = NULL;
+	lmd->bundle = NULL;
+	return lmd;
 }
 
 //********************************************************
@@ -424,7 +431,7 @@ Value cfunc_new(int arity, void *func )
 {
 	Value v = gc_new(TYPE_CFUNC);
 	CFUNC_ARITY(v) = arity;
-	CFUNC_NAME(v) = NIL;
+	CFUNC_NAME(v) = NULL;
 	CFUNC_FUNC(v) = func;
 	return v;
 }
@@ -488,11 +495,11 @@ Bundle *bundle_new( Bundle *upper )
 	return b;
 }
 
-DictEntry* bundle_find( Bundle *b, Value sym, bool find_upper, bool create )
+DictEntry* bundle_find( Bundle *b, Symbol *sym, bool find_upper, bool create )
 {
 	if( find_upper && b->upper != NULL ){
 		// 自分のを探す
-		DictEntry *entry = dict_find( b->dict, sym, false );
+		DictEntry *entry = dict_find( b->dict, V(sym), false );
 		if( entry ) return entry;
 		
 		// 親のを探す
@@ -506,21 +513,21 @@ DictEntry* bundle_find( Bundle *b, Value sym, bool find_upper, bool create )
 			return NULL;
 		}
 	}else{
-		return dict_find( b->dict, sym, create );
+		return dict_find( b->dict, V(sym), create );
 	}
 }
 
-void bundle_set( Bundle *b, Value sym, Value v )
+void bundle_set( Bundle *b, Symbol *sym, Value v )
 {
 	DictEntry *entry = bundle_find( b, sym, true, false );
 	if( !entry ){
-		printf( "bundle_set: %s\n", v2s(sym) );
+		printf( "bundle_set: %s\n", v2s(V(sym)) );
 		assert( !"cannot set" );
 	}
 	entry->val = v;
 }
 
-void bundle_define( Bundle *b, Value sym, Value v )
+void bundle_define( Bundle *b, Symbol *sym, Value v )
 {
 	// サイズが大きいならリサイズ
 	Dict *d = b->dict;
@@ -529,11 +536,11 @@ void bundle_define( Bundle *b, Value sym, Value v )
 	DictEntry *entry = bundle_find( b, sym, false, true );
 	entry->val = v;
 
-	if( IS_LAMBDA(v) && LAMBDA_NAME(v) == NIL ) LAMBDA_NAME(v) = sym;
-	if( IS_CFUNC(v) && CFUNC_NAME(v) == NIL ) CFUNC_NAME(v) = sym;
+	if( IS_LAMBDA(v) && !V2LAMBDA(v)->name ) V2LAMBDA(v)->name = sym;
+	if( IS_CFUNC(v) && CFUNC_NAME(v) ) CFUNC_NAME(v) = sym;
 }
 
-Value bundle_get( Bundle *b, Value sym, Value def )
+Value bundle_get( Bundle *b, Symbol *sym, Value def )
 {
 	DictEntry *entry = bundle_find( b, sym, true, false );
 	if( entry ){
@@ -599,7 +606,7 @@ int _parse_list( Stream *s, Value *result )
 		err = _parse( s, &val );
 		if( err ) return err;
 
-		if( val == SYM_DOT ){
+		if( val == V(SYM_DOT) ){
 			err = _parse( s, &cdr );
 			if( err ) return err;
 			*result = cdr;
@@ -643,12 +650,12 @@ static Value _parse_token( char *str )
 	if( isnumber(str[0]) || (str[0] == '-' && isnumber(str[1])) ){
 		for( char *s = str+1; *s != '\0'; s++ ){
 			if( !isnumber(*s) ){
-				return intern(str);
+				return V(intern(str));
 			}
 		}
 		return INT2V(atoi(str));
 	}else{
-		return intern( str );
+		return V(intern( str ));
 	}
 }
 
@@ -756,7 +763,7 @@ int _parse( Stream *s, Value *result )
 			// for debug pringint
 			err = _parse(s,result);
 			if( err ) return err;
-			*result = cons3( intern("*tee*"), *result, NIL );
+			*result = cons3( V(intern("*tee*")), *result, NIL );
 			return 0;
 		case '|':
 			// multi-line comment
@@ -858,13 +865,13 @@ int _parse( Stream *s, Value *result )
 	case '`':
 		err = _parse( s, result );
 		if( err ) return err;
-		*result = cons( SYM_QUASIQUOTE, cons(*result,NIL) );
+		*result = cons( V(SYM_QUASIQUOTE), cons(*result,NIL) );
 		return err;
 	case ',':
 		{
-			Value sym = SYM_UNQUOTE;
+			Value sym = V(SYM_UNQUOTE);
 			if( (c = stream_getc(s)) == '@' ){
-				sym = SYM_UNQUOTE_SPLICING;
+				sym = V(SYM_UNQUOTE_SPLICING);
 			}else{
 				stream_ungetc(c,s);
 			}
@@ -1022,9 +1029,9 @@ static Value _syntax_expand_body( Value body, Dict *bundle )
 	for( Value cur=body; cur != NIL; cur=CDR(cur) ){
 		Value found = dict_get( bundle, CAR(cur) );
 		if( found ){
-			if( IS_PAIR(CDR(cur)) && CADR(cur) == SYM_DOT3 ){
+			if( IS_PAIR(CDR(cur)) && CADR(cur) == V(SYM_DOT3) ){
 				Value next = CDDR(cur);
-				if( CAR(found) != SYM_SYNTAX_REST ) assert(0);
+				if( CAR(found) != V(SYM_SYNTAX_REST) ) assert(0);
 				found = CDR(found);
 				if( found != NIL ){
 					found = list_copy( found );
@@ -1072,8 +1079,8 @@ static bool _syntax_match( Value keywords, Value rule, Value code, Dict *bundle 
 		}
 
 		// match pattern
-		if( IS_PAIR(CDR(c)) && CADR(c) == SYM_DOT3 ){
-			dict_set( bundle, CAR(c), cons( SYM_SYNTAX_REST, code ));
+		if( IS_PAIR(CDR(c)) && CADR(c) == V(SYM_DOT3) ){
+			dict_set( bundle, CAR(c), cons( V(SYM_SYNTAX_REST), code ));
 			// printf( "bind %s => %s\n", v2s(CAR(c)), v2s(code) );
 			return true;
 		}else{
@@ -1096,11 +1103,11 @@ Value syntax_expand1( Value code )
 {
 	if( !IS_PAIR(code) ) return code;
 	code = normalize_let( code );
-	Value syntax = bundle_get( bundle_cur, CAR(code), NIL );
+	Value syntax = bundle_get( bundle_cur, (Symbol*)CAR(code), NIL );
 	if( !IS_PAIR(syntax) ) return code;
 	Value sym, keywords, rules;
 	bind3cdr( syntax, sym, keywords, rules );
-	if( sym != SYM_SYNTAX_RULES ) return code;
+	if( sym != V(SYM_SYNTAX_RULES) ) return code;
 	if( keywords == NULL || rules == NULL ) assert(0);
 	
 	// printf( "matching: %s %s\n", v2s(rules), v2s(code) );
@@ -1167,24 +1174,24 @@ Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 Value V_READ_EVAL, V_READ_EVAL2;
 
 /*{{ declare_symbols */
-Value SYM_A_COMPILE_HOOK_A;
-Value SYM_QUASIQUOTE;
-Value SYM_UNQUOTE;
-Value SYM_UNQUOTE_SPLICING;
-Value SYM_CURRENT_INPUT_PORT;
-Value SYM_CURRENT_OUTPUT_PORT;
-Value SYM_END_OF_LINE;
-Value SYM_VALUES;
-Value SYM_ERROR;
-Value SYM_SYNTAX_RULES;
-Value SYM_SYNTAX_REST;
-Value SYM_RUNTIME_LOAD_PATH;
-Value SYM_RUNTIME_HOME_PATH;
-Value SYM_LAMBDA;
-Value SYM_LET;
-Value SYM_LETREC;
-Value SYM_DOT;
-Value SYM_DOT3;
+Symbol * SYM_A_COMPILE_HOOK_A;
+Symbol * SYM_QUASIQUOTE;
+Symbol * SYM_UNQUOTE;
+Symbol * SYM_UNQUOTE_SPLICING;
+Symbol * SYM_CURRENT_INPUT_PORT;
+Symbol * SYM_CURRENT_OUTPUT_PORT;
+Symbol * SYM_END_OF_LINE;
+Symbol * SYM_VALUES;
+Symbol * SYM_ERROR;
+Symbol * SYM_SYNTAX_RULES;
+Symbol * SYM_SYNTAX_REST;
+Symbol * SYM_RUNTIME_LOAD_PATH;
+Symbol * SYM_RUNTIME_HOME_PATH;
+Symbol * SYM_LAMBDA;
+Symbol * SYM_LET;
+Symbol * SYM_LETREC;
+Symbol * SYM_DOT;
+Symbol * SYM_DOT3;
 /*}}*/
 
 #define _INIT_OPERATOR(v,sym,op) do{\
@@ -1236,8 +1243,7 @@ void init_prelude( const char *argv0, bool with_prelude )
 	
 	bundle_cur = bundle_new( NULL );
 	retain( (Value*)&bundle_cur );
-	symbol_root = bundle_new( NULL );
-	retain( (Value*)&symbol_root );
+	symbol_root = dict_new( hash_eqv, eqv );
 	
 	V_EOF = gc_new(TYPE_SPECIAL);
 	retain( &V_EOF );

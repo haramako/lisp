@@ -43,7 +43,7 @@ static Value _equal_p( Bundle *bundle, Value args ) /* -1 */
 static Value _define_p( Bundle *bundle, Value sym ) /* 1 */
 {
 	ERROR_IF_NOT_SYMBOL( sym );
-	return bundle_find( bundle, sym, true, false )?VALUE_T:VALUE_F;
+	return bundle_find( bundle, V2SYMBOL(sym), true, false )?VALUE_T:VALUE_F;
 }
 
 static Value _add( Bundle *bundle, Value args ) /* -1 + */
@@ -242,7 +242,7 @@ static Value _procedure_p( Bundle *bundle, Value v ) /* 1 */
 
 static Value _macro_p( Bundle *bundle, Value v ) /* 1 */
 {
-	return (TYPE_OF(v)==TYPE_LAMBDA&&LAMBDA_TYPE(v)==LAMBDA_TYPE_MACRO)?VALUE_T:VALUE_F;
+	return (TYPE_OF(v)==TYPE_LAMBDA&&V2LAMBDA(v)->type==LAMBDA_TYPE_MACRO)?VALUE_T:VALUE_F;
 }
 
 static Value _apply( Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW */
@@ -253,7 +253,7 @@ static Value _apply( Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW 
 		{
 			Value rest = CADR(args);
 			if( IS_PAIR(CDR(rest)) ){
-				*result = cons( intern("VALUES"), rest );
+				*result = cons( V(intern("VALUES")), rest );
 			}else{
 				*result = CAR(rest);
 			}

@@ -64,9 +64,9 @@ typedef enum {
 extern const char* LAMBDA_TYPE_NAME[];
 
 typedef struct Cell* Value;
+typedef struct Bundle Bundle;
 
 #define CFUNC_ARITY_RAW 127
-typedef struct Bundle Bundle;
 
 typedef Value (*CFunction)( Value args, Value cont, Value *result );
 typedef Value (*CFunction0)( Bundle *bundle );
@@ -96,11 +96,7 @@ typedef struct Cell {
 			Value cdr;
 		} pair;
 		struct {
-			struct Bundle *bundle;
-			Value data; // (name arg . body)
-		} lambda;
-		struct {
-			Value name;
+			struct Symbol *name;
 			void *func;
 		} cfunc;
 		struct {
@@ -114,14 +110,7 @@ typedef struct Cell {
 	} d;
 } Cell;
 
-struct Bundle {
-	CellHeader h;
-	struct Dict *dict;
-	struct Bundle *upper;
-	Value lambda;
-};
-
-typedef struct {
+typedef struct Symbol {
 	CellHeader h;
 	struct String *str;
 } Symbol;
@@ -138,6 +127,22 @@ typedef struct String {
 	size_t start;
 	size_t len;
 } String;
+
+typedef struct Lambda {
+	CellHeader h;
+	Bundle *bundle;
+	LambdaType type;
+	Symbol *name;
+	Value args;
+	Value body;
+} Lambda;
+
+struct Bundle {
+	CellHeader h;
+	struct Dict *dict;
+	struct Bundle *upper;
+	Lambda *lambda;
+};
 
 typedef enum {
 	STREAM_TYPE_FILE,
@@ -170,7 +175,7 @@ typedef struct {
 	String *str;
 } Error;
 
-#define TYPE_OF(v) ((Type)v->h.type)
+#define TYPE_OF(v) ((Type)(v)->h.type)
 
 #define IS_INT(v) ((v)->h.type==TYPE_INT)
 #define IS_CHAR(v) ((v)->h.type==TYPE_CHAR)
@@ -187,6 +192,7 @@ typedef struct {
 #define IS_POINTER(v) ((v)->h.type==TYPE_POINTER)
 #define IS_ERROR(v) ((v)->h.type==TYPE_ERROR)
 
+#define V(v) ((Value)v)
 #define V2INT(v) (assert(IS_INT(v)),v->d.number)
 #define INT2V(v) (int_new(v))
 #define V2CHAR(v) (assert(IS_CHAR(v)),(int)v->d.number)
@@ -195,7 +201,7 @@ inline Symbol* V2SYMBOL(Value v){ assert(IS_SYMBOL(v)); return (Symbol*)v; }
 inline String* V2STRING(Value v){ assert(IS_STRING(v)); return (String*)v; }
 inline StringBody* V2STRING_BODY(Value v){ assert(IS_STRING_BODY(v)); return (StringBody*)v; }
 #define V2PAIR(v) (assert(IS_PAIR(v)),v)
-#define V2LAMBDA(v) (assert(IS_LAMBDA(v)),v)
+inline Lambda* V2LAMBDA(Value v){ assert(IS_LAMBDA(v)); return (Lambda*)v; }
 #define V2CFUNC(v) (assert(IS_CFUNC(v)),v)
 inline Bundle* V2BUNDLE(Value v){ assert(IS_BUNDLE(v)); return (Bundle*)v; }
 #define V2CONTINUATION(v) (assert(IS_CONTINUATION(v)),v)
@@ -268,8 +274,8 @@ Value char_new( int i );
 #define SYMBOL_STR(v) (V2SYMBOL(v)->d.symbol.str)
 #define SYMBOL_NEXT(v) (V2SYMBOL(v)->d.symbol.next)
 
-extern Bundle *symbol_root;
-Value intern( char *sym );
+extern Dict *symbol_root;
+Symbol* intern( char *sym );
 
 // String
 
@@ -283,14 +289,7 @@ String* string_substr( String *s, int start, int len );
 
 // Lambda
 
-#define LAMBDA_TYPE(v) (V2LAMBDA(v)->h.flag)
-#define LAMBDA_DATA(v) (V2LAMBDA(v)->d.lambda.data)
-#define LAMBDA_NAME(v) (CAR(V2LAMBDA(v)->d.lambda.data))
-#define LAMBDA_ARGS(v) (CAR(CDR(V2LAMBDA(v)->d.lambda.data)))
-#define LAMBDA_BODY(v) (CDR(CDR(V2LAMBDA(v)->d.lambda.data)))
-#define LAMBDA_BUNDLE(v) (V2LAMBDA(v)->d.lambda.bundle)
-
-Value lambda_new();
+Lambda *lambda_new();
 
 // CFunc
 
@@ -351,10 +350,10 @@ Value list_tail( Value list );
 
 extern Bundle *bundle_cur;
 Bundle *bundle_new( Bundle *upper );
-DictEntry* bundle_find( Bundle *b, Value sym, bool find_upper, bool create );
-void bundle_set( Bundle *b, Value sym, Value v );
-void bundle_define( Bundle *b, Value sym, Value v );
-Value bundle_get( Bundle *b, Value sym, Value def );
+DictEntry* bundle_find( Bundle *b, Symbol *sym, bool find_upper, bool create );
+void bundle_set( Bundle *b, Symbol *sym, Value v );
+void bundle_define( Bundle *b, Symbol *sym, Value v );
+Value bundle_get( Bundle *b, Symbol *sym, Value def );
 
 // Continuation
 
@@ -438,24 +437,24 @@ extern Value V_READ_EVAL, V_READ_EVAL2;
   runtime-load-path runtime-home-path lambda let letrec ) +
   [[".","SYM_DOT"], ["...","SYM_DOT3"]] )
 */
-extern Value SYM_A_COMPILE_HOOK_A;
-extern Value SYM_QUASIQUOTE;
-extern Value SYM_UNQUOTE;
-extern Value SYM_UNQUOTE_SPLICING;
-extern Value SYM_CURRENT_INPUT_PORT;
-extern Value SYM_CURRENT_OUTPUT_PORT;
-extern Value SYM_END_OF_LINE;
-extern Value SYM_VALUES;
-extern Value SYM_ERROR;
-extern Value SYM_SYNTAX_RULES;
-extern Value SYM_SYNTAX_REST;
-extern Value SYM_RUNTIME_LOAD_PATH;
-extern Value SYM_RUNTIME_HOME_PATH;
-extern Value SYM_LAMBDA;
-extern Value SYM_LET;
-extern Value SYM_LETREC;
-extern Value SYM_DOT;
-extern Value SYM_DOT3;
+extern Symbol *SYM_A_COMPILE_HOOK_A;
+extern Symbol *SYM_QUASIQUOTE;
+extern Symbol *SYM_UNQUOTE;
+extern Symbol *SYM_UNQUOTE_SPLICING;
+extern Symbol *SYM_CURRENT_INPUT_PORT;
+extern Symbol *SYM_CURRENT_OUTPUT_PORT;
+extern Symbol *SYM_END_OF_LINE;
+extern Symbol *SYM_VALUES;
+extern Symbol *SYM_ERROR;
+extern Symbol *SYM_SYNTAX_RULES;
+extern Symbol *SYM_SYNTAX_REST;
+extern Symbol *SYM_RUNTIME_LOAD_PATH;
+extern Symbol *SYM_RUNTIME_HOME_PATH;
+extern Symbol *SYM_LAMBDA;
+extern Symbol *SYM_LET;
+extern Symbol *SYM_LETREC;
+extern Symbol *SYM_DOT;
+extern Symbol *SYM_DOT3;
 /*}}*/
 
 extern bool opt_trace;
