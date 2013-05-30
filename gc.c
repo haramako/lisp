@@ -50,6 +50,7 @@ Value gc_new( Type type )
 	case TYPE_STREAM:
 	case TYPE_STRING:
 	case TYPE_STRING_BODY:
+	case TYPE_BUNDLE:
 		arena_idx = 1;
 		break;
 	default:
@@ -134,17 +135,21 @@ static void _mark( Value v )
 		break;
 	case TYPE_LAMBDA:
 		_mark( LAMBDA_DATA(v) );
-		_mark( LAMBDA_BUNDLE(v) );
+		_mark( (Value)LAMBDA_BUNDLE(v) );
 		break;
 	case TYPE_CFUNC:
 		_mark( CFUNC_NAME(v) );
 		break;
 	case TYPE_BUNDLE:
-		_mark_dict( BUNDLE_DICT(v) );
-		_mark( BUNDLE_DATA(v) );
+		{
+			Bundle *b = V2BUNDLE(v);
+			_mark_dict( b->dict );
+			_mark( (Value)b->upper );
+			_mark( b->lambda );
+		}
 		break;
 	case TYPE_CONTINUATION:
-		_mark( CONTINUATION_BUNDLE(v) );
+		_mark( (Value)CONTINUATION_BUNDLE(v) );
 		_mark( CONTINUATION_DATA(v) );
 		break;
 	case TYPE_STREAM:
@@ -176,7 +181,7 @@ static void _free( Value v )
 		free( V2STRING_BODY(v)->buf );
 		break;
 	case TYPE_BUNDLE:
-		dict_free( BUNDLE_DICT(v) );
+		dict_free( V2BUNDLE(v)->dict );
 		break;
 	case TYPE_STREAM:
 		{

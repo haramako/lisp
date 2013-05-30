@@ -5,12 +5,12 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
-static Value _identity( Value bundle, Value v ) /* 1 */
+static Value _identity( Bundle *bundle, Value v ) /* 1 */
 {
 	return v;
 }
 
-static Value _eq_p( Value bundle, Value args ) /* -1 */
+static Value _eq_p( Bundle *bundle, Value args ) /* -1 */
 {
 	if( args == NIL ) return VALUE_T;
 	Value v = CAR(args);
@@ -20,7 +20,7 @@ static Value _eq_p( Value bundle, Value args ) /* -1 */
 	return VALUE_T;
 }
 
-static Value _eqv_p( Value bundle, Value args ) /* -1 */
+static Value _eqv_p( Bundle *bundle, Value args ) /* -1 */
 {
 	if( args == NIL ) return VALUE_T;
 	Value v = CAR(args);
@@ -30,7 +30,7 @@ static Value _eqv_p( Value bundle, Value args ) /* -1 */
 	return VALUE_T;
 }
 
-static Value _equal_p( Value bundle, Value args ) /* -1 */
+static Value _equal_p( Bundle *bundle, Value args ) /* -1 */
 {
 	if( args == NIL ) return VALUE_T;
 	Value v = CAR(args);
@@ -40,13 +40,13 @@ static Value _equal_p( Value bundle, Value args ) /* -1 */
 	return VALUE_T;
 }
 
-static Value _define_p( Value bundle, Value sym ) /* 1 */
+static Value _define_p( Bundle *bundle, Value sym ) /* 1 */
 {
 	ERROR_IF_NOT_SYMBOL( sym );
 	return bundle_find( bundle, sym, true, false )?VALUE_T:VALUE_F;
 }
 
-static Value _add( Value bundle, Value args ) /* -1 + */
+static Value _add( Bundle *bundle, Value args ) /* -1 + */
 {
 	int sum = 0;
 	LIST_EACH( n, args ){
@@ -56,7 +56,7 @@ static Value _add( Value bundle, Value args ) /* -1 + */
 	return INT2V(sum);
 }
 
-static Value _sub( Value bundle, Value args ) /* -1 - */
+static Value _sub( Bundle *bundle, Value args ) /* -1 - */
 {
 	ERROR_IF_NOT_INT(CAR(args));
 	int64_t sum = V2INT(CAR(args));
@@ -67,7 +67,7 @@ static Value _sub( Value bundle, Value args ) /* -1 - */
 	return INT2V(sum);
 }
 
-static Value _mul( Value bundle, Value args ) /* -1 * */
+static Value _mul( Bundle *bundle, Value args ) /* -1 * */
 {
 	int sum = 1;
 	LIST_EACH( n, args ){
@@ -77,7 +77,7 @@ static Value _mul( Value bundle, Value args ) /* -1 * */
 	return INT2V(sum);
 }
 
-static Value _div( Value bundle, Value args ) /* -1 / */
+static Value _div( Bundle *bundle, Value args ) /* -1 / */
 {
 	ERROR_IF_NOT_INT(CAR(args));
 	int64_t sum = V2INT(CAR(args));
@@ -88,7 +88,7 @@ static Value _div( Value bundle, Value args ) /* -1 / */
 	return INT2V(sum);
 }
 
-static Value _modulo( Value bundle, Value args ) /* -1 */
+static Value _modulo( Bundle *bundle, Value args ) /* -1 */
 {
 	ERROR_IF_NOT_INT(CAR(args));
 	int64_t sum = V2INT(CAR(args));
@@ -99,7 +99,7 @@ static Value _modulo( Value bundle, Value args ) /* -1 */
 	return INT2V(sum);
 }
 
-static Value _eq( Value bundle, Value args ) /* -1 = */
+static Value _eq( Bundle *bundle, Value args ) /* -1 = */
 {
 	if( args == NIL ) return VALUE_T;
 	ERROR_IF_NOT_INT(CAR(args));
@@ -118,69 +118,69 @@ static Value _eq( Value bundle, Value args ) /* -1 = */
 	}																	\
 	return VALUE_T;
 
-static Value _less( Value bundle, Value ns ) /* -1 < */
+static Value _less( Bundle *bundle, Value ns ) /* -1 < */
 {
 	_INT_COMPARE_FUNC( <, INT64_MIN );
 }
 
-static Value _less_eq( Value bundle, Value ns ) /* -1 <= */
+static Value _less_eq( Bundle *bundle, Value ns ) /* -1 <= */
 {
 	_INT_COMPARE_FUNC( <=, INT64_MIN );
 }
 
-static Value _greater( Value bundle, Value ns ) /* -1 > */
+static Value _greater( Bundle *bundle, Value ns ) /* -1 > */
 {
 	_INT_COMPARE_FUNC( >, INT64_MAX );
 }
 
-static Value _greater_eq( Value bundle, Value ns ) /* -1 >= */
+static Value _greater_eq( Bundle *bundle, Value ns ) /* -1 >= */
 {
 	_INT_COMPARE_FUNC( >=, INT64_MAX );
 }
 
-static Value _symbol_to_string( Value bundle, Value v ) /* 1 */
+static Value _symbol_to_string( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_SYMBOL(v);
 	return (Value)V2SYMBOL(v)->str;
 }
 
-static Value _car( Value bundle, Value v ) /* 1 */
+static Value _car( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_PAIR(v);
 	return CAR(v);
 }
 
-static Value _cdr( Value bundle, Value v ) /* 1 */
+static Value _cdr( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_PAIR(v);
 	return CDR(v);
 }
 
-static Value _cons( Value bundle, Value v1, Value v2 ) /* 2 */
+static Value _cons( Bundle *bundle, Value v1, Value v2 ) /* 2 */
 {
 	return cons( v1, v2 );
 }
 
-static Value _set_car_i( Value bundle, Value pair, Value v ) /* 2 */
+static Value _set_car_i( Bundle *bundle, Value pair, Value v ) /* 2 */
 {
 	ERROR_IF_NOT_PAIR(pair);
 	CAR(pair) = v;
 	return NIL;
 }
 
-static Value _set_cdr_i( Value bundle, Value pair, Value v ) /* 2 */
+static Value _set_cdr_i( Bundle *bundle, Value pair, Value v ) /* 2 */
 {
 	ERROR_IF_NOT_PAIR(pair);
 	CDR(pair) = v;
 	return NIL;
 }
 
-static Value _list( Value bundle, Value args ) /* -1 */
+static Value _list( Bundle *bundle, Value args ) /* -1 */
 {
 	return args;
 }
 
-static Value _list_a( Value bundle, Value args ) /* -1 */
+static Value _list_a( Bundle *bundle, Value args ) /* -1 */
 {
 	Value li = cons( NIL, NIL );
 	Value tail = li;
@@ -195,52 +195,52 @@ static Value _list_a( Value bundle, Value args ) /* -1 */
 	return CDR(li);
 }
 
-static Value _not( Value bundle, Value v ) /* 1 */
+static Value _not( Bundle *bundle, Value v ) /* 1 */
 {
 	return (v==VALUE_F)?VALUE_T:VALUE_F;
 }
 
-static Value _number_p( Value bundle, Value v ) /* 1 */
+static Value _number_p( Bundle *bundle, Value v ) /* 1 */
 {
 	return IS_INT(v)?VALUE_T:VALUE_F;
 }
 
-static Value _char_p( Value bundle, Value v ) /* 1 */
+static Value _char_p( Bundle *bundle, Value v ) /* 1 */
 {
 	return IS_CHAR(v)?VALUE_T:VALUE_F;
 }
 
-static Value _symbol_p( Value bundle, Value v ) /* 1 */
+static Value _symbol_p( Bundle *bundle, Value v ) /* 1 */
 {
 	return IS_SYMBOL(v)?VALUE_T:VALUE_F;
 }
 
-static Value _pair_p( Value bundle, Value v ) /* 1 */
+static Value _pair_p( Bundle *bundle, Value v ) /* 1 */
 {
 	return IS_PAIR(v)?VALUE_T:VALUE_F;
 }
 
-static Value _null_p( Value bundle, Value v ) /* 1 */
+static Value _null_p( Bundle *bundle, Value v ) /* 1 */
 {
 	return (v==NIL)?VALUE_T:VALUE_F;
 }
 
-static Value _list_p( Value bundle, Value v ) /* 1 */
+static Value _list_p( Bundle *bundle, Value v ) /* 1 */
 {
 	return (v==NIL||IS_PAIR(v))?VALUE_T:VALUE_F;
 }
 
-static Value _string_p( Value bundle, Value v ) /* 1 */
+static Value _string_p( Bundle *bundle, Value v ) /* 1 */
 {
 	return (IS_STRING(v))?VALUE_T:VALUE_F;
 }
 
-static Value _procedure_p( Value bundle, Value v ) /* 1 */
+static Value _procedure_p( Bundle *bundle, Value v ) /* 1 */
 {
 	return ((TYPE_OF(v)==TYPE_CFUNC)||(TYPE_OF(v)==TYPE_LAMBDA))?VALUE_T:VALUE_F;
 }
 
-static Value _macro_p( Value bundle, Value v ) /* 1 */
+static Value _macro_p( Bundle *bundle, Value v ) /* 1 */
 {
 	return (TYPE_OF(v)==TYPE_LAMBDA&&LAMBDA_TYPE(v)==LAMBDA_TYPE_MACRO)?VALUE_T:VALUE_F;
 }
@@ -282,7 +282,7 @@ static Value _apply( Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW 
 	}
 }
 
-static Value _syntax_expand1( Value bundle, Value code ) /* 1 */
+static Value _syntax_expand1( Bundle *bundle, Value code ) /* 1 */
 {
 	return syntax_expand1( code );
 }
@@ -292,14 +292,14 @@ static Value _eval( Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW *
 	Value code, bundle;
 	bind2arg( args, code, bundle );
 	if( !code ) assert(0);
-	if( !bundle ) bundle = CONTINUATION_BUNDLE(cont);
-	Value c = continuation_new( code, bundle, CONTINUATION_NEXT(cont) );
+	if( !bundle ) bundle = (Value)CONTINUATION_BUNDLE(cont);
+	Value c = continuation_new( code, (Bundle*)bundle, CONTINUATION_NEXT(cont) );
 	return c;
 }
 
 static Value _current_environment( Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW  */
 {
-	*result = CONTINUATION_BUNDLE(cont);
+	*result = (Value)CONTINUATION_BUNDLE(cont);
 	return CONTINUATION_NEXT(cont);
 }
 
@@ -314,7 +314,7 @@ static Value _backtrace( Value args, Value cont, Value *result ) /* CFUNC_ARITY_
 		}else{
 			printf( "  %s in %s\n",
 					v2s_limit(code, 60),
-					v2s(BUNDLE_LAMBDA(CONTINUATION_BUNDLE(cur))) );
+					v2s((Value)(CONTINUATION_BUNDLE(cur)->lambda) ) );
 		}
 	}
 	*result = NIL;
@@ -348,12 +348,12 @@ static Value _exit( Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW *
 	return NIL;
 }
 
-static Value _eof_object_p( Value bundle, Value v ) /* 1 */
+static Value _eof_object_p( Bundle *bundle, Value v ) /* 1 */
 {
 	return (v==V_EOF)?VALUE_T:VALUE_F;
 }
 
-static Value _display( Value bundle, Value v, Value rest ) /* -2 */
+static Value _display( Bundle *bundle, Value v, Value rest ) /* -2 */
 {
 	char buf[10240];
 	size_t len;
@@ -389,7 +389,7 @@ static Value _display( Value bundle, Value v, Value rest ) /* -2 */
 	return NIL;
 }
 
-static Value _write( Value bundle, Value v, Value rest ) /* -2 */
+static Value _write( Bundle *bundle, Value v, Value rest ) /* -2 */
 {
 	Value port;
 	bind1arg( rest, port );
@@ -399,7 +399,7 @@ static Value _write( Value bundle, Value v, Value rest ) /* -2 */
 	return NIL;
 }
 
-static Value _read( Value bundle, Value rest ) /* -1 */
+static Value _read( Bundle *bundle, Value rest ) /* -1 */
 {
 	Value port;
 	bind1arg( rest, port );
@@ -407,7 +407,7 @@ static Value _read( Value bundle, Value rest ) /* -1 */
 	return stream_read_value(V2STREAM(port));
 }
 
-static Value _write_char( Value bundle, Value v, Value rest ) /* -2 */
+static Value _write_char( Bundle *bundle, Value v, Value rest ) /* -2 */
 {
 	Value port;
 	bind1arg( rest, port );
@@ -418,7 +418,7 @@ static Value _write_char( Value bundle, Value v, Value rest ) /* -2 */
 	return NIL;
 }
 
-static Value _open_input_file( Value bundle, Value _filename ) /* 1 */
+static Value _open_input_file( Bundle *bundle, Value _filename ) /* 1 */
 {
 	ERROR_IF_NOT_STRING(_filename);
 	char *filename = STRING_BUF(V2STRING(_filename));
@@ -427,7 +427,7 @@ static Value _open_input_file( Value bundle, Value _filename ) /* 1 */
 	return (Value)stream_new( fd, true, filename );
 }
 
-static Value _open_output_file( Value bundle, Value _filename ) /* 1 */
+static Value _open_output_file( Bundle *bundle, Value _filename ) /* 1 */
 {
 	ERROR_IF_NOT_STRING(_filename);
 	char *filename = STRING_BUF(V2STRING(_filename));
@@ -436,20 +436,20 @@ static Value _open_output_file( Value bundle, Value _filename ) /* 1 */
 	return (Value)stream_new( fd, true, filename );
 }
 
-static Value _open_input_string( Value bundle, Value str ) /* 1 */
+static Value _open_input_string( Bundle *bundle, Value str ) /* 1 */
 {
 	ERROR_IF_NOT_STRING(str);
 	Stream *s = stream_new_str( V2STRING(str) );
 	return (Value)s;
 }
 
-static Value _open_output_string( Value bundle ) /* 0 */
+static Value _open_output_string( Bundle *bundle ) /* 0 */
 {
 	Stream *s = stream_new_str( string_new_len("",8192) );
 	return (Value)s;
 }
 
-static Value _close_input_port( Value bundle, Value v ) /* 1 */
+static Value _close_input_port( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_STREAM(v);
 	Stream *s = V2STREAM(v);
@@ -457,7 +457,7 @@ static Value _close_input_port( Value bundle, Value v ) /* 1 */
 	return NIL;
 }
 
-static Value _close_output_port( Value bundle, Value v ) /* 1 */
+static Value _close_output_port( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_STREAM(v);
 	Stream *s = V2STREAM(v);
@@ -465,7 +465,7 @@ static Value _close_output_port( Value bundle, Value v ) /* 1 */
 	return NIL;
 }
 
-static Value _get_output_string( Value bundle, Value v ) /* 1 */
+static Value _get_output_string( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_STREAM(v);
 	Stream *s = V2STREAM(v);
@@ -473,7 +473,7 @@ static Value _get_output_string( Value bundle, Value v ) /* 1 */
 	return (Value)string_substr( s->u.str, 0, s->pos );
 }
 
-static Value _char_eq_p( Value bundle, Value first, Value rest ) /* -2 char=? */
+static Value _char_eq_p( Bundle *bundle, Value first, Value rest ) /* -2 char=? */
 {
 	ERROR_IF_NOT_CHAR(first);
 	LIST_EACH( c, rest ){
@@ -491,53 +491,53 @@ static Value _char_eq_p( Value bundle, Value first, Value rest ) /* -2 char=? */
 	}																	\
 	return VALUE_T;
 
-static Value _char_lt_p( Value bundle, Value cs ) /* -1 char<? */
+static Value _char_lt_p( Bundle *bundle, Value cs ) /* -1 char<? */
 {
 	_CHAR_COMPARE_FUNC( <, INT_MIN );
 }
 
-static Value _char_le_p( Value bundle, Value cs ) /* -1 char<=? */
+static Value _char_le_p( Bundle *bundle, Value cs ) /* -1 char<=? */
 {
 	_CHAR_COMPARE_FUNC( <=, INT_MIN );
 }
 
-static Value _char_gt_p( Value bundle, Value cs ) /* -1 char>? */
+static Value _char_gt_p( Bundle *bundle, Value cs ) /* -1 char>? */
 {
 	_CHAR_COMPARE_FUNC( >, INT_MAX );
 }
 
-static Value _char_ge_p( Value bundle, Value cs ) /* -1 char>=? */
+static Value _char_ge_p( Bundle *bundle, Value cs ) /* -1 char>=? */
 {
 	_CHAR_COMPARE_FUNC( >=, INT_MAX );
 }
 
-static Value _char_to_integer( Value bundle, Value v ) /* 1 */
+static Value _char_to_integer( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_CHAR(v);
 	return INT2V(V2CHAR(v));
 }
 
-static Value _integer_to_char( Value bundle, Value v ) /* 1 */
+static Value _integer_to_char( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_INT(v);
 	return CHAR2V(V2INT(v));
 }
 
-static Value _char_upcase( Value bundle, Value v ) /* 1 */
+static Value _char_upcase( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_CHAR(v);
 	int c = V2CHAR(v);
 	return ( c >= 'a' && c <= 'z' )?CHAR2V(c-32):v;
 }
 
-static Value _char_downcase( Value bundle, Value v ) /* 1 */
+static Value _char_downcase( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_CHAR(v);
 	int c = V2CHAR(v);
 	return ( c >= 'A' && c <= 'Z' )?CHAR2V(c+32):v;
 }
 
-static Value _number_to_string( Value bundle, Value v ) /* 1 */
+static Value _number_to_string( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_INT(v);
 	char buf[32];
@@ -545,7 +545,7 @@ static Value _number_to_string( Value bundle, Value v ) /* 1 */
 	return (Value)string_new(buf);
 }
 
-static Value _string_to_number( Value bundle, Value v ) /* 1 */
+static Value _string_to_number( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_STRING(v);
 	int num;
@@ -553,7 +553,7 @@ static Value _string_to_number( Value bundle, Value v ) /* 1 */
 	return INT2V(num);
 }
 
-static Value _string_append( Value bundle, Value args ) /* -1 */
+static Value _string_append( Bundle *bundle, Value args ) /* -1 */
 {
 	char buf[10240];
 	char *tail = buf;
@@ -564,7 +564,7 @@ static Value _string_append( Value bundle, Value args ) /* -1 */
 	return (Value)string_new(buf);
 }
 
-static Value _string_to_list( Value bundle, Value v ) /* 1 */
+static Value _string_to_list( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_STRING(v);
 	char *str = STRING_BUF(V2STRING(v));
@@ -578,7 +578,7 @@ static Value _string_to_list( Value bundle, Value v ) /* 1 */
 	return r;
 }
 
-static Value _list_to_string( Value bundle, Value v ) /* 1 */
+static Value _list_to_string( Bundle *bundle, Value v ) /* 1 */
 {
 	if( v == NIL ) return (Value)string_new("");
 	
@@ -593,7 +593,7 @@ static Value _list_to_string( Value bundle, Value v ) /* 1 */
 	return (Value)string_new(buf);
 }
 
-static Value _string( Value bundle, Value cs ) /* -1 */
+static Value _string( Bundle *bundle, Value cs ) /* -1 */
 {
 	if( cs == NIL ) return (Value)string_new("");
 	char buf[1024];
@@ -607,7 +607,7 @@ static Value _string( Value bundle, Value cs ) /* -1 */
 	return (Value)string_new(buf);
 }
 
-static Value _make_string( Value bundle, Value _len, Value rest ) /* -2 */
+static Value _make_string( Bundle *bundle, Value _len, Value rest ) /* -2 */
 {
 	ERROR_IF_NOT_INT(_len);
 	char buf[1024];
@@ -624,20 +624,20 @@ static Value _make_string( Value bundle, Value _len, Value rest ) /* -2 */
 	return (Value)string_new_len(buf, len);
 }
 
-static Value _string_null_p( Value bundle, Value v ) /* 1 */
+static Value _string_null_p( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_STRING(v);
 	String *s = V2STRING(v);
 	return (s->len == 0)?VALUE_T:VALUE_F;
 }
 
-static Value _string_length( Value bundle, Value v ) /* 1 */
+static Value _string_length( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_STRING(v);
 	return INT2V( V2STRING(v)->len );
 }
 
-static Value _string_ref( Value bundle, Value v, Value _idx ) /* 2 */
+static Value _string_ref( Bundle *bundle, Value v, Value _idx ) /* 2 */
 {
 	ERROR_IF_NOT_STRING(v);
 	ERROR_IF_NOT_INT(_idx);
@@ -646,7 +646,7 @@ static Value _string_ref( Value bundle, Value v, Value _idx ) /* 2 */
 	return CHAR2V( str[idx] );
 }
 
-static Value _string_set_i( Value bundle, Value v, Value _idx, Value _c ) /* 3 */
+static Value _string_set_i( Bundle *bundle, Value v, Value _idx, Value _c ) /* 3 */
 {
 	char *str = STRING_BUF(V2STRING(v));
 	int idx = (int)V2INT(_idx);
@@ -655,7 +655,7 @@ static Value _string_set_i( Value bundle, Value v, Value _idx, Value _c ) /* 3 *
 	return NIL;
 }
 
-static Value _substring( Value bundle, Value v, Value _start, Value rest ) /* -3 */
+static Value _substring( Bundle *bundle, Value v, Value _start, Value rest ) /* -3 */
 {
 	int start = (int)V2INT(_start);
 	int end = V2STRING(v)->len;
@@ -666,7 +666,7 @@ static Value _substring( Value bundle, Value v, Value _start, Value rest ) /* -3
 	return (Value)string_substr( s, start, end-start );
 }
 
-static Value _sys_getenv( Value bundle, Value name ) /* 1 */
+static Value _sys_getenv( Bundle *bundle, Value name ) /* 1 */
 {
 	char *str = getenv( STRING_BUF(V2STRING(name)) );
 	if( str ){
@@ -676,7 +676,7 @@ static Value _sys_getenv( Value bundle, Value name ) /* 1 */
 	}
 }
 
-static Value _file_exists_p( Value bundle, Value _path ) /* 1 */
+static Value _file_exists_p( Bundle *bundle, Value _path ) /* 1 */
 {
 	char *path = STRING_BUF(V2STRING(_path));
 	struct stat file_stat;
@@ -685,7 +685,7 @@ static Value _file_exists_p( Value bundle, Value _path ) /* 1 */
 	return VALUE_T;
 }
 
-static Value _runtime_value_set_i( Value bundle, Value _name, Value val ) /* 2 */
+static Value _runtime_value_set_i( Bundle *bundle, Value _name, Value val ) /* 2 */
 {
 	char *name;
 	if( IS_SYMBOL(_name) ){

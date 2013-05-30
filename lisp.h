@@ -66,16 +66,17 @@ extern const char* LAMBDA_TYPE_NAME[];
 typedef struct Cell* Value;
 
 #define CFUNC_ARITY_RAW 127
+typedef struct Bundle Bundle;
 
 typedef Value (*CFunction)( Value args, Value cont, Value *result );
-typedef Value (*CFunction0)( Value bundle );
-typedef Value (*CFunction1)( Value bundle, Value v1 );
-typedef Value (*CFunction2)( Value bundle, Value v1, Value v2 );
-typedef Value (*CFunction3)( Value bundle, Value v1, Value v2, Value v3 );
-typedef Value (*CFunction4)( Value bundle, Value v1, Value v2, Value v3, Value v4 );
-typedef Value (*CFunction5)( Value bundle, Value v1, Value v2, Value v3, Value v4, Value v5 );
-typedef Value (*CFunction6)( Value bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6 );
-typedef Value (*CFunction7)( Value bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6, Value v7 );
+typedef Value (*CFunction0)( Bundle *bundle );
+typedef Value (*CFunction1)( Bundle *bundle, Value v1 );
+typedef Value (*CFunction2)( Bundle *bundle, Value v1, Value v2 );
+typedef Value (*CFunction3)( Bundle *bundle, Value v1, Value v2, Value v3 );
+typedef Value (*CFunction4)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4 );
+typedef Value (*CFunction5)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4, Value v5 );
+typedef Value (*CFunction6)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6 );
+typedef Value (*CFunction7)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6, Value v7 );
 
 typedef struct {
 	char type;
@@ -95,11 +96,7 @@ typedef struct Cell {
 			Value cdr;
 		} pair;
 		struct {
-			struct Dict *dict;
-			Value data; // ( upper . lambda )
-		} bundle;
-		struct {
-			Value bundle;
+			struct Bundle *bundle;
 			Value data; // (name arg . body)
 		} lambda;
 		struct {
@@ -111,11 +108,18 @@ typedef struct Cell {
 			char *str;
 		} special;
 		struct {
-			Value bundle;
+			struct Bundle *bundle;
 			Value data; // (code . next )
 		} continuation;
 	} d;
 } Cell;
+
+struct Bundle {
+	CellHeader h;
+	struct Dict *dict;
+	struct Bundle *upper;
+	Value lambda;
+};
 
 typedef struct {
 	CellHeader h;
@@ -193,7 +197,7 @@ inline StringBody* V2STRING_BODY(Value v){ assert(IS_STRING_BODY(v)); return (St
 #define V2PAIR(v) (assert(IS_PAIR(v)),v)
 #define V2LAMBDA(v) (assert(IS_LAMBDA(v)),v)
 #define V2CFUNC(v) (assert(IS_CFUNC(v)),v)
-#define V2BUNDLE(v) (assert(IS_BUNDLE(v)),v)
+inline Bundle* V2BUNDLE(Value v){ assert(IS_BUNDLE(v)); return (Bundle*)v; }
 #define V2CONTINUATION(v) (assert(IS_CONTINUATION(v)),v)
 #define V2SPECIAL(v) (assert(IS_SPECIAL(v)),v)
 inline Stream* V2STREAM(Value v){ assert(IS_STREAM(v)); return (Stream*)v; }
@@ -264,7 +268,7 @@ Value char_new( int i );
 #define SYMBOL_STR(v) (V2SYMBOL(v)->d.symbol.str)
 #define SYMBOL_NEXT(v) (V2SYMBOL(v)->d.symbol.next)
 
-extern Value symbol_root;
+extern Bundle *symbol_root;
 Value intern( char *sym );
 
 // String
@@ -345,17 +349,12 @@ Value list_tail( Value list );
 
 // Bundle
 
-#define BUNDLE_DICT(v) (V2BUNDLE(v)->d.bundle.dict)
-#define BUNDLE_DATA(v) (V2BUNDLE(v)->d.bundle.data)
-#define BUNDLE_UPPER(v) (CAR(V2BUNDLE(v)->d.bundle.data))
-#define BUNDLE_LAMBDA(v) (CDR(V2BUNDLE(v)->d.bundle.data))
-
-extern Value bundle_cur;
-Value bundle_new( Value upper );
-DictEntry* bundle_find( Value b, Value sym, bool find_upper, bool create );
-void bundle_set( Value b, Value sym, Value v );
-void bundle_define( Value b, Value sym, Value v );
-Value bundle_get( Value b, Value sym, Value def );
+extern Bundle *bundle_cur;
+Bundle *bundle_new( Bundle *upper );
+DictEntry* bundle_find( Bundle *b, Value sym, bool find_upper, bool create );
+void bundle_set( Bundle *b, Value sym, Value v );
+void bundle_define( Bundle *b, Value sym, Value v );
+Value bundle_get( Bundle *b, Value sym, Value def );
 
 // Continuation
 
@@ -364,7 +363,7 @@ Value bundle_get( Value b, Value sym, Value def );
 #define CONTINUATION_CODE(v) (CAR(V2CONTINUATION(v)->d.continuation.data))
 #define CONTINUATION_NEXT(v) (CDR(V2CONTINUATION(v)->d.continuation.data))
 
-Value continuation_new( Value code, Value bundle, Value next );
+Value continuation_new( Value code, Bundle *bundle, Value next );
 
 // Special
 

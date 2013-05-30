@@ -38,6 +38,7 @@ const char* LAMBDA_TYPE_NAME[] = {
 extern inline Symbol* V2SYMBOL(Value v);
 extern inline String* V2STRING(Value v);
 extern inline StringBody* V2STRING_BODY(Value v);
+extern inline Bundle* V2BUNDLE(Value v);
 extern inline Stream* V2STREAM(Value v);
 extern inline Pointer* V2POINTER(Value v);
 extern inline Error* V2ERROR(Value v);
@@ -313,7 +314,7 @@ Value char_new( int i )
 // Symbol
 //********************************************************
 
-Value symbol_root = NULL;
+Bundle *symbol_root = NULL;
 
 Value intern( char *sym )
 {
@@ -411,7 +412,7 @@ Value lambda_new()
 {
 	Value v = gc_new(TYPE_LAMBDA);
 	LAMBDA_DATA(v) = NIL;
-	LAMBDA_BUNDLE(v) = NIL;
+	LAMBDA_BUNDLE(v) = NULL;
 	return v;
 }
 
@@ -476,25 +477,26 @@ Value list_tail( Value list )
 // Bundle
 //********************************************************
 
-Value bundle_cur = NULL;
+Bundle *bundle_cur = NULL;
 
-Value bundle_new( Value upper )
+Bundle *bundle_new( Bundle *upper )
 {
-	Value v = gc_new(TYPE_BUNDLE);
-	BUNDLE_DICT(v) = dict_new( hash_eqv, eqv );
-	BUNDLE_DATA(v) = cons( upper, NIL );
-	return v;
+	Bundle *b = V2BUNDLE(gc_new(TYPE_BUNDLE));
+	b->dict = dict_new( hash_eqv, eqv );
+	b->upper = upper;
+	b->lambda = NULL;
+	return b;
 }
 
-DictEntry* bundle_find( Value b, Value sym, bool find_upper, bool create )
+DictEntry* bundle_find( Bundle *b, Value sym, bool find_upper, bool create )
 {
-	if( find_upper && BUNDLE_UPPER(b) != NIL ){
+	if( find_upper && b->upper != NULL ){
 		// 自分のを探す
-		DictEntry *entry = dict_find( BUNDLE_DICT(b), sym, false );
+		DictEntry *entry = dict_find( b->dict, sym, false );
 		if( entry ) return entry;
 		
 		// 親のを探す
-		entry = bundle_find( BUNDLE_UPPER(b), sym, find_upper, false );
+		entry = bundle_find( b->upper, sym, find_upper, false );
 		if( entry ) return entry;
 
 		// 新しく作る
@@ -504,11 +506,11 @@ DictEntry* bundle_find( Value b, Value sym, bool find_upper, bool create )
 			return NULL;
 		}
 	}else{
-		return dict_find( BUNDLE_DICT(b), sym, create );
+		return dict_find( b->dict, sym, create );
 	}
 }
 
-void bundle_set( Value b, Value sym, Value v )
+void bundle_set( Bundle *b, Value sym, Value v )
 {
 	DictEntry *entry = bundle_find( b, sym, true, false );
 	if( !entry ){
@@ -518,11 +520,11 @@ void bundle_set( Value b, Value sym, Value v )
 	entry->val = v;
 }
 
-void bundle_define( Value b, Value sym, Value v )
+void bundle_define( Bundle *b, Value sym, Value v )
 {
 	// サイズが大きいならリサイズ
-	Dict *d = BUNDLE_DICT(b);
-	if( d->use >= d->size ) BUNDLE_DICT(b) = dict_rehash(d);
+	Dict *d = b->dict;
+	if( d->use >= d->size ) b->dict = dict_rehash(d);
 	
 	DictEntry *entry = bundle_find( b, sym, false, true );
 	entry->val = v;
@@ -531,7 +533,7 @@ void bundle_define( Value b, Value sym, Value v )
 	if( IS_CFUNC(v) && CFUNC_NAME(v) == NIL ) CFUNC_NAME(v) = sym;
 }
 
-Value bundle_get( Value b, Value sym, Value def )
+Value bundle_get( Bundle *b, Value sym, Value def )
 {
 	DictEntry *entry = bundle_find( b, sym, true, false );
 	if( entry ){
@@ -545,7 +547,7 @@ Value bundle_get( Value b, Value sym, Value def )
 // Continuation
 //********************************************************
 
-Value continuation_new( Value code, Value bundle, Value next )
+Value continuation_new( Value code, Bundle *bundle, Value next )
 {
 	Value v = gc_new( TYPE_CONTINUATION );
 	CONTINUATION_BUNDLE(v) = bundle;
@@ -1232,10 +1234,10 @@ void init_prelude( const char *argv0, bool with_prelude )
 	VALUE_F = gc_new(TYPE_BOOL);
 	retain( &VALUE_F );
 	
-	bundle_cur = bundle_new( NIL );
-	retain( &bundle_cur );
-	symbol_root = bundle_new( NIL );
-	retain( &symbol_root );
+	bundle_cur = bundle_new( NULL );
+	retain( (Value*)&bundle_cur );
+	symbol_root = bundle_new( NULL );
+	retain( (Value*)&symbol_root );
 	
 	V_EOF = gc_new(TYPE_SPECIAL);
 	retain( &V_EOF );

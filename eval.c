@@ -19,8 +19,8 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 		case LAMBDA_TYPE_LAMBDA:
 		case LAMBDA_TYPE_MACRO:
 			{
-				Value bundle = bundle_new( LAMBDA_BUNDLE(lmd) );
-				BUNDLE_LAMBDA(bundle) = lmd;
+				Bundle *bundle = bundle_new( LAMBDA_BUNDLE(lmd) );
+				bundle->lambda = lmd;
 				for( Value cur=LAMBDA_ARGS(lmd); cur != NIL; cur=CDR(cur), vals=CDR(vals) ){
 					if( IS_PAIR(cur) ){
 						if( !IS_PAIR(vals) ){
@@ -44,7 +44,7 @@ Value call( Value lmd, Value vals, Value cont, Value *result )
 			if( arity == CFUNC_ARITY_RAW ){
 				return ((CFunction)func)( vals, cont, result );
 			}else{
-				Value bundle = CONTINUATION_BUNDLE(cont);
+				Bundle *bundle = CONTINUATION_BUNDLE(cont);
 				bool has_rest = (arity<0);
 				int arg_num = has_rest?(-1-arity):(arity);
 				Value v[8] = {NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
@@ -360,12 +360,12 @@ Value eval_loop( Stream *stream )
 			}
 			if( IS_PAIR( CAR(code) )){
 				// normal let
-				Value new_bundle = bundle_new(C_BUNDLE(cont));
+				Bundle *new_bundle = bundle_new(C_BUNDLE(cont));
 				switch( op ){
 				case OP_LET:
-					NEXT( CONT_OP( V_LET2, cons(C_BUNDLE(cont), code), new_bundle, C_NEXT(cont)), NIL );
+					NEXT( CONT_OP( V_LET2, cons((Value)C_BUNDLE(cont), code), new_bundle, C_NEXT(cont)), NIL );
 				case OP_LET_A:
-					NEXT( CONT_OP( V_LET2, cons(new_bundle, code), new_bundle, C_NEXT(cont)), NIL );
+					NEXT( CONT_OP( V_LET2, cons((Value)new_bundle, code), new_bundle, C_NEXT(cont)), NIL );
 				case OP_LETREC:
 					for( Value cur=CAR(code); cur != NIL; cur = CDR(cur) ){
 						Value sym_val = CAR(cur);
@@ -374,7 +374,7 @@ Value eval_loop( Stream *stream )
 						CHECK( IS_SYMBOL(sym) );
 						bundle_define( new_bundle, sym, NIL );
 					}
-					NEXT( CONT_OP( V_LET2, cons(new_bundle, code), new_bundle, C_NEXT(cont)), NIL );
+					NEXT( CONT_OP( V_LET2, cons((Value)new_bundle, code), new_bundle, C_NEXT(cont)), NIL );
 				default:
 					assert(0);
 				}
@@ -389,8 +389,8 @@ Value eval_loop( Stream *stream )
 				// printf( "OP_LET2: %s\n", v2s(vars) );
 				if( IS_PAIR(vars) ){
 					// printf( "OP_LET2- %s\n", v2s(CADR(CAR(vars))) );
-					NEXT( CONT( CADR(CAR(vars)), bundle,
-								CONT_OP( V_LET3, cons4( bundle, CAAR(vars), CDR(vars), body ), C_BUNDLE(cont), C_NEXT(cont) )), NIL);
+					NEXT( CONT( CADR(CAR(vars)), (Bundle*)bundle,
+								CONT_OP( V_LET3, cons4( (Value)bundle, CAAR(vars), CDR(vars), body ), C_BUNDLE(cont), C_NEXT(cont) )), NIL);
 				}else if( vars == NIL ){
 					NEXT( CONT_OP( V_BEGIN, body, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
 				}else{
