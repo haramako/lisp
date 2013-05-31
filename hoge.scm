@@ -1,5 +1,11 @@
 #!/usr/bin/env mlisp
 
+(require srfi-26)
+(puts (gensym))
+
+(puts (map (cut + <> 1) '(1 2 3)))
+(puts ((cut + <> 2 <> 4) 1 3))
+
 (require text.tree)
 
 (write-tree '(1 ("2" 4) 3))

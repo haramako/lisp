@@ -144,6 +144,19 @@ static Value _symbol_to_string( Bundle *bundle, Value v ) /* 1 */
 	return (Value)V2SYMBOL(v)->str;
 }
 
+static Value _gensym( Bundle *bundle ) /* 0 */
+{
+	static int i = 0;
+	char buf[32];
+	sprintf( buf, "#<gensym:%d>", i );
+	i++;
+	
+	Symbol* val = V2SYMBOL(gc_new(TYPE_SYMBOL));
+	val->str = string_new(buf);
+	return V(val);
+}
+
+
 static Value _car( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_PAIR(v);
@@ -723,6 +736,7 @@ void cfunc_init()
 	defun( ">", -1, _greater );
 	defun( ">=", -1, _greater_eq );
 	defun( "symbol->string", 1, _symbol_to_string );
+	defun( "gensym", 0, _gensym );
 	defun( "car", 1, _car );
 	defun( "cdr", 1, _cdr );
 	defun( "cons", 2, _cons );
