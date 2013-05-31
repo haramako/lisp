@@ -30,15 +30,41 @@ const char *TYPE_NAMES[] = {
 	"error",
 };
 
+const int TYPE_SIZE[] = {
+	sizeof(Unused),
+	sizeof(Cell),
+	sizeof(Cell),
+	sizeof(Integer),
+	sizeof(Integer),
+	sizeof(Symbol),
+	sizeof(String),
+	sizeof(StringBody),
+	sizeof(Pair),
+	sizeof(Lambda),
+	sizeof(CFunc),
+	sizeof(Bundle),
+	sizeof(Cell),
+	sizeof(Special),
+	sizeof(Stream),
+	sizeof(Pointer),
+	sizeof(Error),
+};
+
 const char* LAMBDA_TYPE_NAME[] = {
 	"lambda",
 	"macro",
 };
 
+extern inline Unused* V2UNUSED(Value v);
+extern inline Special* V2SPECIAL(Value v);
+extern inline int64_t V2INT(Value v);
+extern inline int V2CHAR(Value v);
 extern inline Symbol* V2SYMBOL(Value v);
 extern inline String* V2STRING(Value v);
 extern inline StringBody* V2STRING_BODY(Value v);
+extern inline Pair* V2PAIR(Value v);
 extern inline Lambda* V2LAMBDA(Value v);
+extern inline CFunc* V2CFUNC(Value v);
 extern inline Bundle* V2BUNDLE(Value v);
 extern inline Stream* V2STREAM(Value v);
 extern inline Pointer* V2POINTER(Value v);
@@ -54,7 +80,7 @@ static size_t _value_to_str( char *buf, int len, Value v )
 	if( n >= len ) return len;
 	
 	if( !v ){
-		n += snprintf( buf, len, "(NULL)" );
+		n += snprintf( buf, len, "#<null>" );
 		if( n >= len ) return len;
 		return n;
 	}
@@ -104,12 +130,15 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		}
 		break;
 	case TYPE_CFUNC:
-		if( CFUNC_NAME(v) ){
-			char str[128];
-			string_puts_escape( CFUNC_NAME(v)->str, str, sizeof(str)-1 );
-			n += snprintf( buf, len, "#<cfunc:%s>", str );
-		}else{
-			n += snprintf( buf, len, "#<cfunc:%p>", CFUNC_FUNC(v) );
+		{
+			CFunc *func = V2CFUNC(v);
+			if( func->name ){
+				char str[128];
+				string_puts_escape( func->name->str, str, sizeof(str)-1 );
+				n += snprintf( buf, len, "#<cfunc:%s>", str );
+			}else{
+				n += snprintf( buf, len, "#<cfunc:%p>", func );
+			}
 		}
 		break;
 	case TYPE_PAIR:
@@ -150,7 +179,7 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		n += snprintf( buf+n, len-n, "#<continuation:%p>", v );
 		break;
 	case TYPE_SPECIAL:
-		n += snprintf( buf+n, len-n, "%s", SPECIAL_STR(v) );
+		n += snprintf( buf+n, len-n, "%s", V2SPECIAL(v)->str );
 		break;
 	case TYPE_STREAM:
 		{
@@ -183,7 +212,8 @@ static size_t _value_to_str( char *buf, int len, Value v )
 size_t value_to_str( char *buf, int len, Value v )
 {
 	size_t n = _value_to_str( buf, len, v );
-	if( n >= len ) buf[len-1] = '\0'; // snprintf()が長さ以上に書き込むと終端してくれないので、念のため、終端させておく
+	// snprintf()が長さ以上に書き込むと終端してくれないので、念のため、終端させておく
+	if( n >= len ) buf[len-1] = '\0'; 
 	return n;
 }
 
@@ -211,8 +241,6 @@ bool eq( Value a, Value b )
 {
 	if( TYPE_OF(a) != TYPE_OF(b) ) return false;
 	switch( TYPE_OF(a) ){
-	case TYPE_NIL:
-		return true;
 	case TYPE_INT:
 		return ( V2INT(a) == V2INT(b) );
 	case TYPE_CHAR:
@@ -296,10 +324,10 @@ unsigned int hash_equal( Value v )
 // Int
 //********************************************************
 
-Value int_new( int64_t i )
+Integer* int_new( int64_t i )
 {
-	Value v = gc_new(TYPE_INT);
-	v->d.number = i;
+	Integer *v = (Integer*)gc_new(TYPE_INT);
+	v->number = i;
 	return v;
 }
 
@@ -307,10 +335,10 @@ Value int_new( int64_t i )
 // Char
 //********************************************************
 
-Value char_new( int i )
+Integer* char_new( int i )
 {
-	Value v = gc_new(TYPE_CHAR);
-	v->d.number = i;
+	Integer *v = (Integer*)gc_new(TYPE_CHAR);
+	v->number = i;
 	return v;
 }
 
@@ -427,19 +455,18 @@ Lambda* lambda_new()
 // CFunc
 //********************************************************
 
-Value cfunc_new(int arity, void *func )
+CFunc* cfunc_new(int arity, void *func )
 {
-	Value v = gc_new(TYPE_CFUNC);
-	CFUNC_ARITY(v) = arity;
-	CFUNC_NAME(v) = NULL;
-	CFUNC_FUNC(v) = func;
-	return v;
+	CFunc *f = V2CFUNC(gc_new(TYPE_CFUNC));
+	f->arity = arity;
+	f->name = NULL;
+	f->func = func;
+	return f;
 }
 
 void defun( char *sym, int arity, void *func )
 {
-	Value v = cfunc_new(arity, func);
-	bundle_define( bundle_cur, intern(sym), v );
+	bundle_define( bundle_cur, intern(sym), V(cfunc_new(arity, func)) );
 }
 
 
@@ -537,7 +564,7 @@ void bundle_define( Bundle *b, Symbol *sym, Value v )
 	entry->val = v;
 
 	if( IS_LAMBDA(v) && !V2LAMBDA(v)->name ) V2LAMBDA(v)->name = sym;
-	if( IS_CFUNC(v) && CFUNC_NAME(v) ) CFUNC_NAME(v) = sym;
+	if( IS_CFUNC(v) && !V2CFUNC(v)->name ) V2CFUNC(v)->name = sym;
 }
 
 Value bundle_get( Bundle *b, Symbol *sym, Value def )
@@ -750,6 +777,7 @@ int _parse( Stream *s, Value *result )
 		if( c == '[' && c2 != ']' ) return -2;
 		return 0;
 	case ')':
+	case ']':
 		assert(!"paren not matched");
 	case '#':
 		switch( c = stream_getc(s) ){
@@ -1174,31 +1202,31 @@ Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 Value V_READ_EVAL, V_READ_EVAL2;
 
 /*{{ declare_symbols */
-Symbol * SYM_A_COMPILE_HOOK_A;
-Symbol * SYM_QUASIQUOTE;
-Symbol * SYM_UNQUOTE;
-Symbol * SYM_UNQUOTE_SPLICING;
-Symbol * SYM_CURRENT_INPUT_PORT;
-Symbol * SYM_CURRENT_OUTPUT_PORT;
-Symbol * SYM_END_OF_LINE;
-Symbol * SYM_VALUES;
-Symbol * SYM_ERROR;
-Symbol * SYM_SYNTAX_RULES;
-Symbol * SYM_SYNTAX_REST;
-Symbol * SYM_RUNTIME_LOAD_PATH;
-Symbol * SYM_RUNTIME_HOME_PATH;
-Symbol * SYM_LAMBDA;
-Symbol * SYM_LET;
-Symbol * SYM_LETREC;
-Symbol * SYM_DOT;
-Symbol * SYM_DOT3;
+Symbol *SYM_A_COMPILE_HOOK_A;
+Symbol *SYM_QUASIQUOTE;
+Symbol *SYM_UNQUOTE;
+Symbol *SYM_UNQUOTE_SPLICING;
+Symbol *SYM_CURRENT_INPUT_PORT;
+Symbol *SYM_CURRENT_OUTPUT_PORT;
+Symbol *SYM_END_OF_LINE;
+Symbol *SYM_VALUES;
+Symbol *SYM_ERROR;
+Symbol *SYM_SYNTAX_RULES;
+Symbol *SYM_SYNTAX_REST;
+Symbol *SYM_RUNTIME_LOAD_PATH;
+Symbol *SYM_RUNTIME_HOME_PATH;
+Symbol *SYM_LAMBDA;
+Symbol *SYM_LET;
+Symbol *SYM_LETREC;
+Symbol *SYM_DOT;
+Symbol *SYM_DOT3;
 /*}}*/
 
-#define _INIT_OPERATOR(v,sym,op) do{\
+#define _INIT_OPERATOR(v,sym,_op) do{\
 	v = gc_new(TYPE_SPECIAL);		\
-	SPECIAL_OP(v) = op;				\
-	SPECIAL_STR(v) = sym;			\
-	bundle_define( bundle_cur, intern(sym), v );\
+	V2SPECIAL(v)->op = _op;	\
+	V2SPECIAL(v)->str = sym;				\
+	bundle_define( bundle_cur, intern(sym), v );	\
 	retain(&v);						\
 	}while(0);
 
@@ -1246,8 +1274,7 @@ void init_prelude( const char *argv0, bool with_prelude )
 	symbol_root = dict_new( hash_eqv, eqv );
 	
 	V_EOF = gc_new(TYPE_SPECIAL);
-	retain( &V_EOF );
-	SPECIAL_STR(V_EOF) = "#<eof>";
+	V2SPECIAL(V_EOF)->str = "#<eof>";
 	retain( &V_EOF );
 	V_STDIN = stream_new(stdin, false, "stdin" );
 	retain( (Value*)&V_STDIN );
@@ -1335,6 +1362,7 @@ void finalize()
 {
 	bundle_cur = NULL;
 	retained = NULL;
+	dict_free( symbol_root );
 	symbol_root = NULL;
 	gc_run(opt_trace);
     gc_finalize();

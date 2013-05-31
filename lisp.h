@@ -28,6 +28,7 @@ typedef enum {
 } Type;
 
 extern const char *TYPE_NAMES[];
+extern const int TYPE_SIZE[];
 
 typedef enum {
 	OP_BEGIN = 0,
@@ -56,59 +57,38 @@ typedef enum {
 	OP_READ_EVAL2,
 } Operator;
 
-typedef enum {
-	LAMBDA_TYPE_LAMBDA = 0,
-	LAMBDA_TYPE_MACRO,
-} LambdaType;
-
-extern const char* LAMBDA_TYPE_NAME[];
-
 typedef struct Cell* Value;
-typedef struct Bundle Bundle;
-
-#define CFUNC_ARITY_RAW 127
-
-typedef Value (*CFunction)( Value args, Value cont, Value *result );
-typedef Value (*CFunction0)( Bundle *bundle );
-typedef Value (*CFunction1)( Bundle *bundle, Value v1 );
-typedef Value (*CFunction2)( Bundle *bundle, Value v1, Value v2 );
-typedef Value (*CFunction3)( Bundle *bundle, Value v1, Value v2, Value v3 );
-typedef Value (*CFunction4)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4 );
-typedef Value (*CFunction5)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4, Value v5 );
-typedef Value (*CFunction6)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6 );
-typedef Value (*CFunction7)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6, Value v7 );
 
 typedef struct {
 	char type;
 	char marked;
-	int16_t flag;
 } CellHeader;
 
 typedef struct Cell {
 	CellHeader h;
 	union {
-		int64_t number;
-		struct {
-			Value next;
-		} unused;
-		struct {
-			Value car;
-			Value cdr;
-		} pair;
-		struct {
-			struct Symbol *name;
-			void *func;
-		} cfunc;
-		struct {
-			Operator op;
-			char *str;
-		} special;
 		struct {
 			struct Bundle *bundle;
 			Value data; // (code . next )
 		} continuation;
 	} d;
 } Cell;
+
+typedef struct Unused {
+	CellHeader h;
+	Value next;
+} Unused;
+
+typedef struct Special {
+	CellHeader h;
+	Operator op;
+	char *str;
+} Special;
+
+typedef struct Integer {
+	CellHeader h;
+	int64_t number;
+} Integer;
 
 typedef struct Symbol {
 	CellHeader h;
@@ -128,21 +108,41 @@ typedef struct String {
 	size_t len;
 } String;
 
+typedef struct Pair {
+	CellHeader h;
+	Value car;
+	Value cdr;
+} Pair;
+
+typedef enum {
+	LAMBDA_TYPE_LAMBDA = 0,
+	LAMBDA_TYPE_MACRO,
+} LambdaType;
+
+extern const char* LAMBDA_TYPE_NAME[];
+
 typedef struct Lambda {
 	CellHeader h;
-	Bundle *bundle;
+	struct Bundle *bundle;
 	LambdaType type;
 	Symbol *name;
 	Value args;
 	Value body;
 } Lambda;
 
-struct Bundle {
+typedef struct Bundle {
 	CellHeader h;
 	struct Dict *dict;
 	struct Bundle *upper;
 	Lambda *lambda;
-};
+} Bundle;
+
+typedef struct CFunc {
+	CellHeader h;
+	int arity;
+	Symbol *name;
+	void *func;
+} CFunc;
 
 typedef enum {
 	STREAM_TYPE_FILE,
@@ -175,8 +175,22 @@ typedef struct {
 	String *str;
 } Error;
 
+#define CFUNC_ARITY_RAW 127
+
+typedef Value (*CFunction)( Value args, Value cont, Value *result );
+typedef Value (*CFunction0)( Bundle *bundle );
+typedef Value (*CFunction1)( Bundle *bundle, Value v1 );
+typedef Value (*CFunction2)( Bundle *bundle, Value v1, Value v2 );
+typedef Value (*CFunction3)( Bundle *bundle, Value v1, Value v2, Value v3 );
+typedef Value (*CFunction4)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4 );
+typedef Value (*CFunction5)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4, Value v5 );
+typedef Value (*CFunction6)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6 );
+typedef Value (*CFunction7)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6, Value v7 );
+
 #define TYPE_OF(v) ((Type)(v)->h.type)
 
+#define IS_UNUSED(v) ((v)->h.type==TYPE_UNUSED)
+#define IS_SPECIAL(v) ((v)->h.type==TYPE_SPECIAL)
 #define IS_INT(v) ((v)->h.type==TYPE_INT)
 #define IS_CHAR(v) ((v)->h.type==TYPE_CHAR)
 #define IS_SYMBOL(v) ((v)->h.type==TYPE_SYMBOL)
@@ -187,25 +201,25 @@ typedef struct {
 #define IS_CFUNC(v) ((v)->h.type==TYPE_CFUNC)
 #define IS_BUNDLE(v) ((v)->h.type==TYPE_BUNDLE)
 #define IS_CONTINUATION(v) ((v)->h.type==TYPE_CONTINUATION)
-#define IS_SPECIAL(v) ((v)->h.type==TYPE_SPECIAL)
 #define IS_STREAM(v) ((v)->h.type==TYPE_STREAM)
 #define IS_POINTER(v) ((v)->h.type==TYPE_POINTER)
 #define IS_ERROR(v) ((v)->h.type==TYPE_ERROR)
 
 #define V(v) ((Value)v)
-#define V2INT(v) (assert(IS_INT(v)),v->d.number)
-#define INT2V(v) (int_new(v))
-#define V2CHAR(v) (assert(IS_CHAR(v)),(int)v->d.number)
-#define CHAR2V(v) (char_new((int)v))
+inline Unused* V2UNUSED(Value v){ assert(IS_UNUSED(v)); return (Unused*)v; }
+inline Special* V2SPECIAL(Value v){ assert(IS_SPECIAL(v)); return (Special*)v; }
+inline int64_t V2INT(Value v){ assert(IS_INT(v)); return ((Integer*)v)->number; }
+#define INT2V(v) ((Value)int_new(v))
+inline int V2CHAR(Value v){ assert(IS_CHAR(v)); return (int)((Integer*)v)->number; }
+#define CHAR2V(v) ((Value)char_new((int)v))
 inline Symbol* V2SYMBOL(Value v){ assert(IS_SYMBOL(v)); return (Symbol*)v; }
 inline String* V2STRING(Value v){ assert(IS_STRING(v)); return (String*)v; }
 inline StringBody* V2STRING_BODY(Value v){ assert(IS_STRING_BODY(v)); return (StringBody*)v; }
-#define V2PAIR(v) (assert(IS_PAIR(v)),v)
+inline Pair* V2PAIR(Value v){ assert(IS_PAIR(v)); return (Pair*)v; }
 inline Lambda* V2LAMBDA(Value v){ assert(IS_LAMBDA(v)); return (Lambda*)v; }
-#define V2CFUNC(v) (assert(IS_CFUNC(v)),v)
+inline CFunc* V2CFUNC(Value v){ assert(IS_CFUNC(v)); return (CFunc*)v; }
 inline Bundle* V2BUNDLE(Value v){ assert(IS_BUNDLE(v)); return (Bundle*)v; }
 #define V2CONTINUATION(v) (assert(IS_CONTINUATION(v)),v)
-#define V2SPECIAL(v) (assert(IS_SPECIAL(v)),v)
 inline Stream* V2STREAM(Value v){ assert(IS_STREAM(v)); return (Stream*)v; }
 inline Pointer* V2POINTER(Value v){ assert(IS_POINTER(v)); return (Pointer*)v; }
 inline Error* V2ERROR(Value v){ assert(IS_ERROR(v)); return (Error*)v; }
@@ -263,16 +277,13 @@ Dict* dict_rehash( Dict *d );
 
 // Int
 
-Value int_new( int64_t i );
+Integer* int_new( int64_t i );
 
 // Char
 
-Value char_new( int i );
+Integer* char_new( int i );
 
 // Symbol
-
-#define SYMBOL_STR(v) (V2SYMBOL(v)->d.symbol.str)
-#define SYMBOL_NEXT(v) (V2SYMBOL(v)->d.symbol.next)
 
 extern Dict *symbol_root;
 Symbol* intern( char *sym );
@@ -293,17 +304,13 @@ Lambda *lambda_new();
 
 // CFunc
 
-#define CFUNC_ARITY(v) (V2CFUNC(v)->h.flag)
-#define CFUNC_NAME(v) (V2CFUNC(v)->d.cfunc.name)
-#define CFUNC_FUNC(v) (V2CFUNC(v)->d.cfunc.func)
-
-Value cfunc_new(int arity, void *func );
+CFunc* cfunc_new(int arity, void *func );
 void defun( char *sym, int arity, void *func );
 
 // Pair
 
-#define CAR(v) (V2PAIR(v)->d.pair.car)
-#define CDR(v) (V2PAIR(v)->d.pair.cdr)
+#define CAR(v) (V2PAIR(v)->car)
+#define CDR(v) (V2PAIR(v)->cdr)
 #define CAAR(v) (CAR(CAR(v)))
 #define CADR(v) (CAR(CDR(v)))
 #define CDAR(v) (CDR(CAR(v)))
@@ -366,9 +373,6 @@ Value continuation_new( Value code, Bundle *bundle, Value next );
 
 // Special
 
-#define SPECIAL_OP(v) (V2SPECIAL(v)->d.special.op)
-#define SPECIAL_STR(v) (V2SPECIAL(v)->d.special.str)
-
 // Stream
 
 Stream* stream_new( FILE *fd, bool close, char *filename );
@@ -383,6 +387,8 @@ size_t stream_write( Stream *s, char *buf, size_t len );
 void stream_close( Stream *s );
 
 // Error
+
+// error handling used in c-functions.
 #define ERROR_IF_NOT_INT(v) if( !IS_INT(v) ) return error_new( "not integer" );
 #define ERROR_IF_NOT_CHAR(v) if( !IS_CHAR(v) ) return error_new( "not char" );
 #define ERROR_IF_NOT_SYMBOL(v) if( !IS_SYMBOL(v) ) return error_new( "not symbol" );

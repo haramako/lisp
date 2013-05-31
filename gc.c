@@ -30,7 +30,7 @@ static Cell* _alloc( int arena_idx )
 		void *cur = ARENA_ENTRY(arena);
 		for( int i=0; i<count; i++, cur += cell_size ){
 			((Cell*)cur)->h.type = TYPE_UNUSED;
-			((Cell*)cur)->d.unused.next = (i<(count-1))?(cur+cell_size):(NULL);
+			V2UNUSED((Cell*)cur)->next = (i<(count-1))?(cur+cell_size):(NULL);
 		}
 		arena->size = cell_size;
 		arena->count = count;
@@ -39,35 +39,24 @@ static Cell* _alloc( int arena_idx )
 		_cell_next[arena_idx] = ARENA_ENTRY(arena);
 		prof.size += count;
 	}
-	
-	return _cell_next[arena_idx];
+
+	Cell *result = _cell_next[arena_idx];
+	assert( IS_UNUSED(result) );
+	_cell_next[arena_idx] = V2UNUSED(result)->next;
+	return result;
 }
 
 Value gc_new( Type type )
 {
-	int arena_idx;
-	switch( type ){
-	case TYPE_STRING_BODY:
-	case TYPE_STRING:
-	case TYPE_LAMBDA:
-	case TYPE_BUNDLE:
-	case TYPE_STREAM:
-		arena_idx = 1;
-		break;
-	default:
-		arena_idx = 0;
-	}
-	
-	// allocate cell
-	Cell *cell = _alloc(arena_idx);
-	assert( cell->h.type == TYPE_UNUSED );
-	_cell_next[arena_idx] = cell->d.unused.next;
+	assert( type > 0 && type < TYPE_MAX );
+	Cell *cell = _alloc( (TYPE_SIZE[type]>sizeof(Cell))?1:0);
 	cell->h.type = type;
 	cell->h.marked = -1;
+	
 	prof.use++;
 	prof.alloc_count++;
 	prof.cell_count[type]++;
-
+	
 	return cell;
 }
 
@@ -96,6 +85,7 @@ static void _mark( Value v );
 
 static void _mark_dict( Dict *d )
 {
+	if( !d ) return;
 	for( int i=0; i<d->size; i++ ){
 		for( DictEntry *cur = d->entry[i]; cur; cur = cur->next ){
 			_mark( cur->key );
@@ -144,7 +134,7 @@ static void _mark( Value v )
 		}
 		break;
 	case TYPE_CFUNC:
-		_mark( V(CFUNC_NAME(v)) );
+		_mark( V(V2CFUNC(v)->name) );
 		break;
 	case TYPE_BUNDLE:
 		{
@@ -204,10 +194,10 @@ static void _free( Value v )
 
 void gc_init()
 {
-	_arena_size[0] = sizeof(Cell);
-	_arena_size[1] = sizeof(Cell);
-	if( _arena_size[1] < sizeof(Stream) ) _arena_size[1] = sizeof(Stream);
-	if( _arena_size[1] < sizeof(Lambda) ) _arena_size[1] = sizeof(Lambda);
+	_arena_size[0] = sizeof(Pair);
+	for( Type i=0; i<TYPE_MAX; i++ ){
+		if( _arena_size[1] < TYPE_SIZE[i] ) _arena_size[1] = TYPE_SIZE[i];
+	}
 }
 
 void gc_finalize()
@@ -243,9 +233,8 @@ void gc_run( int verbose )
 
 				if( cur->h.marked != _color ){
 					_free( cur );
-					cur->h.flag = cur->h.type; // for debug: save h.type to h.flag;
 					cur->h.type = TYPE_UNUSED;
-					cur->d.unused.next = _cell_next[arena_idx];
+					V2UNUSED(cur)->next = _cell_next[arena_idx];
 					_cell_next[arena_idx] = cur;
 					prof.use--;
 					kill++;

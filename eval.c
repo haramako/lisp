@@ -42,10 +42,10 @@ Value call( Value _lmd, Value vals, Value cont, Value *result )
 		}
 	case TYPE_CFUNC:
 		{
-			void *func = CFUNC_FUNC(_lmd);
-			int arity = CFUNC_ARITY(_lmd);
+			CFunc *func = V2CFUNC(_lmd);
+			int arity = func->arity;
 			if( arity == CFUNC_ARITY_RAW ){
-				return ((CFunction)func)( vals, cont, result );
+				return ((CFunction)func->func)( vals, cont, result );
 			}else{
 				Bundle *bundle = CONTINUATION_BUNDLE(cont);
 				bool has_rest = (arity<0);
@@ -66,14 +66,14 @@ Value call( Value _lmd, Value vals, Value cont, Value *result )
 				}
 				
 				switch( arg_num ){
-				case 0: *result = ((CFunction0)func)( bundle ); break;
-				case 1: *result = ((CFunction1)func)( bundle, v[0] ); break;
-				case 2: *result = ((CFunction2)func)( bundle, v[0], v[1] ); break;
-				case 3: *result = ((CFunction3)func)( bundle, v[0], v[1], v[2] ); break;
-				case 4: *result = ((CFunction4)func)( bundle, v[0], v[1], v[2], v[3] ); break;
-				case 5: *result = ((CFunction5)func)( bundle, v[0], v[1], v[2], v[3], v[4] ); break;
-				case 6: *result = ((CFunction6)func)( bundle, v[0], v[1], v[2], v[3], v[4], v[5] ); break;
-				case 7: *result = ((CFunction7)func)( bundle, v[0], v[1], v[2], v[3], v[4], v[5], v[6] ); break;
+				case 0: *result = ((CFunction0)func->func)( bundle ); break;
+				case 1: *result = ((CFunction1)func->func)( bundle, v[0] ); break;
+				case 2: *result = ((CFunction2)func->func)( bundle, v[0], v[1] ); break;
+				case 3: *result = ((CFunction3)func->func)( bundle, v[0], v[1], v[2] ); break;
+				case 4: *result = ((CFunction4)func->func)( bundle, v[0], v[1], v[2], v[3] ); break;
+				case 5: *result = ((CFunction5)func->func)( bundle, v[0], v[1], v[2], v[3], v[4] ); break;
+				case 6: *result = ((CFunction6)func->func)( bundle, v[0], v[1], v[2], v[3], v[4], v[5] ); break;
+				case 7: *result = ((CFunction7)func->func)( bundle, v[0], v[1], v[2], v[3], v[4], v[5], v[6] ); break;
 				default:
 					assert(0);
 				}
@@ -83,7 +83,7 @@ Value call( Value _lmd, Value vals, Value cont, Value *result )
 					Error *err = V2ERROR(*result);
 					*result = NIL;
 					char str[128];
-					snprintf( str, sizeof(str)-1, "in %s", v2s(V(CFUNC_NAME(_lmd))));
+					snprintf( str, sizeof(str)-1, "in %s", v2s(V(func->name)));
 					return continuation_new( cons4( V(SYM_ERROR), (Value)err->str, (Value)string_new(str), NIL),
 											   CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
 				}else{
@@ -183,7 +183,7 @@ Value normalize_let( Value code )
 
 Value eval_loop( Stream *stream )
 {
-	int GC_FREQUENCY = 1000;
+	int GC_FREQUENCY = 10000;
 	int gc_count = GC_FREQUENCY;
 	Value result = NIL;
 	Value cont = CONT_OP( V_READ_EVAL, (Value)stream, bundle_cur, NIL );
@@ -236,7 +236,7 @@ Value eval_loop( Stream *stream )
 		}
 		
 		Value code = CDR(C_CODE(cont));
-		Operator op = SPECIAL_OP(CAR(C_CODE(cont)));
+		Operator op = V2SPECIAL(CAR(C_CODE(cont)))->op;
 		switch( op ){
 		case OP_BEGIN:
 			// display_val( "OP_BEGIN: ", code );
