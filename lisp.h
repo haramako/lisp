@@ -407,6 +407,7 @@ Value compile( Value code );
 Value eval_loop( Stream *s );
 Value syntax_expand1( Value code );
 Value normalize_let( Value code );
+Value vm_compile( Value code );
 
 // Initialization
 
@@ -472,5 +473,4 @@ void finalize();
 void show_prof();
 
 void cfunc_init();
-void srfi13_init();
 

@@ -19,7 +19,7 @@ env.AppendUnique(
     CCFLAGS=['-Wall', '-O2', '-std=c99', '-g'],
     LIBS=['m'] )
 
-LISP_LIBS = ['lisp.c', 'eval.c', 'gc.c', 'dict.c', 'cfunc.c']
+LISP_LIBS = ['lisp.c', 'eval.c', 'vm.c', 'gc.c', 'dict.c', 'cfunc.c']
 
 env.Program('mlisp', ['main.c'] + LISP_LIBS)
 env.Program('test_mlisp', ['test.c'] + LISP_LIBS)

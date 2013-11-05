@@ -1,4 +1,5 @@
 
+* evalをVM方式にする
 * pairにファイル：行番号の情報を与える
 * syntax のシンボルを保護的に
 * syntax を別オブジェクトに
@@ -25,3 +26,8 @@
 - 名前付きlet
 - gcをまともに
 - bundle を hashに
+
+**別言語のアイデア
+
+* pairを遅延pairも含むようにする
+* car, cdrを pair, string などに適用可能に

@@ -1202,24 +1202,7 @@ Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
 Value V_READ_EVAL, V_READ_EVAL2;
 
 /*{{ declare_symbols */
-Symbol *SYM_A_COMPILE_HOOK_A;
-Symbol *SYM_QUASIQUOTE;
-Symbol *SYM_UNQUOTE;
-Symbol *SYM_UNQUOTE_SPLICING;
-Symbol *SYM_CURRENT_INPUT_PORT;
-Symbol *SYM_CURRENT_OUTPUT_PORT;
-Symbol *SYM_END_OF_LINE;
-Symbol *SYM_VALUES;
-Symbol *SYM_ERROR;
-Symbol *SYM_SYNTAX_RULES;
-Symbol *SYM_SYNTAX_REST;
-Symbol *SYM_RUNTIME_LOAD_PATH;
-Symbol *SYM_RUNTIME_HOME_PATH;
-Symbol *SYM_LAMBDA;
-Symbol *SYM_LET;
-Symbol *SYM_LETREC;
-Symbol *SYM_DOT;
-Symbol *SYM_DOT3;
+
 /*}}*/
 
 #define _INIT_OPERATOR(v,sym,_op) do{\
@@ -1309,24 +1292,7 @@ void init_prelude( const char *argv0, bool with_prelude )
 	_INIT_OPERATOR(V_READ_EVAL2, "#<read-eval2>", OP_READ_EVAL2);
 
 	/*{{ register_symbols */
-	SYM_A_COMPILE_HOOK_A = intern("*compile-hook*");
-	SYM_QUASIQUOTE = intern("quasiquote");
-	SYM_UNQUOTE = intern("unquote");
-	SYM_UNQUOTE_SPLICING = intern("unquote-splicing");
-	SYM_CURRENT_INPUT_PORT = intern("current-input-port");
-	SYM_CURRENT_OUTPUT_PORT = intern("current-output-port");
-	SYM_END_OF_LINE = intern("end-of-line");
-	SYM_VALUES = intern("values");
-	SYM_ERROR = intern("error");
-	SYM_SYNTAX_RULES = intern("syntax-rules");
-	SYM_SYNTAX_REST = intern("syntax-rest");
-	SYM_RUNTIME_LOAD_PATH = intern("runtime-load-path");
-	SYM_RUNTIME_HOME_PATH = intern("runtime-home-path");
-	SYM_LAMBDA = intern("lambda");
-	SYM_LET = intern("let");
-	SYM_LETREC = intern("letrec");
-	SYM_DOT = intern(".");
-	SYM_DOT3 = intern("...");
+	
 	/*}}*/
 
 	bundle_define( bundle_cur, SYM_CURRENT_INPUT_PORT, (Value)V_STDIN );

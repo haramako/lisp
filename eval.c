@@ -469,6 +469,7 @@ Value eval_loop( Stream *stream )
 		case OP_READ_EVAL:
 			{
 				Value stat = stream_read_value( V2STREAM(code) );
+				vm_compile( stat );
 				if( opt_trace ) printf( "trace: %s\n", v2s_limit(stat,100) );
 				if( stat != V_EOF ){
 					// stat = syntax_expand1( stat );
