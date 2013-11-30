@@ -29,4 +29,4 @@ env.Command('test', ['test_mlisp','mlisp'], ['./test_mlisp', do_test])
 env.Command('tags', [], ['gtags'])
 env.Clean('tags',['GPATH','GTAGS','GRTAGS'])
 
-env.Default('do_src_filter', 'tags', 'mlisp', 'test_mlisp')
+env.Default('do_src_filter', 'mlisp', 'test_mlisp')
