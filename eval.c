@@ -325,19 +325,8 @@ Value eval_loop( Stream *stream )
 			}
 			
 		case OP_DEFINE:
-			{
-				if( IS_SYMBOL(CAR(code)) ){
-					// (define sym val) の形
-					NEXT_DIRECT(CADR(code),
-								CONT_OP( V_DEFINE2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) );
-				}else if( IS_PAIR(CAR(code)) ){
-					// (define (sym args ... ) の形
-					NEXT( CONT( cons3( V_LAMBDA, CDAR(code), CDR(code) ), C_BUNDLE(cont),
-								CONT_OP( V_DEFINE2, CAAR(code), C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-				}else{
-					assert(0);
-				}
-			}
+			NEXT_DIRECT(CADR(code),
+						CONT_OP( V_DEFINE2, CAR(code), C_BUNDLE(cont), C_NEXT(cont)) );
 				
 		case OP_DEFINE2:
 			bundle_define( C_BUNDLE(cont), V2SYMBOL(code), result );
@@ -354,6 +343,7 @@ Value eval_loop( Stream *stream )
 		case OP_LET:
 		case OP_LET_A:
 		case OP_LETREC:
+			if( op == OP_LET_A ) vdump( code );
 			//printf( "LET: %s\n", v2sn(code,80) );
 			// TODO: read/eval時に変換するようにする
 			if( op == OP_LET && IS_SYMBOL( CAR(code) ) ){
@@ -576,12 +566,12 @@ Value normalize_sexp( Value s )
 	}else if( sym == SYM_LET_A ){
 		// (let* ((a v) ...) ...) => ((lambda (a) (let* (...) ...)) v)
 		Value arg_vals = CAR(rest);
-		if( arg_vals == NIL ) return normalize_list( CDR(rest) );
+		if( arg_vals == NIL ) return normalize_begin( CDR(rest) );
 		Value arg = CAAR(arg_vals);
 		Value val = CAR(CDAR(arg_vals));
 		return cons3( cons4( V_LAMBDA,
 							 cons(arg,NIL),
-							 normalize_list( cons3( V(SYM_LET_A), CDR(arg_vals), CDR(rest) ) ),
+							 normalize_sexp( cons3( V(SYM_LET_A), CDR(arg_vals), CDR(rest) ) ),
 							 NIL ),
 					  normalize_sexp(val),
 					  NIL);
