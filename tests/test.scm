@@ -288,8 +288,9 @@
 		(b (+ a 1)))
 	(assert '(2 3) (list a b)))
   (letrec ((a b)
-		   (b (cons 1 a)))
-	(assert '(() (1)) (list a b)))
+		   (b (cons 1 a))
+		   (undef (if #f 0)))
+	(assert (list undef (cons 1 undef)) (list a b)))
   )
 
 ;; test define-syntax

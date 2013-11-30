@@ -360,6 +360,18 @@ Symbol* intern( char *sym )
 	return V2SYMBOL(entry->val);
 }
 
+Value gensym()
+{
+	static int i = 0;
+	char buf[32];
+	sprintf( buf, "#<gensym:%d>", i );
+	i++;
+	
+	Symbol* val = V2SYMBOL(gc_new(TYPE_SYMBOL));
+	val->str = string_new(buf);
+	return V(val);
+}
+
 //********************************************************
 // String
 //********************************************************
@@ -1187,6 +1199,7 @@ static void handler(int sig) {
 Value NIL = NULL;
 Value VALUE_T = NULL;
 Value VALUE_F = NULL;
+Value V_UNDEF = NULL;
 Value V_EOF = NULL;
 Value V_END_OF_LINE = NULL;
 Stream *V_STDOUT, *V_STDIN, *V_SRC_FILE;
@@ -1218,8 +1231,16 @@ Symbol *SYM_RUNTIME_HOME_PATH;
 Symbol *SYM_LAMBDA;
 Symbol *SYM_LET;
 Symbol *SYM_LETREC;
+Symbol *SYM_LET_A;
+Symbol *SYM_DEFINE;
+Symbol *SYM_IF;
+Symbol *SYM_COND;
+Symbol *SYM_QUOTE;
+Symbol *SYM_ELSE;
+Symbol *SYM_BEGIN;
 Symbol *SYM_DOT;
 Symbol *SYM_DOT3;
+Symbol *SYM_ARROW;
 /*}}*/
 
 #define _INIT_OPERATOR(v,sym,_op) do{\
@@ -1268,6 +1289,9 @@ void init_prelude( const char *argv0, bool with_prelude )
 	retain( &VALUE_T );
 	VALUE_F = gc_new(TYPE_BOOL);
 	retain( &VALUE_F );
+	V_UNDEF = gc_new(TYPE_SPECIAL);
+	V2SPECIAL(V_UNDEF)->str = "#<undef>";
+	retain( &V_UNDEF );
 	
 	bundle_cur = bundle_new( NULL );
 	retain( (Value*)&bundle_cur );
@@ -1325,8 +1349,16 @@ void init_prelude( const char *argv0, bool with_prelude )
 	SYM_LAMBDA = intern("lambda");
 	SYM_LET = intern("let");
 	SYM_LETREC = intern("letrec");
+	SYM_LET_A = intern("let*");
+	SYM_DEFINE = intern("define");
+	SYM_IF = intern("if");
+	SYM_COND = intern("cond");
+	SYM_QUOTE = intern("quote");
+	SYM_ELSE = intern("else");
+	SYM_BEGIN = intern("begin");
 	SYM_DOT = intern(".");
 	SYM_DOT3 = intern("...");
+	SYM_ARROW = intern("=>");
 	/*}}*/
 
 	bundle_define( bundle_cur, SYM_CURRENT_INPUT_PORT, (Value)V_STDIN );

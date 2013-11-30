@@ -146,14 +146,7 @@ static Value _symbol_to_string( Bundle *bundle, Value v ) /* 1 */
 
 static Value _gensym( Bundle *bundle ) /* 0 */
 {
-	static int i = 0;
-	char buf[32];
-	sprintf( buf, "#<gensym:%d>", i );
-	i++;
-	
-	Symbol* val = V2SYMBOL(gc_new(TYPE_SYMBOL));
-	val->str = string_new(buf);
-	return V(val);
+	return gensym();
 }
 
 

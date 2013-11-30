@@ -1,5 +1,7 @@
 #!/usr/bin/env mlisp
 
+(display (if #f 1))
+
 (require srfi-26)
 (puts (gensym))
 

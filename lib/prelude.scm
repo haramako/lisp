@@ -72,6 +72,7 @@
   (puts "tee:" x)
   x)
 
+#|
 (define-syntax cond
   (syntax-rules (=> else)
 	((_ (else ?body ...))
@@ -94,6 +95,7 @@
 		 (cond ?rest ...)))
 	
 	))
+|#
 		
 (define (error . mes)
   (apply puts (list "error:" mes))

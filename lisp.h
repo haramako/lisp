@@ -287,6 +287,7 @@ Integer* char_new( int i );
 
 extern Dict *symbol_root;
 Symbol* intern( char *sym );
+Value gensym();
 
 // String
 
@@ -318,7 +319,7 @@ void defun( char *sym, int arity, void *func );
 
 #define cons3(v1,v2,v3) (cons( v1, cons( v2, v3 ) ))
 #define cons4(v1,v2,v3,v4) (cons( v1, cons( v2, cons( v3, v4 ) ) ))
-#define cons5(v1,v2,v3,v4,v5) (cons( v1, cons( v2, cons( v3, cons( v4, v5 ) ) ))
+#define cons5(v1,v2,v3,v4,v5) (cons( v1, cons( v2, cons( v3, cons( v4, v5 ) ) )))
 #define cons6(v1,v2,v3,v4,v5,v6) (cons( v1, cons( v2, cons( v3, cons( v4, cons( v5, v6 ) ) ) ))
 #define cons7(v1,v2,v3,v4,v5,v6) (cons( v1, cons( v2, cons( v3, cons( v4, cons( v5, v6 ) ) ) ))
 #define bind2cdr(list,v1,v2) do{Value _=(list);v1=CAR(_);v2=CDR(_);}while(0);
@@ -421,6 +422,7 @@ extern Profile prof;
 extern Value NIL;
 extern Value VALUE_T;
 extern Value VALUE_F;
+extern Value V_UNDEF;
 extern Value V_EOF;
 extern Value V_END_OF_LINE;
 extern Stream *V_STDOUT, *V_STDIN, *V_SRC_FILE;
@@ -440,8 +442,9 @@ extern Value V_READ_EVAL, V_READ_EVAL2;
   %w( *compile-hook* quasiquote unquote unquote-splicing
   current-input-port current-output-port end-of-line values
   error syntax-rules syntax-rest
-  runtime-load-path runtime-home-path lambda let letrec ) +
-  [[".","SYM_DOT"], ["...","SYM_DOT3"]] )
+  runtime-load-path runtime-home-path lambda let letrec let*
+  define if cond quote else begin) +
+  [[".","SYM_DOT"], ["...","SYM_DOT3"], ["=>", "SYM_ARROW"]] )
 */
 extern Symbol *SYM_A_COMPILE_HOOK_A;
 extern Symbol *SYM_QUASIQUOTE;
@@ -459,8 +462,16 @@ extern Symbol *SYM_RUNTIME_HOME_PATH;
 extern Symbol *SYM_LAMBDA;
 extern Symbol *SYM_LET;
 extern Symbol *SYM_LETREC;
+extern Symbol *SYM_LET_A;
+extern Symbol *SYM_DEFINE;
+extern Symbol *SYM_IF;
+extern Symbol *SYM_COND;
+extern Symbol *SYM_QUOTE;
+extern Symbol *SYM_ELSE;
+extern Symbol *SYM_BEGIN;
 extern Symbol *SYM_DOT;
 extern Symbol *SYM_DOT3;
+extern Symbol *SYM_ARROW;
 /*}}*/
 
 extern bool opt_trace;
@@ -474,3 +485,4 @@ void show_prof();
 void cfunc_init();
 void srfi13_init();
 
+Value normalize_sexp( Value s );

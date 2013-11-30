@@ -475,12 +475,14 @@ Value eval_loop( Stream *stream )
 						
 					Value compile_hook = bundle_get( bundle_cur, SYM_A_COMPILE_HOOK_A, NIL );
 					if( compile_hook != NIL ){
-						// *compile-hook* があればコンパイルする
+						// *compile-hook* があれば呼び出す
 						stat = cons3( compile_hook, cons3( V_QUOTE, stat, NIL ), NIL );
 						// printf( "READ_EVAL: %s\n", v2s(stat) );
 						NEXT( CONT( stat, C_BUNDLE(cont),
 									CONT_OP( V_READ_EVAL2, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
 					}else{
+						stat = normalize_sexp(stat);
+						if( opt_trace ) printf( "trace: %s\n", v2s_limit(stat,100) );
 						NEXT( CONT( stat, C_BUNDLE(cont),
 									CONT_OP( V_READ_EVAL, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
 					}
@@ -490,10 +492,167 @@ Value eval_loop( Stream *stream )
 			}
 				
 		case OP_READ_EVAL2:
+			if( opt_trace ) printf( "trace: %s\n", v2s_limit(result,100) );
+			result = normalize_sexp( result );
+			if( opt_trace ) printf( "trace: %s\n", v2s_limit(result,1000) );
 			NEXT( CONT( result, C_BUNDLE(cont),
 						CONT_OP( V_READ_EVAL, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
 		}
 	}
 	assert(0);
+}
+
+Value unzip_arg_val( Value arg_vals )
+{
+	Value args = NIL;
+	Value vals = NIL;
+	if( arg_vals != NIL ){
+		args = cons( CAR(CAR(arg_vals)), NIL );
+		vals = cons( CADR(CAR(arg_vals)), NIL );
+		Value args_tail = args;
+		Value vals_tail = vals;
+		for( Value cur=CDR(arg_vals); cur != NIL; cur=CDR(cur) ){
+			args_tail = CDR(args_tail) = cons( CAR(CAR(cur)), NIL);
+			vals_tail = CDR(vals_tail) = cons( CADR(CAR(cur)), NIL);
+		}
+	}
+	return cons( args, vals );
+}
+
+Value normalize_list( Value s );
+Value normalize_begin( Value s );
+
+Value normalize_sexp( Value s )
+{
+	// printf( "s:%s\n", v2s_limit(s,30) );
+	if( !IS_PAIR(s) ) return s;
+	if( TYPE_OF(CAR( s )) != TYPE_SYMBOL ) return s;
+	Symbol *sym = V2SYMBOL(CAR( s ));
+	Value rest = CDR(s);
+	if( sym == SYM_DEFINE ){
+		if( IS_SYMBOL(CAR(rest)) ){
+			// (define sym val) の形
+			return cons( V_DEFINE, normalize_list(rest) );
+		}else if( IS_PAIR(CAR(rest)) ){
+			// (define (sym args ...) ... ) の形
+			return cons4( V_DEFINE, CAAR(rest),
+						  cons3( V_LAMBDA, CDAR(rest), normalize_list(CDR(rest)) ), NIL );
+		}else{
+			assert(0);
+		}
+	}else if( sym == SYM_LET ){
+		if( IS_SYMBOL(CAR(rest)) ){
+			// named let
+			// (let name ((arg val) ...) ...)
+			//  => ((lambda (name) (set! name (lambda (args) ...) (name vals))) #<undef>)
+			Value name = CAR(rest);
+			Value body = normalize_list(CDDR(rest));
+			Value arg_val = unzip_arg_val(CADR(rest));
+			Value r = cons3(
+							cons5(V_LAMBDA,
+								  cons(name,NIL),
+								  cons4(V_SET_I, name, cons3(V_LAMBDA, CAR(arg_val), body), NIL),
+								  cons(name, normalize_list(CDR(arg_val))),
+								  NIL),
+							V_UNDEF,
+							NIL);
+			return r;
+		}else{
+			// normal let
+			Value arg_val = unzip_arg_val(CAR(rest));
+			return cons( cons3( V_LAMBDA, CAR(arg_val), normalize_list(CDR(rest)) ),
+						 normalize_list( CDR(arg_val)) );
+		}
+	}else if( sym == SYM_LETREC ){
+		// (letrec ((a b) ...) => ((lambda (a ...) (set! a b) ...) #<undef>)
+		Value arg_val = unzip_arg_val(CAR(rest));
+		Value sets = list_copy(CAR(rest));
+		Value undefs = NIL;
+		LIST_EACH(it,sets){
+			CAR(it_pair) = cons4( V_SET_I, CAR(it), normalize_sexp( CADR(it) ), NIL );
+			undefs = cons(V_UNDEF,undefs);
+		}
+		return cons( cons4( V_LAMBDA, CAR(arg_val), cons(V_BEGIN, sets), normalize_list(CDR(rest))), undefs );
+	}else if( sym == SYM_LET_A ){
+		// (let* ((a v) ...) ...) => ((lambda (a) (let* (...) ...)) v)
+		Value arg_vals = CAR(rest);
+		if( arg_vals == NIL ) return normalize_list( CDR(rest) );
+		Value arg = CAAR(arg_vals);
+		Value val = CAR(CDAR(arg_vals));
+		return cons3( cons4( V_LAMBDA,
+							 cons(arg,NIL),
+							 normalize_list( cons3( V(SYM_LET_A), CDR(arg_vals), CDR(rest) ) ),
+							 NIL ),
+					  normalize_sexp(val),
+					  NIL);
+	}else if( sym == SYM_IF ){
+		Value _cond, _then, _else;
+		bind3cdr( rest, _cond, _then, _else );
+		if( _else == NIL ) _else = cons(V_UNDEF, NIL);
+		return cons4( V_IF, normalize_sexp(_cond), normalize_sexp(_then), normalize_list(_else) );
+	}else if( sym == SYM_COND ){
+		if( rest == NIL ) return rest;
+		Value code = CAR(rest);
+		Value test = CAR(code);
+		if( test == V(SYM_ELSE) ) return normalize_begin(CDR(code)); // (cond (else ...))
+
+		Value expr = CDR(code);
+		if( expr == NIL ) expr = cons(V_UNDEF, NIL); 
+		if( IS_PAIR(expr) && CAR(expr) == V(SYM_ARROW) ){
+			// (cond (test => f)...)
+			// => (let ((*tmp* ?test ))
+			//      (if *tmp*
+			//        (?expr *tmp*)
+			//        (cond ...))))
+			Value tmp = gensym();
+			Value f = normalize_sexp(CADR(expr));
+			return cons4( V_LET,
+						  cons(cons3(tmp, normalize_sexp(test),NIL),NIL),
+						  cons5( V_IF, tmp, cons3(f, tmp, NIL),
+								 normalize_sexp( cons( V(SYM_COND), CDR(rest) ) ), NIL ),
+						  NIL);
+		}else if( IS_PAIR(expr) && IS_PAIR(CDR(expr)) && CADR(expr) == V(SYM_ARROW) ){
+			// (cond (test guard => ...) ...)
+			assert(0);
+		}else{
+			// (cond (test expr ...) ...)
+			// => (if test (begin expr ...) (cond ...))
+			return cons5( V_IF, test,
+						  normalize_begin(expr),
+						  normalize_sexp( cons(V(SYM_COND), CDR(rest))),
+						  NIL);
+		}
+		
+		/*	}else if( sym == SYM_AND ){
+		Value _cond, _then, _else;
+		bind3cdr( rest, _cond, _then, _else );
+		if( _else == NIL ) _else = cons(V_UNDEF, NIL);
+		return cons4( V_IF, normalize_sexp(_cond), normalize_sexp(_then), normalize_list(_else) );
+		*/
+		
+	}else if( sym == SYM_BEGIN ){
+		if( rest == NIL ) return V_UNDEF;
+		if( CDR(rest) == NIL ) return normalize_sexp(CAR(rest));
+		return cons( V_BEGIN, normalize_list(rest) );
+	}else if( sym == SYM_QUOTE ){
+		return cons( V_QUOTE, rest );
+	}else{
+		return normalize_list(s);
+	}
+}
+
+// implicit begin
+Value normalize_begin( Value list )
+{
+	return normalize_sexp( cons( (Value)SYM_BEGIN, list) );
+}
+
+Value normalize_list( Value list )
+{
+	if( IS_PAIR(list) ){
+		return cons( normalize_sexp(CAR(list)), normalize_list(CDR(list)) );
+	}else{
+		return list;
+	}
 }
 
