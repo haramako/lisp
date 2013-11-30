@@ -179,7 +179,7 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		n += snprintf( buf+n, len-n, "#<continuation:%p>", v );
 		break;
 	case TYPE_SPECIAL:
-		n += snprintf( buf+n, len-n, "%s", V2SPECIAL(v)->str );
+		n += snprintf( buf+n, len-n, "%%%s", V2SPECIAL(v)->str );
 		break;
 	case TYPE_STREAM:
 		{
@@ -1203,15 +1203,14 @@ Value V_UNDEF = NULL;
 Value V_EOF = NULL;
 Value V_END_OF_LINE = NULL;
 Stream *V_STDOUT, *V_STDIN, *V_SRC_FILE;
+
 Value V_BEGIN;
-Value V_CALL0;
-Value V_CALL1;
+Value V_APP;
 Value V_QUOTE;
 Value V_DEFINE, V_DEFINE2;
 Value V_SET_I, V_SET_I2;
-Value V_LET, V_LET_A, V_LETREC, V_LET2, V_LET3;
 Value V_LAMBDA, V_MACRO, V_DEFINE_SYNTAX;
-Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
+Value V_IF, V_IF2;
 Value V_READ_EVAL, V_READ_EVAL2;
 
 /*{{ declare_symbols */
@@ -1238,6 +1237,11 @@ Symbol *SYM_COND;
 Symbol *SYM_QUOTE;
 Symbol *SYM_ELSE;
 Symbol *SYM_BEGIN;
+Symbol *SYM_AND;
+Symbol *SYM_OR;
+Symbol *SYM_MACRO;
+Symbol *SYM_DEFINE_SYNTAX;
+Symbol *SYM_SET_I;
 Symbol *SYM_DOT;
 Symbol *SYM_DOT3;
 Symbol *SYM_ARROW;
@@ -1247,7 +1251,6 @@ Symbol *SYM_ARROW;
 	v = gc_new(TYPE_SPECIAL);		\
 	V2SPECIAL(v)->op = _op;	\
 	V2SPECIAL(v)->str = sym;				\
-	bundle_define( bundle_cur, intern(sym), v );	\
 	retain(&v);						\
 	}while(0);
 
@@ -1308,27 +1311,17 @@ void init_prelude( const char *argv0, bool with_prelude )
 	retain( &V_END_OF_LINE );
 	
 	_INIT_OPERATOR(V_BEGIN, "begin", OP_BEGIN);
-	_INIT_OPERATOR(V_CALL0, "#<call0>", OP_CALL0);
-	_INIT_OPERATOR(V_CALL1, "#<call1>", OP_CALL1);
+	_INIT_OPERATOR(V_APP, "%app", OP_APP);
 	_INIT_OPERATOR(V_QUOTE, "quote", OP_QUOTE);
 	_INIT_OPERATOR(V_DEFINE, "define", OP_DEFINE);
 	_INIT_OPERATOR(V_DEFINE2, "#<define2>", OP_DEFINE2);
 	_INIT_OPERATOR(V_SET_I, "set!", OP_SET_I);
 	_INIT_OPERATOR(V_SET_I2, "#<set!2>", OP_SET_I2);
-	_INIT_OPERATOR(V_LET, "let", OP_LET);
-	_INIT_OPERATOR(V_LET_A, "let*", OP_LET_A);
-	_INIT_OPERATOR(V_LETREC, "letrec", OP_LETREC);
-	_INIT_OPERATOR(V_LET2, "#<let2>", OP_LET2);
-	_INIT_OPERATOR(V_LET3, "#<let3>", OP_LET3);
 	_INIT_OPERATOR(V_LAMBDA, "lambda", OP_LAMBDA);
 	_INIT_OPERATOR(V_MACRO, "macro", OP_MACRO);
 	_INIT_OPERATOR(V_DEFINE_SYNTAX, "define-syntax", OP_DEFINE_SYNTAX);
 	_INIT_OPERATOR(V_IF, "if", OP_IF);
 	_INIT_OPERATOR(V_IF2, "#<if2>", OP_IF2);
-	_INIT_OPERATOR(V_AND, "and", OP_AND);
-	_INIT_OPERATOR(V_AND2, "#<and2>", OP_AND2);
-	_INIT_OPERATOR(V_OR, "or", OP_OR);
-	_INIT_OPERATOR(V_OR2, "#<or2>", OP_OR2);
 	_INIT_OPERATOR(V_READ_EVAL, "#<read-eval>", OP_READ_EVAL);
 	_INIT_OPERATOR(V_READ_EVAL2, "#<read-eval2>", OP_READ_EVAL2);
 
@@ -1356,6 +1349,11 @@ void init_prelude( const char *argv0, bool with_prelude )
 	SYM_QUOTE = intern("quote");
 	SYM_ELSE = intern("else");
 	SYM_BEGIN = intern("begin");
+	SYM_AND = intern("and");
+	SYM_OR = intern("or");
+	SYM_MACRO = intern("macro");
+	SYM_DEFINE_SYNTAX = intern("define-syntax");
+	SYM_SET_I = intern("set!");
 	SYM_DOT = intern(".");
 	SYM_DOT3 = intern("...");
 	SYM_ARROW = intern("=>");

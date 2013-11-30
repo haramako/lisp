@@ -299,6 +299,7 @@ static Value _eval( Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW *
 	bind2arg( args, code, bundle );
 	if( !code ) assert(0);
 	if( !bundle ) bundle = (Value)CONTINUATION_BUNDLE(cont);
+	code = normalize_sexp( code );
 	Value c = continuation_new( code, (Bundle*)bundle, CONTINUATION_NEXT(cont) );
 	return c;
 }
@@ -330,7 +331,7 @@ static Value _backtrace( Value args, Value cont, Value *result ) /* CFUNC_ARITY_
 static Value _call_cc( Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW call/cc */
 {
 	*result = CAR(args);
-	return continuation_new( cons3( V_CALL0, CONTINUATION_NEXT(cont), NIL ),
+	return continuation_new( cons3( V_APP, cons( CONTINUATION_NEXT(cont), NIL ), NIL ),
 							 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
 }
 

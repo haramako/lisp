@@ -32,27 +32,17 @@ extern const int TYPE_SIZE[];
 
 typedef enum {
 	OP_BEGIN = 0,
-	OP_CALL0, 
-	OP_CALL1,
+	OP_APP,
 	OP_QUOTE,
 	OP_DEFINE,
 	OP_DEFINE2,
 	OP_SET_I,
 	OP_SET_I2,
-	OP_LET,
-	OP_LET_A,
-	OP_LETREC,
-	OP_LET2,
-	OP_LET3,
 	OP_LAMBDA,
 	OP_MACRO,
 	OP_DEFINE_SYNTAX,
 	OP_IF,
 	OP_IF2,
-	OP_AND,
-	OP_AND2,
-	OP_OR,
-	OP_OR2,
 	OP_READ_EVAL,
 	OP_READ_EVAL2,
 } Operator;
@@ -428,14 +418,12 @@ extern Value V_END_OF_LINE;
 extern Stream *V_STDOUT, *V_STDIN, *V_SRC_FILE;
 
 extern Value V_BEGIN;
-extern Value V_CALL0;
-extern Value V_CALL1;
+extern Value V_APP;
 extern Value V_QUOTE;
 extern Value V_DEFINE, V_DEFINE2;
 extern Value V_SET_I, V_SET_I2;
-extern Value V_LET, V_LET_A, V_LETREC, V_LET2, V_LET3;
 extern Value V_LAMBDA, V_MACRO, V_DEFINE_SYNTAX;
-extern Value V_IF, V_IF2, V_AND, V_AND2, V_OR, V_OR2;
+extern Value V_IF, V_IF2;
 extern Value V_READ_EVAL, V_READ_EVAL2;
 
 /*{{ define_symbols(
@@ -443,8 +431,8 @@ extern Value V_READ_EVAL, V_READ_EVAL2;
   current-input-port current-output-port end-of-line values
   error syntax-rules syntax-rest
   runtime-load-path runtime-home-path lambda let letrec let*
-  define if cond quote else begin) +
-  [[".","SYM_DOT"], ["...","SYM_DOT3"], ["=>", "SYM_ARROW"]] )
+  define if cond quote else begin and or macro define-syntax) +
+  [["set!", "SYM_SET_I"], [".","SYM_DOT"], ["...","SYM_DOT3"], ["=>", "SYM_ARROW"]] )
 */
 extern Symbol *SYM_A_COMPILE_HOOK_A;
 extern Symbol *SYM_QUASIQUOTE;
@@ -469,6 +457,11 @@ extern Symbol *SYM_COND;
 extern Symbol *SYM_QUOTE;
 extern Symbol *SYM_ELSE;
 extern Symbol *SYM_BEGIN;
+extern Symbol *SYM_AND;
+extern Symbol *SYM_OR;
+extern Symbol *SYM_MACRO;
+extern Symbol *SYM_DEFINE_SYNTAX;
+extern Symbol *SYM_SET_I;
 extern Symbol *SYM_DOT;
 extern Symbol *SYM_DOT3;
 extern Symbol *SYM_ARROW;

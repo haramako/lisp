@@ -1,7 +1,3 @@
-(runtime-value-set! 'trace 1)
-(let* ((a 1) (b 2)) (+ 1 a) 1)
-(runtime-value-set! 'trace 0)
-  
 ;; macro-expand-all, quasi-quote に必要な物は早めに
 (define integer? number?)
 (define quotient /)
@@ -204,7 +200,6 @@
 	  (list 'cons l r)))
   (define (mappend f l r)
 	(if (or (null? (cdr f))
-			
 			(and (pair? r)
 				 (eq? (car r) 'quote)
 				 (eq? (car (cdr r)) '())))

@@ -230,9 +230,8 @@ Value eval_loop( Stream *stream )
 		}
 	case TYPE_PAIR:
 		if( !IS_SPECIAL(CAR(C_CODE(cont))) ){
-			Value v = CAR(C_CODE(cont));
-			NEXT_DIRECT( v,
-						 CONT_OP( V_CALL0, CDR(C_CODE(cont)), C_BUNDLE(cont), C_NEXT(cont) ) );
+			NEXT_DIRECT( CAR(C_CODE(cont)),
+						 CONT_OP( V_APP, cons( CDR(C_CODE(cont)), NIL ), C_BUNDLE(cont), C_NEXT(cont) ) );
 		}
 		
 		Value code = CDR(C_CODE(cont));
@@ -252,60 +251,20 @@ Value eval_loop( Stream *stream )
 		case OP_QUOTE:
 			NEXT( C_NEXT(cont), CAR(code) );
 			
-		case OP_CALL0:
-			// printf( "OP_CALL0: %s %s\n", v2sn(result,20), v2sn(C_CODE(cont),80) );
-			switch( TYPE_OF(result) ){
-			case TYPE_LAMBDA:
-				{
-					Lambda *lmd = V2LAMBDA(result);
-					switch( lmd->type ){
-					case LAMBDA_TYPE_LAMBDA:
-						if( code != NIL ){
-							Value args = cons(result,NIL);
-							NEXT_DIRECT( CAR(code),
-										 CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) );
-						}else{
-							Value res = NIL;
-							Value next = call( result, NIL, cont, &res);
-							NEXT( next, res );
-						}
-					default:
-						ERROR( "cannot call" );
-					}
-				}
-			case TYPE_CFUNC:
-				if( code != NIL ){
-					Value args = cons(result,NIL);
-					NEXT_DIRECT( CAR(code), 
-								 CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) );
-				}else{
-					Value res = NIL;
-					Value next = call( result, NIL, cont, &res);
-					NEXT( next, res );
-				}
-			case TYPE_SPECIAL:
-				NEXT( CONT_OP( result, code, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
-			case TYPE_CONTINUATION:
-				{
-					Value args = cons(result,NIL);
-					NEXT( CONT( CAR(code), C_BUNDLE(cont),
-								CONT_OP( V_CALL1, cons4( CDR(code), args, args, NIL), C_BUNDLE(cont), C_NEXT(cont) ) ),
-						  NIL );
-				}
-			default:
-				FAIL();
-			}
-			
-		case OP_CALL1:
+		case OP_APP:
 			{
-				// display_val( "OP_CALL1: ", C_CODE(cont) );
-				Value rest, vals, tmp;
-				bind3(code,rest,vals,tmp);
-				CDR(tmp) = cons( result, NIL );
+				// printf( "OP_CALL1: %s %s\n", v2s_limit(code,100), v2s_limit(result,10) );
+				Value rest, tmp;
+				bind2cdr(code,rest,tmp);
+				tmp = cons( result, tmp );
 				if( rest != NIL ){
-					NEXT_DIRECT( CAR(rest),
-								 CONT_OP( V_CALL1, cons4( CDR(rest), vals, CDR(tmp), NIL ), C_BUNDLE(cont), C_NEXT(cont) ) );
+					NEXT_DIRECT( CAR(rest), CONT_OP( V_APP, cons(CDR(rest), tmp), C_BUNDLE(cont), C_NEXT(cont) ) );
 				}else{
+					Value vals = NIL;
+					LIST_EACH(it,tmp){
+						vals = cons( it, vals );
+					}
+
 					Value lmd = CAR(vals);
 					if( IS_LAMBDA(lmd) || IS_CFUNC(lmd) ){
 						Value val = NIL;
@@ -340,68 +299,6 @@ Value eval_loop( Stream *stream )
 			bundle_set( C_BUNDLE(cont), V2SYMBOL(code), result );
 			NEXT( C_NEXT(cont), NIL );
 
-		case OP_LET:
-		case OP_LET_A:
-		case OP_LETREC:
-			if( op == OP_LET_A ) vdump( code );
-			//printf( "LET: %s\n", v2sn(code,80) );
-			// TODO: read/eval時に変換するようにする
-			if( op == OP_LET && IS_SYMBOL( CAR(code) ) ){
-				Value tmp_code = cons( V(SYM_LET), code);
-				Value new_code = normalize_let( tmp_code );
-				if( new_code != tmp_code ){
-					op = OP_LETREC;
-					code = CDR(new_code);
-				}
-			}
-			if( IS_PAIR( CAR(code) )){
-				// normal let
-				Bundle *new_bundle = bundle_new(C_BUNDLE(cont));
-				switch( op ){
-				case OP_LET:
-					NEXT( CONT_OP( V_LET2, cons((Value)C_BUNDLE(cont), code), new_bundle, C_NEXT(cont)), NIL );
-				case OP_LET_A:
-					NEXT( CONT_OP( V_LET2, cons((Value)new_bundle, code), new_bundle, C_NEXT(cont)), NIL );
-				case OP_LETREC:
-					for( Value cur=CAR(code); cur != NIL; cur = CDR(cur) ){
-						Value sym_val = CAR(cur);
-						CHECK( IS_PAIR(sym_val) );
-						Value sym = CAR(sym_val);
-						CHECK( IS_SYMBOL(sym) );
-						bundle_define( new_bundle, V2SYMBOL(sym), NIL );
-					}
-					NEXT( CONT_OP( V_LET2, cons((Value)new_bundle, code), new_bundle, C_NEXT(cont)), NIL );
-				default:
-					assert(0);
-				}
-			}else{
-				FAIL();
-			}
-				
-		case OP_LET2:
-			{
-				Value bundle, vars, body;
-				bind3cdr( code, bundle, vars, body );
-				// printf( "OP_LET2: %s\n", v2s(vars) );
-				if( IS_PAIR(vars) ){
-					// printf( "OP_LET2- %s\n", v2s(CADR(CAR(vars))) );
-					NEXT( CONT( CADR(CAR(vars)), (Bundle*)bundle,
-								CONT_OP( V_LET3, cons4( (Value)bundle, CAAR(vars), CDR(vars), body ), C_BUNDLE(cont), C_NEXT(cont) )), NIL);
-				}else if( vars == NIL ){
-					NEXT( CONT_OP( V_BEGIN, body, C_BUNDLE(cont), C_NEXT(cont) ), NIL );
-				}else{
-					FAIL();
-				}
-			}
-				
-		case OP_LET3:
-			{
-				Value bundle, sym, form;
-				bind3cdr( code, bundle, sym, form );
-				bundle_define( C_BUNDLE(cont), V2SYMBOL(sym), result );
-				NEXT( CONT_OP( V_LET2, cons( bundle, form ), C_BUNDLE(cont), C_NEXT(cont)), NIL );
-			}
-				
 		case OP_LAMBDA:
 		case OP_MACRO:
 			{
@@ -416,10 +313,8 @@ Value eval_loop( Stream *stream )
 			}
 
 		case OP_DEFINE_SYNTAX:
-			{
-				bundle_define( C_BUNDLE(cont), V2SYMBOL(CAR(code)), CADR(code) );
-				NEXT( C_NEXT(cont), NIL );
-			}
+			bundle_define( C_BUNDLE(cont), V2SYMBOL(CAR(code)), CADR(code) );
+			NEXT( C_NEXT(cont), NIL );
 				
 		case OP_IF:
 			NEXT_DIRECT( CAR(code),
@@ -432,57 +327,24 @@ Value eval_loop( Stream *stream )
 				NEXT( CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
 			}
 
-		case OP_AND:
-			NEXT_DIRECT( CAR(code),
-						 CONT_OP( V_AND2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
-
-		case OP_AND2:
-			if( result != VALUE_F && IS_PAIR(code) ){
-				NEXT_DIRECT( CAR(code),
-							 CONT_OP( V_AND2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
-			}else{
-				NEXT( C_NEXT(cont), result );
-			}
-
-		case OP_OR:
-			NEXT_DIRECT( CAR(code),
-						 CONT_OP( V_OR2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
-
-		case OP_OR2:
-			if( result == VALUE_F && IS_PAIR(code) ){
-				NEXT_DIRECT( CAR(code),
-							 CONT_OP( V_OR2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
-			}else{
-				NEXT( C_NEXT(cont), result );
-			}
-				
 		case OP_READ_EVAL:
 			{
 				Value stat = stream_read_value( V2STREAM(code) );
 				if( opt_trace ) printf( "trace: %s\n", v2s_limit(stat,100) );
-				if( stat != V_EOF ){
-					// stat = syntax_expand1( stat );
-						
-					Value compile_hook = bundle_get( bundle_cur, SYM_A_COMPILE_HOOK_A, NIL );
-					if( compile_hook != NIL ){
-						// *compile-hook* があれば呼び出す
-						stat = cons3( compile_hook, cons3( V_QUOTE, stat, NIL ), NIL );
-						// printf( "READ_EVAL: %s\n", v2s(stat) );
-						NEXT( CONT( stat, C_BUNDLE(cont),
-									CONT_OP( V_READ_EVAL2, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-					}else{
-						stat = normalize_sexp(stat);
-						if( opt_trace ) printf( "trace: %s\n", v2s_limit(stat,100) );
-						NEXT( CONT( stat, C_BUNDLE(cont),
-									CONT_OP( V_READ_EVAL, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-					}
+				if( stat != V_EOF ) NEXT( C_NEXT(cont), NIL );
+				
+				Value compile_hook = bundle_get( bundle_cur, SYM_A_COMPILE_HOOK_A, NIL );
+				if( compile_hook != NIL ){
+					// *compile-hook* があれば呼び出す
+					stat = cons3( compile_hook, cons3( V_QUOTE, stat, NIL ), NIL );
+					NEXT( CONT( stat, C_BUNDLE(cont),
+								CONT_OP( V_READ_EVAL2, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
 				}else{
-					NEXT( C_NEXT(cont), NIL );
+					NEXT( CONT_OP( V_READ_EVAL2, code, C_BUNDLE(cont), C_NEXT(cont) ), stat );
 				}
 			}
 				
 		case OP_READ_EVAL2:
-			if( opt_trace ) printf( "trace: %s\n", v2s_limit(result,100) );
 			result = normalize_sexp( result );
 			if( opt_trace ) printf( "trace: %s\n", v2s_limit(result,1000) );
 			NEXT( CONT( result, C_BUNDLE(cont),
@@ -516,7 +378,9 @@ Value normalize_sexp( Value s )
 {
 	// printf( "s:%s\n", v2s_limit(s,30) );
 	if( !IS_PAIR(s) ) return s;
+	if( IS_PAIR(CAR(s)) ) return normalize_list( s );
 	if( TYPE_OF(CAR( s )) != TYPE_SYMBOL ) return s;
+
 	Symbol *sym = V2SYMBOL(CAR( s ));
 	Value rest = CDR(s);
 	if( sym == SYM_DEFINE ){
@@ -530,6 +394,15 @@ Value normalize_sexp( Value s )
 		}else{
 			assert(0);
 		}
+	}else if( sym == SYM_LAMBDA ){
+		return cons3( V_LAMBDA, CAR(rest), normalize_list( CDR(rest) ) );
+
+	}else if( sym == SYM_MACRO ){
+		return cons3( V_MACRO, CAR(rest), normalize_list( CDR(rest) ) );
+
+	}else if( sym == SYM_DEFINE_SYNTAX ){
+		return cons( V_DEFINE_SYNTAX, rest );
+		
 	}else if( sym == SYM_LET ){
 		if( IS_SYMBOL(CAR(rest)) ){
 			// named let
@@ -553,6 +426,7 @@ Value normalize_sexp( Value s )
 			return cons( cons3( V_LAMBDA, CAR(arg_val), normalize_list(CDR(rest)) ),
 						 normalize_list( CDR(arg_val)) );
 		}
+		
 	}else if( sym == SYM_LETREC ){
 		// (letrec ((a b) ...) => ((lambda (a ...) (set! a b) ...) #<undef>)
 		Value arg_val = unzip_arg_val(CAR(rest));
@@ -563,6 +437,7 @@ Value normalize_sexp( Value s )
 			undefs = cons(V_UNDEF,undefs);
 		}
 		return cons( cons4( V_LAMBDA, CAR(arg_val), cons(V_BEGIN, sets), normalize_list(CDR(rest))), undefs );
+
 	}else if( sym == SYM_LET_A ){
 		// (let* ((a v) ...) ...) => ((lambda (a) (let* (...) ...)) v)
 		Value arg_vals = CAR(rest);
@@ -575,11 +450,13 @@ Value normalize_sexp( Value s )
 							 NIL ),
 					  normalize_sexp(val),
 					  NIL);
+		
 	}else if( sym == SYM_IF ){
 		Value _cond, _then, _else;
 		bind3cdr( rest, _cond, _then, _else );
 		if( _else == NIL ) _else = cons(V_UNDEF, NIL);
 		return cons4( V_IF, normalize_sexp(_cond), normalize_sexp(_then), normalize_list(_else) );
+		
 	}else if( sym == SYM_COND ){
 		if( rest == NIL ) return rest;
 		Value code = CAR(rest);
@@ -590,16 +467,19 @@ Value normalize_sexp( Value s )
 		if( expr == NIL ) expr = cons(V_UNDEF, NIL); 
 		if( IS_PAIR(expr) && CAR(expr) == V(SYM_ARROW) ){
 			// (cond (test => f)...)
-			// => (let ((*tmp* ?test ))
-			//      (if *tmp*
-			//        (?expr *tmp*)
-			//        (cond ...))))
+			// => ((lambda (*tmp*)
+			//       (if *tmp*
+			//         (?expr *tmp*)
+			//         (cond ...) ))
+			//      ?test )
 			Value tmp = gensym();
 			Value f = normalize_sexp(CADR(expr));
-			return cons4( V_LET,
-						  cons(cons3(tmp, normalize_sexp(test),NIL),NIL),
-						  cons5( V_IF, tmp, cons3(f, tmp, NIL),
-								 normalize_sexp( cons( V(SYM_COND), CDR(rest) ) ), NIL ),
+			return cons3( cons4( V_LAMBDA,
+								 cons(tmp, NIL), 
+								 cons5( V_IF, tmp, cons3(f, tmp, NIL),
+										normalize_sexp( cons( V(SYM_COND), CDR(rest) ) ), NIL ),
+								 NIL ),
+						  normalize_sexp(test),
 						  NIL);
 		}else if( IS_PAIR(expr) && IS_PAIR(CDR(expr)) && CADR(expr) == V(SYM_ARROW) ){
 			// (cond (test guard => ...) ...)
@@ -607,25 +487,53 @@ Value normalize_sexp( Value s )
 		}else{
 			// (cond (test expr ...) ...)
 			// => (if test (begin expr ...) (cond ...))
-			return cons5( V_IF, test,
+			return cons5( V_IF, normalize_sexp(test),
 						  normalize_begin(expr),
 						  normalize_sexp( cons(V(SYM_COND), CDR(rest))),
 						  NIL);
 		}
 		
-		/*	}else if( sym == SYM_AND ){
-		Value _cond, _then, _else;
-		bind3cdr( rest, _cond, _then, _else );
-		if( _else == NIL ) _else = cons(V_UNDEF, NIL);
-		return cons4( V_IF, normalize_sexp(_cond), normalize_sexp(_then), normalize_list(_else) );
-		*/
+	}else if( sym == SYM_AND ){
+		// (and) => #<undef>
+		// (and a) => a
+		// (and a ...) => ((lambda (tmp) (if tmp (and ...) tmp)) a)
+		if( rest == NIL ) return VALUE_T;
+		if( CDR(rest) == NIL ) return normalize_sexp(CAR(rest));
+		Value test = CAR(rest);
+		Value tmp = gensym();
+		return cons3( cons4( V_LAMBDA,
+							 cons( tmp, NIL ),
+							 cons5( V_IF, tmp, normalize_sexp( cons( V(SYM_AND), CDR(rest) ) ), tmp, NIL ),
+							 NIL ),
+					  normalize_sexp( test ),
+					  NIL );
+
+	}else if( sym == SYM_OR ){
+		// (or) => #f
+		// (or a) => a
+		// (or a ...) => ((lambda (tmp) (if tmp tmp (or ...))) a)
+		if( rest == NIL ) return VALUE_F;
+		if( CDR(rest) == NIL ) return normalize_sexp(CAR(rest));
+		Value test = CAR(rest);
+		Value tmp = gensym();
+		return cons3( cons4( V_LAMBDA,
+							 cons( tmp, NIL ),
+							 cons5( V_IF, tmp, tmp, normalize_sexp( cons( V(SYM_OR), CDR(rest) ) ), NIL ),
+							 NIL ),
+					  normalize_sexp( test ),
+					  NIL );
 		
 	}else if( sym == SYM_BEGIN ){
 		if( rest == NIL ) return V_UNDEF;
 		if( CDR(rest) == NIL ) return normalize_sexp(CAR(rest));
 		return cons( V_BEGIN, normalize_list(rest) );
+		
+	}else if( sym == SYM_SET_I ){
+		return cons3( V_SET_I, CAR(rest), normalize_sexp( CDR(rest) ) );
+		
 	}else if( sym == SYM_QUOTE ){
 		return cons( V_QUOTE, rest );
+		
 	}else{
 		return normalize_list(s);
 	}
