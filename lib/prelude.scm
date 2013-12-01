@@ -72,7 +72,7 @@
   (puts "tee:" x)
   x)
 
-#|
+#| normalize に移したためいらない
 (define-syntax cond
   (syntax-rules (=> else)
 	((_ (else ?body ...))
