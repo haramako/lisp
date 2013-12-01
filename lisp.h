@@ -47,22 +47,12 @@ typedef enum {
 	OP_READ_EVAL2,
 } Operator;
 
-typedef struct Cell* Value;
+typedef struct CellHeader* Value;
 
-typedef struct {
+typedef struct CellHeader{
 	char type;
 	char marked;
 } CellHeader;
-
-typedef struct Cell {
-	CellHeader h;
-	union {
-		struct {
-			struct Bundle *bundle;
-			Value data; // (code . next )
-		} continuation;
-	} d;
-} Cell;
 
 typedef struct Unused {
 	CellHeader h;
@@ -127,6 +117,14 @@ typedef struct Bundle {
 	Lambda *lambda;
 } Bundle;
 
+typedef struct Continuation {
+	CellHeader h;
+	struct Bundle *bundle;
+	Value data;
+	Value code;
+	Value next;
+} Continuation;
+
 typedef struct CFunc {
 	CellHeader h;
 	int arity;
@@ -177,23 +175,23 @@ typedef Value (*CFunction5)( Bundle *bundle, Value v1, Value v2, Value v3, Value
 typedef Value (*CFunction6)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6 );
 typedef Value (*CFunction7)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6, Value v7 );
 
-#define TYPE_OF(v) ((Type)(v)->h.type)
+#define TYPE_OF(v) ((Type)(v)->type)
 
-#define IS_UNUSED(v) ((v)->h.type==TYPE_UNUSED)
-#define IS_SPECIAL(v) ((v)->h.type==TYPE_SPECIAL)
-#define IS_INT(v) ((v)->h.type==TYPE_INT)
-#define IS_CHAR(v) ((v)->h.type==TYPE_CHAR)
-#define IS_SYMBOL(v) ((v)->h.type==TYPE_SYMBOL)
-#define IS_STRING(v) ((v)->h.type==TYPE_STRING)
-#define IS_STRING_BODY(v) ((v)->h.type==TYPE_STRING_BODY)
-#define IS_PAIR(v) ((v)->h.type==TYPE_PAIR)
-#define IS_LAMBDA(v) ((v)->h.type==TYPE_LAMBDA)
-#define IS_CFUNC(v) ((v)->h.type==TYPE_CFUNC)
-#define IS_BUNDLE(v) ((v)->h.type==TYPE_BUNDLE)
-#define IS_CONTINUATION(v) ((v)->h.type==TYPE_CONTINUATION)
-#define IS_STREAM(v) ((v)->h.type==TYPE_STREAM)
-#define IS_POINTER(v) ((v)->h.type==TYPE_POINTER)
-#define IS_ERROR(v) ((v)->h.type==TYPE_ERROR)
+#define IS_UNUSED(v) ((v)->type==TYPE_UNUSED)
+#define IS_SPECIAL(v) ((v)->type==TYPE_SPECIAL)
+#define IS_INT(v) ((v)->type==TYPE_INT)
+#define IS_CHAR(v) ((v)->type==TYPE_CHAR)
+#define IS_SYMBOL(v) ((v)->type==TYPE_SYMBOL)
+#define IS_STRING(v) ((v)->type==TYPE_STRING)
+#define IS_STRING_BODY(v) ((v)->type==TYPE_STRING_BODY)
+#define IS_PAIR(v) ((v)->type==TYPE_PAIR)
+#define IS_LAMBDA(v) ((v)->type==TYPE_LAMBDA)
+#define IS_CFUNC(v) ((v)->type==TYPE_CFUNC)
+#define IS_BUNDLE(v) ((v)->type==TYPE_BUNDLE)
+#define IS_CONTINUATION(v) ((v)->type==TYPE_CONTINUATION)
+#define IS_STREAM(v) ((v)->type==TYPE_STREAM)
+#define IS_POINTER(v) ((v)->type==TYPE_POINTER)
+#define IS_ERROR(v) ((v)->type==TYPE_ERROR)
 
 #define V(v) ((Value)v)
 inline Unused* V2UNUSED(Value v){ assert(IS_UNUSED(v)); return (Unused*)v; }
@@ -209,7 +207,7 @@ inline Pair* V2PAIR(Value v){ assert(IS_PAIR(v)); return (Pair*)v; }
 inline Lambda* V2LAMBDA(Value v){ assert(IS_LAMBDA(v)); return (Lambda*)v; }
 inline CFunc* V2CFUNC(Value v){ assert(IS_CFUNC(v)); return (CFunc*)v; }
 inline Bundle* V2BUNDLE(Value v){ assert(IS_BUNDLE(v)); return (Bundle*)v; }
-#define V2CONTINUATION(v) (assert(IS_CONTINUATION(v)),v)
+inline Continuation* V2CONTINUATION(Value v){ assert(IS_CONTINUATION(v)); return (Continuation*)v; }
 inline Stream* V2STREAM(Value v){ assert(IS_STREAM(v)); return (Stream*)v; }
 inline Pointer* V2POINTER(Value v){ assert(IS_POINTER(v)); return (Pointer*)v; }
 inline Error* V2ERROR(Value v){ assert(IS_ERROR(v)); return (Error*)v; }
@@ -355,10 +353,10 @@ Value bundle_get( Bundle *b, Symbol *sym, Value def );
 
 // Continuation
 
-#define CONTINUATION_BUNDLE(v) (V2CONTINUATION(v)->d.continuation.bundle)
-#define CONTINUATION_DATA(v) (V2CONTINUATION(v)->d.continuation.data)
-#define CONTINUATION_CODE(v) (CAR(V2CONTINUATION(v)->d.continuation.data))
-#define CONTINUATION_NEXT(v) (CDR(V2CONTINUATION(v)->d.continuation.data))
+#define CONTINUATION_BUNDLE(v) (V2CONTINUATION(v)->bundle)
+#define CONTINUATION_DATA(v) (V2CONTINUATION(v)->data)
+#define CONTINUATION_CODE(v) (V2CONTINUATION(v)->code)
+#define CONTINUATION_NEXT(v) (V2CONTINUATION(v)->next)
 
 Value continuation_new( Value code, Bundle *bundle, Value next );
 

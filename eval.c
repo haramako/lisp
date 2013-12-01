@@ -331,7 +331,7 @@ Value eval_loop( Stream *stream )
 			{
 				Value stat = stream_read_value( V2STREAM(code) );
 				if( opt_trace ) printf( "trace: %s\n", v2s_limit(stat,100) );
-				if( stat != V_EOF ) NEXT( C_NEXT(cont), NIL );
+				if( stat == V_EOF ) NEXT( C_NEXT(cont), NIL );
 				
 				Value compile_hook = bundle_get( bundle_cur, SYM_A_COMPILE_HOOK_A, NIL );
 				if( compile_hook != NIL ){
@@ -346,7 +346,7 @@ Value eval_loop( Stream *stream )
 				
 		case OP_READ_EVAL2:
 			result = normalize_sexp( result );
-			if( opt_trace ) printf( "trace: %s\n", v2s_limit(result,1000) );
+			// if( opt_trace ) printf( "trace: %s\n", v2s_limit(result,1000) );
 			NEXT( CONT( result, C_BUNDLE(cont),
 						CONT_OP( V_READ_EVAL, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
 		}

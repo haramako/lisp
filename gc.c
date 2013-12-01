@@ -21,7 +21,7 @@ static Value _cell_next[2] = { NULL, NULL };
 static int _arena_size[2] = { 0, 0 };
 Pointer* retained = NULL;
 
-static Cell* _alloc( int arena_idx )
+static CellHeader* _alloc( int arena_idx )
 {
 	if( !_cell_next[arena_idx] ){
 		Arena *arena = malloc(ARENA_SIZE);
@@ -29,8 +29,8 @@ static Cell* _alloc( int arena_idx )
 		int count = ( ARENA_SIZE - sizeof(Arena) ) / cell_size;
 		void *cur = ARENA_ENTRY(arena);
 		for( int i=0; i<count; i++, cur += cell_size ){
-			((Cell*)cur)->h.type = TYPE_UNUSED;
-			V2UNUSED((Cell*)cur)->next = (i<(count-1))?(cur+cell_size):(NULL);
+			((CellHeader*)cur)->type = TYPE_UNUSED;
+			V2UNUSED((CellHeader*)cur)->next = (i<(count-1))?(cur+cell_size):(NULL);
 		}
 		arena->size = cell_size;
 		arena->count = count;
@@ -40,7 +40,7 @@ static Cell* _alloc( int arena_idx )
 		prof.size += count;
 	}
 
-	Cell *result = _cell_next[arena_idx];
+	CellHeader *result = _cell_next[arena_idx];
 	assert( IS_UNUSED(result) );
 	_cell_next[arena_idx] = V2UNUSED(result)->next;
 	return result;
@@ -49,9 +49,9 @@ static Cell* _alloc( int arena_idx )
 Value gc_new( Type type )
 {
 	assert( type > 0 && type < TYPE_MAX );
-	Cell *cell = _alloc( (TYPE_SIZE[type]>sizeof(Cell))?1:0);
-	cell->h.type = type;
-	cell->h.marked = -1;
+	CellHeader *cell = _alloc( (TYPE_SIZE[type]>sizeof(CellHeader))?1:0);
+	cell->type = type;
+	cell->marked = -1;
 	
 	prof.use++;
 	prof.alloc_count++;
@@ -98,8 +98,8 @@ static void _mark( Value v )
 {
 	if( !v ) return;
 	
-	if( v->h.marked == _color ) return;
-	v->h.marked = _color;
+	if( v->marked == _color ) return;
+	v->marked = _color;
 	
 	switch( TYPE_OF(v) ){
 	case TYPE_UNUSED:
@@ -145,8 +145,13 @@ static void _mark( Value v )
 		}
 		break;
 	case TYPE_CONTINUATION:
-		_mark( (Value)CONTINUATION_BUNDLE(v) );
-		_mark( CONTINUATION_DATA(v) );
+		{
+			Continuation *c = V2CONTINUATION(v);
+			_mark( V(c->bundle) );
+			_mark( c->data );
+			_mark( c->next );
+			_mark( c->code );
+		}
 		break;
 	case TYPE_STREAM:
 		{
@@ -167,6 +172,7 @@ static void _mark( Value v )
 		break;
 	case TYPE_ERROR:
 		_mark( (Value)V2ERROR(v)->str );
+		break;
 	}
 }
 
@@ -227,13 +233,13 @@ void gc_run( int verbose )
 			int count = arena->count;
 			int size = arena->size;
 			for( int i=0; i<count; i++, p+=size){
-				Value cur = (Cell*)p;
-				if( cur->h.type == TYPE_UNUSED ) continue;
+				Value cur = (CellHeader*)p;
+				if( cur->type == TYPE_UNUSED ) continue;
 				all++;
 
-				if( cur->h.marked != _color ){
+				if( cur->marked != _color ){
 					_free( cur );
-					cur->h.type = TYPE_UNUSED;
+					cur->type = TYPE_UNUSED;
 					V2UNUSED(cur)->next = _cell_next[arena_idx];
 					_cell_next[arena_idx] = cur;
 					prof.use--;

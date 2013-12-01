@@ -32,8 +32,8 @@ const char *TYPE_NAMES[] = {
 
 const int TYPE_SIZE[] = {
 	sizeof(Unused),
-	sizeof(Cell),
-	sizeof(Cell),
+	sizeof(CellHeader),
+	sizeof(CellHeader),
 	sizeof(Integer),
 	sizeof(Integer),
 	sizeof(Symbol),
@@ -43,7 +43,7 @@ const int TYPE_SIZE[] = {
 	sizeof(Lambda),
 	sizeof(CFunc),
 	sizeof(Bundle),
-	sizeof(Cell),
+	sizeof(Continuation),
 	sizeof(Special),
 	sizeof(Stream),
 	sizeof(Pointer),
@@ -66,6 +66,7 @@ extern inline Pair* V2PAIR(Value v);
 extern inline Lambda* V2LAMBDA(Value v);
 extern inline CFunc* V2CFUNC(Value v);
 extern inline Bundle* V2BUNDLE(Value v);
+extern inline Continuation* V2CONTINUATION(Value v);
 extern inline Stream* V2STREAM(Value v);
 extern inline Pointer* V2POINTER(Value v);
 extern inline Error* V2ERROR(Value v);
@@ -595,10 +596,12 @@ Value bundle_get( Bundle *b, Symbol *sym, Value def )
 
 Value continuation_new( Value code, Bundle *bundle, Value next )
 {
-	Value v = gc_new( TYPE_CONTINUATION );
-	CONTINUATION_BUNDLE(v) = bundle;
-	CONTINUATION_DATA(v) = cons( code, next );
-	return v;
+	Continuation *v = (Continuation*)gc_new( TYPE_CONTINUATION );
+	v->bundle = bundle;
+	v->data = NIL;
+	v->code = code;
+	v->next = next;
+	return V(v);
 }
 
 //********************************************************
