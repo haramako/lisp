@@ -7,6 +7,7 @@
 #include <limits.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <linux/limits.h>
 
 Profile prof;
 
@@ -687,6 +688,8 @@ static int _read_token( Stream *s, char *buf )
 	return 0;
 }
 
+#define isnumber isdigit
+
 static Value _parse_token( char *str )
 {
 	if( isnumber(str[0]) || (str[0] == '-' && isnumber(str[1])) ){
@@ -1282,8 +1285,8 @@ void init_prelude( const char *argv0, bool with_prelude )
 	char home_path[PATH_MAX];
 	_get_home_path( argv0, home_path );
 	
-	signal( SIGABRT, handler );
-	signal( SIGSEGV, handler );
+	//signal( SIGABRT, handler );
+	//signal( SIGSEGV, handler );
 	
 	gc_init();
 
