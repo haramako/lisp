@@ -1,17 +1,17 @@
 import os
 import glob
-import commands
+#import commands
 
 def do_test(target, source, env):
     for file in glob.glob('tests/test*.scm') + glob.glob('tests/*.ss'):
-        print "testing", file, "..."
+        print ("testing", file, "...")
         result, out = commands.getstatusoutput( "./mlisp "+file )
         if result != 0:
-            print "="*80
-            print "ERROR: in", file
-            print "-"*80
-            print out
-            print "="*80
+            print( "="*80)
+            print( "ERROR: in", file)
+            print( "-"*80)
+            print( out)
+            print( "="*80)
 
 
 env = DefaultEnvironment(CC='cc', **os.environ)
