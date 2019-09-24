@@ -5,9 +5,16 @@
 #include <ctype.h>
 #include <setjmp.h>
 #include <limits.h>
-#include <unistd.h>
+//#include <unistd.h>
 #include <stdarg.h>
-#include <linux/limits.h>
+#ifdef WIN32
+#include <windows.h>
+#ifndef PATH_MAX
+#define PATH_MAX MAX_PATH
+#endif
+#else
+//#include <linux/limits.h>
+#endif
 
 Profile prof;
 
@@ -1181,6 +1188,10 @@ Value syntax_expand1( Value code )
 // print backtrace
 // See: http://expcodes.com/12895
 // See: http://0xcc.net/blog/archives/000067.html
+#ifdef WIN32
+static void handler(int sig) {
+}
+#else
 #include <execinfo.h>
 static void handler(int sig) {
 	void *array[10];
@@ -1201,6 +1212,7 @@ static void handler(int sig) {
 	}
 	exit(1);
 }
+#endif
 
 Value NIL = NULL;
 Value VALUE_T = NULL;
@@ -1265,6 +1277,9 @@ bool opt_debug = false;
 
 static void _get_home_path( const char *argv0, char *out_path )
 {
+#if WIN32
+	strncpy_s(out_path, 16, ".", 16);
+#else
 	char cwd[PATH_MAX], path[PATH_MAX];
 	getcwd( cwd, sizeof(cwd) );
 	if( argv0[0] == '/' ){
@@ -1273,6 +1288,7 @@ static void _get_home_path( const char *argv0, char *out_path )
 		sprintf( path, "%s/%s/..", cwd, argv0 );
 	}
 	realpath( path, out_path );
+#endif
 }
 
 void init( const char *argv0 )

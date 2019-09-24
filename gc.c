@@ -13,7 +13,7 @@ typedef struct Arena {
 	int count;
 } Arena;
 
-#define ARENA_ENTRY(a) (((void*)a)+sizeof(Arena))
+#define ARENA_ENTRY(a) (((char*)a)+sizeof(Arena))
 
 static int _color = 0;
 static Arena *_arena_root[2] = { NULL, NULL };
@@ -27,7 +27,7 @@ static CellHeader* _alloc( int arena_idx )
 		Arena *arena = malloc(ARENA_SIZE);
 		int cell_size = _arena_size[arena_idx];
 		int count = ( ARENA_SIZE - sizeof(Arena) ) / cell_size;
-		void *cur = ARENA_ENTRY(arena);
+		char *cur = ARENA_ENTRY(arena);
 		for( int i=0; i<count; i++, cur += cell_size ){
 			((CellHeader*)cur)->type = TYPE_UNUSED;
 			V2UNUSED((CellHeader*)cur)->next = (i<(count-1))?(cur+cell_size):(NULL);
@@ -229,7 +229,7 @@ void gc_run( int verbose )
 	int all = 0, kill = 0;
 	for( int arena_idx=0; arena_idx<2; arena_idx++ ){
 		for( Arena *arena = _arena_root[arena_idx]; arena != NULL; arena = arena->next ){
-			void *p = ARENA_ENTRY(arena);
+			char *p = ARENA_ENTRY(arena);
 			int count = arena->count;
 			int size = arena->size;
 			for( int i=0; i<count; i++, p+=size){

@@ -348,7 +348,7 @@ static Value _load( Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW *
 							 bundle_cur, CONTINUATION_NEXT(cont) );
 }
 
-static Value _exit( Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW */
+static Value _exit_func( Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW exit */
 {
 	bind1arg(args,*result);
 	if( !*result ) *result = NIL;
@@ -755,7 +755,7 @@ void cfunc_init()
 	defun( "backtrace", CFUNC_ARITY_RAW, _backtrace );
 	defun( "call/cc", CFUNC_ARITY_RAW, _call_cc );
 	defun( "load", CFUNC_ARITY_RAW, _load );
-	defun( "exit", CFUNC_ARITY_RAW, _exit );
+	defun( "exit", CFUNC_ARITY_RAW, _exit_func );
 	defun( "eof-object?", 1, _eof_object_p );
 	defun( "display", -2, _display );
 	defun( "write", -2, _write );
