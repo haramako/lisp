@@ -13,7 +13,7 @@ typedef struct Arena {
 	int count;
 } Arena;
 
-#define ARENA_ENTRY(a) (((char*)a)+sizeof(Arena))
+#define ARENA_ENTRY(a) (((void*)a)+sizeof(Arena))
 
 static int _color = 0;
 static Arena *_arena_root[2] = { NULL, NULL };
@@ -30,7 +30,7 @@ static CellHeader* _alloc( int arena_idx )
 		char *cur = ARENA_ENTRY(arena);
 		for( int i=0; i<count; i++, cur += cell_size ){
 			((CellHeader*)cur)->type = TYPE_UNUSED;
-			V2UNUSED((CellHeader*)cur)->next = (i<(count-1))?(cur+cell_size):(NULL);
+			V2UNUSED((CellHeader*)cur)->next = (void*)((i<(count-1))?(cur+cell_size):(NULL));
 		}
 		arena->size = cell_size;
 		arena->count = count;

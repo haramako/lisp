@@ -5,7 +5,8 @@
 #include <ctype.h>
 #include <setjmp.h>
 #include <limits.h>
-//#include <unistd.h>
+#include <inttypes.h>
+#include <unistd.h>
 #include <stdarg.h>
 #ifdef WIN32
 #include <windows.h>
@@ -104,7 +105,7 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		n += snprintf( buf, len, (v==VALUE_T)?"#t":"#f" );
 		break;
 	case TYPE_INT:
-		n += snprintf( buf, len, "%lld", V2INT(v) );
+		n += snprintf( buf, len, "%" PRId64, V2INT(v) );
 		break;
 	case TYPE_CHAR:
 		{

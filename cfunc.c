@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <inttypes.h>
 
 static Value _identity( Bundle *bundle, Value v ) /* 1 */
 {
@@ -548,7 +549,7 @@ static Value _number_to_string( Bundle *bundle, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_INT(v);
 	char buf[32];
-	sprintf( buf, "%lld", V2INT(v) );
+	sprintf( buf, "%" PRId64, V2INT(v) );
 	return (Value)string_new(buf);
 }
 

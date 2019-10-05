@@ -8,4 +8,12 @@ xcuserdata
 GPATH
 GRTAGS
 GTAGS
+
+
 /build
+/CMakeCache.txt
+/CMakeFiles
+/Makefile
+/cmake_install.cmake
+
+
