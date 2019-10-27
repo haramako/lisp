@@ -159,6 +159,7 @@ Value normalize_let( Value code )
 	// normalize named let
 	Value name, dummy, arg_vals, body;
 	bind4cdr( code, dummy, name, arg_vals, body );
+	dummy = dummy; // avoid warning
 	
 	Value args = NIL;
 	Value vals = NIL;
@@ -253,7 +254,7 @@ Value eval_loop( Stream *stream )
 			
 		case OP_APP:
 			{
-				// printf( "OP_CALL1: %s %s\n", v2s_limit(code,100), v2s_limit(result,10) );
+				//printf( "OP_APP: %s %s\n", v2s_limit(code,100), v2s_limit(result,10) );
 				Value rest, tmp;
 				bind2cdr(code,rest,tmp);
 				tmp = cons( result, tmp );
@@ -315,7 +316,21 @@ Value eval_loop( Stream *stream )
 		case OP_DEFINE_SYNTAX:
 			bundle_define( C_BUNDLE(cont), V2SYMBOL(CAR(code)), CADR(code) );
 			NEXT( C_NEXT(cont), NIL );
-				
+
+		case OP_DEFINE_SYNTAX2:
+			//printf("SYNTAX2: %s\n", v2s(code));
+			NEXT_DIRECT( CADR(code),
+						 CONT_OP( V_DEFINE_SYNTAX22, CAR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
+
+		case OP_DEFINE_SYNTAX22:
+			{
+				//printf("SYNTAX22: %s\n", v2s(code));
+				Lambda *lmd = V2LAMBDA(result);
+				lmd->type = LAMBDA_TYPE_MACRO;
+				bundle_define( C_BUNDLE(cont), V2SYMBOL(code), result );
+				NEXT( C_NEXT(cont), NIL );
+			}
+			
 		case OP_IF:
 			NEXT_DIRECT( CAR(code),
 						 CONT_OP( V_IF2, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
@@ -402,6 +417,9 @@ Value normalize_sexp( Value s )
 
 	}else if( sym == SYM_DEFINE_SYNTAX ){
 		return cons( V_DEFINE_SYNTAX, rest );
+		
+	}else if( sym == SYM_DEFINE_SYNTAX2 ){
+		return cons( V_DEFINE_SYNTAX2, normalize_sexp(rest) );
 		
 	}else if( sym == SYM_LET ){
 		if( IS_SYMBOL(CAR(rest)) ){

@@ -41,6 +41,8 @@ typedef enum {
 	OP_LAMBDA,
 	OP_MACRO,
 	OP_DEFINE_SYNTAX,
+	OP_DEFINE_SYNTAX2,
+	OP_DEFINE_SYNTAX22,
 	OP_IF,
 	OP_IF2,
 	OP_READ_EVAL,
@@ -420,7 +422,7 @@ extern Value V_APP;
 extern Value V_QUOTE;
 extern Value V_DEFINE, V_DEFINE2;
 extern Value V_SET_I, V_SET_I2;
-extern Value V_LAMBDA, V_MACRO, V_DEFINE_SYNTAX;
+extern Value V_LAMBDA, V_MACRO, V_DEFINE_SYNTAX, V_DEFINE_SYNTAX2, V_DEFINE_SYNTAX22;
 extern Value V_IF, V_IF2;
 extern Value V_READ_EVAL, V_READ_EVAL2;
 
@@ -429,8 +431,9 @@ extern Value V_READ_EVAL, V_READ_EVAL2;
   current-input-port current-output-port end-of-line values
   error syntax-rules syntax-rest
   runtime-load-path runtime-home-path lambda let letrec let*
-  define if cond quote else begin and or macro define-syntax) +
-  [["set!", "SYM_SET_I"], [".","SYM_DOT"], ["...","SYM_DOT3"], ["=>", "SYM_ARROW"]] )
+  define if cond quote else begin and or macro define-syntax ) +
+  [["set!", "SYM_SET_I"], [".","SYM_DOT"], ["...","SYM_DOT3"],
+  ["=>", "SYM_ARROW"], ['%define-syntax', 'SYM_DEFINE_SYNTAX2']] )
 */
 extern Symbol *SYM_A_COMPILE_HOOK_A;
 extern Symbol *SYM_QUASIQUOTE;
@@ -463,6 +466,7 @@ extern Symbol *SYM_SET_I;
 extern Symbol *SYM_DOT;
 extern Symbol *SYM_DOT3;
 extern Symbol *SYM_ARROW;
+extern Symbol *SYM_DEFINE_SYNTAX2;
 /*}}*/
 
 extern bool opt_trace;

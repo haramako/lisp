@@ -8,7 +8,7 @@ xcuserdata
 GPATH
 GRTAGS
 GTAGS
-
+.gdbinit
 
 /build
 /CMakeCache.txt

@@ -14,7 +14,8 @@
 #define PATH_MAX MAX_PATH
 #endif
 #else
-//#include <linux/limits.h>
+#include <linux/limits.h>
+#include <signal.h>
 #endif
 
 Profile prof;
@@ -1228,7 +1229,7 @@ Value V_APP;
 Value V_QUOTE;
 Value V_DEFINE, V_DEFINE2;
 Value V_SET_I, V_SET_I2;
-Value V_LAMBDA, V_MACRO, V_DEFINE_SYNTAX;
+Value V_LAMBDA, V_MACRO, V_DEFINE_SYNTAX, V_DEFINE_SYNTAX2, V_DEFINE_SYNTAX22;
 Value V_IF, V_IF2;
 Value V_READ_EVAL, V_READ_EVAL2;
 
@@ -1264,6 +1265,7 @@ Symbol *SYM_SET_I;
 Symbol *SYM_DOT;
 Symbol *SYM_DOT3;
 Symbol *SYM_ARROW;
+Symbol *SYM_DEFINE_SYNTAX2;
 /*}}*/
 
 #define _INIT_OPERATOR(v,sym,_op) do{\
@@ -1302,8 +1304,8 @@ void init_prelude( const char *argv0, bool with_prelude )
 	char home_path[PATH_MAX];
 	_get_home_path( argv0, home_path );
 	
-	//signal( SIGABRT, handler );
-	//signal( SIGSEGV, handler );
+	signal( SIGABRT, handler );
+	signal( SIGSEGV, handler );
 	
 	gc_init();
 
@@ -1343,6 +1345,8 @@ void init_prelude( const char *argv0, bool with_prelude )
 	_INIT_OPERATOR(V_LAMBDA, "lambda", OP_LAMBDA);
 	_INIT_OPERATOR(V_MACRO, "macro", OP_MACRO);
 	_INIT_OPERATOR(V_DEFINE_SYNTAX, "define-syntax", OP_DEFINE_SYNTAX);
+	_INIT_OPERATOR(V_DEFINE_SYNTAX2, "%define-syntax", OP_DEFINE_SYNTAX2);
+	_INIT_OPERATOR(V_DEFINE_SYNTAX22, "%define-syntax2", OP_DEFINE_SYNTAX22);
 	_INIT_OPERATOR(V_IF, "if", OP_IF);
 	_INIT_OPERATOR(V_IF2, "#<if2>", OP_IF2);
 	_INIT_OPERATOR(V_READ_EVAL, "#<read-eval>", OP_READ_EVAL);
@@ -1380,6 +1384,7 @@ void init_prelude( const char *argv0, bool with_prelude )
 	SYM_DOT = intern(".");
 	SYM_DOT3 = intern("...");
 	SYM_ARROW = intern("=>");
+	SYM_DEFINE_SYNTAX2 = intern("%define-syntax");
 	/*}}*/
 
 	bundle_define( bundle_cur, SYM_CURRENT_INPUT_PORT, (Value)V_STDIN );
