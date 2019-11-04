@@ -156,20 +156,7 @@ Value eval_loop( Context *ctx, Stream *stream )
 		if( opt_trace ) printf( "trace: %s\n", v2s_limit(stat,100) );
 		if( stat == V_EOF ) break;
 
-		/*
-		  Value compile_hook = bundle_get( ctx->bundle, SYM_A_COMPILE_HOOK_A, NIL );
-		  if( compile_hook != NIL ){
-		  // *compile-hook* があれば呼び出す
-		  stat = cons3( compile_hook, cons3( V_QUOTE, stat, NIL ), NIL );
-		  NEXT( CONT( stat, C_BUNDLE(cont),
-		  CONT_OP( V_READ_EVAL2, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-		  }else{
-		  NEXT( CONT_OP( V_READ_EVAL2, code, C_BUNDLE(cont), C_NEXT(cont) ), stat );
-		  }
-		*/
-				
 		stat = normalize_sexp(ctx, stat );
-		if( opt_trace ) printf( "trace-ex: %s\n", v2s_limit(stat,1000) );
 		result = eval(ctx, stat);
 	}
 	return result;
@@ -177,7 +164,7 @@ Value eval_loop( Context *ctx, Stream *stream )
 
 Value eval( Context *ctx, Value sexp )
 {
-	printf( "eval: %s\n", v2s(sexp));
+	//printf( "eval: %s\n", v2s(sexp));
 	
 	int GC_FREQUENCY = 10000;
 	int gc_count = GC_FREQUENCY;
@@ -365,7 +352,6 @@ Value normalize_sexp( Context *ctx, Value s )
 		}
 	}else if( sym == SYM_LAMBDA ){
 		return cons3( V_LAMBDA, CAR(rest), normalize_list(ctx, CDR(rest) ) );
-
 	}else if( sym == SYM_DEFINE_SYNTAX2 ){
 		return cons( V_DEFINE_SYNTAX2, normalize_list(ctx, rest) );
 		
@@ -420,7 +406,7 @@ Value normalize_syntax( Context *ctx,  Value s )
 		return s;
 	}
 
-	//printf("normalize_syntax: %s %s\n", v2s(v), v2s(s));
+	//printf("normalize_syntax: %s\n", v2s(s));
 	
 	s = eval(ctx, cons5(v, cons(V_QUOTE, cons(s,NIL)), NIL, NIL, NIL));
 	
