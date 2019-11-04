@@ -70,7 +70,7 @@
 	  (if (not (pair? form))
 		  form
 		(cons (macro-expand-all (car form)) (macro-expand-list (cdr form))))))
-  (if (or (not (pair? form)) (eq? 'define-syntax (car form)))
+  (if (or (not (pair? form)) (eq? '%define-syntax (car form)))
 	  form
 	  (let ((form (macro-expand (syntax-expand1 form))))
 		(cons (macro-expand-all (car form)) (macro-expand-list (cdr form))))))

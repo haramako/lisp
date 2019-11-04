@@ -313,12 +313,12 @@ Value eval_loop( Stream *stream )
 				NEXT( C_NEXT(cont), V(lmd) );
 			}
 
-		case OP_DEFINE_SYNTAX:
-			bundle_define( C_BUNDLE(cont), V2SYMBOL(CAR(code)), CADR(code) );
-			NEXT( C_NEXT(cont), NIL );
+			//case OP_DEFINE_SYNTAX:
+			//bundle_define( C_BUNDLE(cont), V2SYMBOL(CAR(code)), CADR(code) );
+			//NEXT( C_NEXT(cont), NIL );
 
 		case OP_DEFINE_SYNTAX2:
-			//printf("SYNTAX2: %s\n", v2s(code));
+			printf("SYNTAX2: %s\n", v2s(code));
 			NEXT_DIRECT( CADR(code),
 						 CONT_OP( V_DEFINE_SYNTAX22, CAR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
 
@@ -361,7 +361,7 @@ Value eval_loop( Stream *stream )
 				
 		case OP_READ_EVAL2:
 			result = normalize_sexp( result );
-			// if( opt_trace ) printf( "trace: %s\n", v2s_limit(result,1000) );
+			if( opt_trace ) printf( "trace-ex: %s\n", v2s_limit(result,1000) );
 			NEXT( CONT( result, C_BUNDLE(cont),
 						CONT_OP( V_READ_EVAL, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
 		}
@@ -415,11 +415,11 @@ Value normalize_sexp( Value s )
 	}else if( sym == SYM_MACRO ){
 		return cons3( V_MACRO, CAR(rest), normalize_list( CDR(rest) ) );
 
-	}else if( sym == SYM_DEFINE_SYNTAX ){
-		return cons( V_DEFINE_SYNTAX, rest );
+		//}else if( sym == SYM_DEFINE_SYNTAX ){
+		//return cons( V_DEFINE_SYNTAX, rest );
 		
 	}else if( sym == SYM_DEFINE_SYNTAX2 ){
-		return cons( V_DEFINE_SYNTAX2, normalize_sexp(rest) );
+		return cons( V_DEFINE_SYNTAX2, normalize_list(rest) );
 		
 	}else if( sym == SYM_LET ){
 		if( IS_SYMBOL(CAR(rest)) ){
@@ -475,7 +475,7 @@ Value normalize_sexp( Value s )
 		if( _else == NIL ) _else = cons(V_UNDEF, NIL);
 		return cons4( V_IF, normalize_sexp(_cond), normalize_sexp(_then), normalize_list(_else) );
 		
-	}else if( sym == SYM_COND ){
+		/*}else if( sym == SYM_COND ){
 		if( rest == NIL ) return rest;
 		Value code = CAR(rest);
 		Value test = CAR(code);
@@ -510,7 +510,7 @@ Value normalize_sexp( Value s )
 						  normalize_sexp( cons(V(SYM_COND), CDR(rest))),
 						  NIL);
 		}
-		
+		*/
 	}else if( sym == SYM_AND ){
 		// (and) => #<undef>
 		// (and a) => a

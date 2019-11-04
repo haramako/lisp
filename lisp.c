@@ -1344,7 +1344,7 @@ void init_prelude( const char *argv0, bool with_prelude )
 	_INIT_OPERATOR(V_SET_I2, "#<set!2>", OP_SET_I2);
 	_INIT_OPERATOR(V_LAMBDA, "lambda", OP_LAMBDA);
 	_INIT_OPERATOR(V_MACRO, "macro", OP_MACRO);
-	_INIT_OPERATOR(V_DEFINE_SYNTAX, "define-syntax", OP_DEFINE_SYNTAX);
+	//_INIT_OPERATOR(V_DEFINE_SYNTAX, "define-syntax", OP_DEFINE_SYNTAX);
 	_INIT_OPERATOR(V_DEFINE_SYNTAX2, "%define-syntax", OP_DEFINE_SYNTAX2);
 	_INIT_OPERATOR(V_DEFINE_SYNTAX22, "%define-syntax2", OP_DEFINE_SYNTAX22);
 	_INIT_OPERATOR(V_IF, "if", OP_IF);
