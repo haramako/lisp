@@ -331,29 +331,6 @@ Value eval( Context *ctx, Value sexp )
 			}else{
 				NEXT( CONT_OP( V_BEGIN, CDR(code), C_BUNDLE(cont), C_NEXT(cont) ), NIL );
 			}
-
-		case OP_READ_EVAL:
-			{
-				Value stat = stream_read_value( V2STREAM(code) );
-				if( opt_trace ) printf( "trace: %s\n", v2s_limit(stat,100) );
-				if( stat == V_EOF ) NEXT( C_NEXT(cont), NIL );
-				
-				Value compile_hook = bundle_get( ctx->bundle, SYM_A_COMPILE_HOOK_A, NIL );
-				if( compile_hook != NIL ){
-					// *compile-hook* があれば呼び出す
-					stat = cons3( compile_hook, cons3( V_QUOTE, stat, NIL ), NIL );
-					NEXT( CONT( stat, C_BUNDLE(cont),
-								CONT_OP( V_READ_EVAL2, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
-				}else{
-					NEXT( CONT_OP( V_READ_EVAL2, code, C_BUNDLE(cont), C_NEXT(cont) ), stat );
-				}
-			}
-				
-		case OP_READ_EVAL2:
-			result = normalize_sexp( result );
-			if( opt_trace ) printf( "trace-ex: %s\n", v2s_limit(result,1000) );
-			NEXT( CONT( result, C_BUNDLE(cont),
-						CONT_OP( V_READ_EVAL, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
 		}
 	}
 	assert(0);

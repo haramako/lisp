@@ -44,8 +44,6 @@ typedef enum {
 	OP_DEFINE_SYNTAX22,
 	OP_IF,
 	OP_IF2,
-	OP_READ_EVAL,
-	OP_READ_EVAL2,
 } Operator;
 
 typedef struct CellHeader* Value;
@@ -430,7 +428,6 @@ extern Value V_DEFINE, V_DEFINE2;
 extern Value V_SET_I, V_SET_I2;
 extern Value V_LAMBDA, V_MACRO, V_DEFINE_SYNTAX, V_DEFINE_SYNTAX2, V_DEFINE_SYNTAX22;
 extern Value V_IF, V_IF2;
-extern Value V_READ_EVAL, V_READ_EVAL2;
 
 /*{{ define_symbols(
   %w( *compile-hook* quasiquote unquote unquote-splicing

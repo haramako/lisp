@@ -1341,8 +1341,6 @@ void init_prelude( const char *argv0, bool with_prelude )
 	_INIT_OPERATOR(V_DEFINE_SYNTAX22, "%define-syntax2", OP_DEFINE_SYNTAX22);
 	_INIT_OPERATOR(V_IF, "if", OP_IF);
 	_INIT_OPERATOR(V_IF2, "#<if2>", OP_IF2);
-	_INIT_OPERATOR(V_READ_EVAL, "#<read-eval>", OP_READ_EVAL);
-	_INIT_OPERATOR(V_READ_EVAL2, "#<read-eval2>", OP_READ_EVAL2);
 
 	/*{{ register_symbols */
 	SYM_A_COMPILE_HOOK_A = intern("*compile-hook*");

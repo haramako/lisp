@@ -316,14 +316,14 @@ static Value _backtrace( Value args, Value cont, Value *result ) /* CFUNC_ARITY_
 	printf( "backtrace:\n" );
 	for( Value cur=CONTINUATION_NEXT(cont); cur != NIL; cur = CONTINUATION_NEXT(cur) ){
 		Value code = CONTINUATION_CODE(cur);
-		if( IS_PAIR(code) && CAR(code) == V_READ_EVAL ){
-			Stream *s = V2STREAM(CDR(code));
-			printf( "  %s:%d: *read-eval*\n", STRING_BUF(s->u.file.filename), s->line );
-		}else{
+		//if( IS_PAIR(code) && CAR(code) == V_READ_EVAL ){
+		//	Stream *s = V2STREAM(CDR(code));
+		//	printf( "  %s:%d: *read-eval*\n", STRING_BUF(s->u.file.filename), s->line );
+		//}else{
 			printf( "  %s in %s\n",
 					v2s_limit(code, 60),
 					v2s((Value)(CONTINUATION_BUNDLE(cur)->lambda) ) );
-		}
+			//}
 	}
 	*result = NIL;
 	return CONTINUATION_NEXT(cont);
@@ -344,9 +344,10 @@ static Value _load( Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW *
 	String *filename = V2STRING(vfilename);
 	FILE *fd = fopen( STRING_BUF(filename), "r" );
 	if( !fd ) assert(0);
-	Stream *file = stream_new( fd, true, STRING_BUF(filename) );
-	return continuation_new( cons( V_READ_EVAL, (Value)file ),
-							 bundle_cur, CONTINUATION_NEXT(cont) );
+	return error_new("not implemented");
+	//Stream *file = stream_new( fd, true, STRING_BUF(filename) );
+	//return continuation_new( cons( V_READ_EVAL, (Value)file ),
+	//						 bundle_cur, CONTINUATION_NEXT(cont) );
 }
 
 static Value _exit_func( Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW exit */
