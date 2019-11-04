@@ -40,7 +40,6 @@ typedef enum {
 	OP_SET_I2,
 	OP_LAMBDA,
 	OP_MACRO,
-	OP_DEFINE_SYNTAX,
 	OP_DEFINE_SYNTAX2,
 	OP_DEFINE_SYNTAX22,
 	OP_IF,
@@ -430,10 +429,10 @@ extern Value V_READ_EVAL, V_READ_EVAL2;
   %w( *compile-hook* quasiquote unquote unquote-splicing
   current-input-port current-output-port end-of-line values
   error syntax-rules syntax-rest
-  runtime-load-path runtime-home-path lambda let letrec let*
-  define if cond quote else begin and or macro define-syntax ) +
-  [["set!", "SYM_SET_I"], [".","SYM_DOT"], ["...","SYM_DOT3"],
-  ["=>", "SYM_ARROW"], ['%define-syntax', 'SYM_DEFINE_SYNTAX2']] )
+  runtime-load-path runtime-home-path lambda
+  define if quote else begin ) +
+  [["set!", "SYM_SET_I"], 
+   ['%define-syntax', 'SYM_DEFINE_SYNTAX2']] )
 */
 extern Symbol *SYM_A_COMPILE_HOOK_A;
 extern Symbol *SYM_QUASIQUOTE;
@@ -449,19 +448,11 @@ extern Symbol *SYM_SYNTAX_REST;
 extern Symbol *SYM_RUNTIME_LOAD_PATH;
 extern Symbol *SYM_RUNTIME_HOME_PATH;
 extern Symbol *SYM_LAMBDA;
-extern Symbol *SYM_LET;
-extern Symbol *SYM_LETREC;
-extern Symbol *SYM_LET_A;
 extern Symbol *SYM_DEFINE;
 extern Symbol *SYM_IF;
-extern Symbol *SYM_COND;
 extern Symbol *SYM_QUOTE;
 extern Symbol *SYM_ELSE;
 extern Symbol *SYM_BEGIN;
-extern Symbol *SYM_AND;
-extern Symbol *SYM_OR;
-extern Symbol *SYM_MACRO;
-extern Symbol *SYM_DEFINE_SYNTAX;
 extern Symbol *SYM_SET_I;
 extern Symbol *SYM_DOT;
 extern Symbol *SYM_DOT3;

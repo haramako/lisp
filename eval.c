@@ -150,38 +150,6 @@ Value _eval_direct( Value cont, Value code )
 	}while(0)
 
 
-Value normalize_let( Value code )
-{
-	if( CAR(code) != V(SYM_LET) ) return code;
-	if( IS_PAIR( CADR(code) )) return code;
-	if( !IS_SYMBOL( CADR(code) ) ) return code;
-
-	// normalize named let
-	Value name, dummy, arg_vals, body;
-	bind4cdr( code, dummy, name, arg_vals, body );
-	dummy = dummy; // avoid warning
-	
-	Value args = NIL;
-	Value vals = NIL;
-	if( arg_vals != NIL ){
-		args = cons( CAR(CAR(arg_vals)), NIL );
-		vals = cons( CADR(CAR(arg_vals)), NIL );
-		Value args_tail = args;
-		Value vals_tail = vals;
-		for( Value cur=CDR(arg_vals); cur != NIL; cur=CDR(cur) ){
-			args_tail = CDR(args_tail) = cons( CAR(CAR(cur)), NIL);
-			vals_tail = CDR(vals_tail) = cons( CADR(CAR(cur)), NIL);
-		}
-	}
-	Value lambda = cons3( V(SYM_LAMBDA), args, body );
-	Value new_code =
-		cons4( V(SYM_LETREC),
-			   cons( cons3( name, lambda, NIL ), NIL),
-			   cons( name, vals ), NIL );
-	// printf( "normalize_let: %s => %s\n", v2sn(code,40), v2sn(new_code,1000) );
-	return new_code;
-}
-
 Value eval_loop( Stream *stream )
 {
 	int GC_FREQUENCY = 10000;
@@ -234,7 +202,7 @@ Value eval_loop( Stream *stream )
 			NEXT_DIRECT( CAR(C_CODE(cont)),
 						 CONT_OP( V_APP, cons( CDR(C_CODE(cont)), NIL ), C_BUNDLE(cont), C_NEXT(cont) ) );
 		}
-		
+
 		Value code = CDR(C_CODE(cont));
 		Operator op = V2SPECIAL(CAR(C_CODE(cont)))->op;
 		switch( op ){
@@ -412,134 +380,14 @@ Value normalize_sexp( Value s )
 	}else if( sym == SYM_LAMBDA ){
 		return cons3( V_LAMBDA, CAR(rest), normalize_list( CDR(rest) ) );
 
-	}else if( sym == SYM_MACRO ){
-		return cons3( V_MACRO, CAR(rest), normalize_list( CDR(rest) ) );
-
-		//}else if( sym == SYM_DEFINE_SYNTAX ){
-		//return cons( V_DEFINE_SYNTAX, rest );
-		
 	}else if( sym == SYM_DEFINE_SYNTAX2 ){
 		return cons( V_DEFINE_SYNTAX2, normalize_list(rest) );
-		
-	}else if( sym == SYM_LET ){
-		if( IS_SYMBOL(CAR(rest)) ){
-			// named let
-			// (let name ((arg val) ...) ...)
-			//  => ((lambda (name) (set! name (lambda (args) ...) (name vals))) #<undef>)
-			Value name = CAR(rest);
-			Value body = normalize_list(CDDR(rest));
-			Value arg_val = unzip_arg_val(CADR(rest));
-			Value r = cons3(
-							cons5(V_LAMBDA,
-								  cons(name,NIL),
-								  cons4(V_SET_I, name, cons3(V_LAMBDA, CAR(arg_val), body), NIL),
-								  cons(name, normalize_list(CDR(arg_val))),
-								  NIL),
-							V_UNDEF,
-							NIL);
-			return r;
-		}else{
-			// normal let
-			Value arg_val = unzip_arg_val(CAR(rest));
-			return cons( cons3( V_LAMBDA, CAR(arg_val), normalize_list(CDR(rest)) ),
-						 normalize_list( CDR(arg_val)) );
-		}
-		
-	}else if( sym == SYM_LETREC ){
-		// (letrec ((a b) ...) => ((lambda (a ...) (set! a b) ...) #<undef>)
-		Value arg_val = unzip_arg_val(CAR(rest));
-		Value sets = list_copy(CAR(rest));
-		Value undefs = NIL;
-		LIST_EACH(it,sets){
-			CAR(it_pair) = cons4( V_SET_I, CAR(it), normalize_sexp( CADR(it) ), NIL );
-			undefs = cons(V_UNDEF,undefs);
-		}
-		return cons( cons4( V_LAMBDA, CAR(arg_val), cons(V_BEGIN, sets), normalize_list(CDR(rest))), undefs );
-
-	}else if( sym == SYM_LET_A ){
-		// (let* ((a v) ...) ...) => ((lambda (a) (let* (...) ...)) v)
-		Value arg_vals = CAR(rest);
-		if( arg_vals == NIL ) return normalize_begin( CDR(rest) );
-		Value arg = CAAR(arg_vals);
-		Value val = CAR(CDAR(arg_vals));
-		return cons3( cons4( V_LAMBDA,
-							 cons(arg,NIL),
-							 normalize_sexp( cons3( V(SYM_LET_A), CDR(arg_vals), CDR(rest) ) ),
-							 NIL ),
-					  normalize_sexp(val),
-					  NIL);
 		
 	}else if( sym == SYM_IF ){
 		Value _cond, _then, _else;
 		bind3cdr( rest, _cond, _then, _else );
 		if( _else == NIL ) _else = cons(V_UNDEF, NIL);
 		return cons4( V_IF, normalize_sexp(_cond), normalize_sexp(_then), normalize_list(_else) );
-		
-		/*}else if( sym == SYM_COND ){
-		if( rest == NIL ) return rest;
-		Value code = CAR(rest);
-		Value test = CAR(code);
-		if( test == V(SYM_ELSE) ) return normalize_begin(CDR(code)); // (cond (else ...))
-
-		Value expr = CDR(code);
-		if( expr == NIL ) expr = cons(V_UNDEF, NIL); 
-		if( IS_PAIR(expr) && CAR(expr) == V(SYM_ARROW) ){
-			// (cond (test => f)...)
-			// => ((lambda (*tmp*)
-			//       (if *tmp*
-			//         (?expr *tmp*)
-			//         (cond ...) ))
-			//      ?test )
-			Value tmp = gensym();
-			Value f = normalize_sexp(CADR(expr));
-			return cons3( cons4( V_LAMBDA,
-								 cons(tmp, NIL), 
-								 cons5( V_IF, tmp, cons3(f, tmp, NIL),
-										normalize_sexp( cons( V(SYM_COND), CDR(rest) ) ), NIL ),
-								 NIL ),
-						  normalize_sexp(test),
-						  NIL);
-		}else if( IS_PAIR(expr) && IS_PAIR(CDR(expr)) && CADR(expr) == V(SYM_ARROW) ){
-			// (cond (test guard => ...) ...)
-			assert(0);
-		}else{
-			// (cond (test expr ...) ...)
-			// => (if test (begin expr ...) (cond ...))
-			return cons5( V_IF, normalize_sexp(test),
-						  normalize_begin(expr),
-						  normalize_sexp( cons(V(SYM_COND), CDR(rest))),
-						  NIL);
-		}
-		*/
-	}else if( sym == SYM_AND ){
-		// (and) => #<undef>
-		// (and a) => a
-		// (and a ...) => ((lambda (tmp) (if tmp (and ...) tmp)) a)
-		if( rest == NIL ) return VALUE_T;
-		if( CDR(rest) == NIL ) return normalize_sexp(CAR(rest));
-		Value test = CAR(rest);
-		Value tmp = gensym();
-		return cons3( cons4( V_LAMBDA,
-							 cons( tmp, NIL ),
-							 cons5( V_IF, tmp, normalize_sexp( cons( V(SYM_AND), CDR(rest) ) ), tmp, NIL ),
-							 NIL ),
-					  normalize_sexp( test ),
-					  NIL );
-
-	}else if( sym == SYM_OR ){
-		// (or) => #f
-		// (or a) => a
-		// (or a ...) => ((lambda (tmp) (if tmp tmp (or ...))) a)
-		if( rest == NIL ) return VALUE_F;
-		if( CDR(rest) == NIL ) return normalize_sexp(CAR(rest));
-		Value test = CAR(rest);
-		Value tmp = gensym();
-		return cons3( cons4( V_LAMBDA,
-							 cons( tmp, NIL ),
-							 cons5( V_IF, tmp, tmp, normalize_sexp( cons( V(SYM_OR), CDR(rest) ) ), NIL ),
-							 NIL ),
-					  normalize_sexp( test ),
-					  NIL );
 		
 	}else if( sym == SYM_BEGIN ){
 		if( rest == NIL ) return V_UNDEF;

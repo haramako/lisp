@@ -1157,7 +1157,6 @@ static bool _syntax_match( Value keywords, Value rule, Value code, Dict *bundle 
 Value syntax_expand1( Value code )
 {
 	if( !IS_PAIR(code) ) return code;
-	code = normalize_let( code );
 	Value syntax = bundle_get( bundle_cur, (Symbol*)CAR(code), NIL );
 	if( !IS_PAIR(syntax) ) return code;
 	Value sym, keywords, rules;
@@ -1248,19 +1247,11 @@ Symbol *SYM_SYNTAX_REST;
 Symbol *SYM_RUNTIME_LOAD_PATH;
 Symbol *SYM_RUNTIME_HOME_PATH;
 Symbol *SYM_LAMBDA;
-Symbol *SYM_LET;
-Symbol *SYM_LETREC;
-Symbol *SYM_LET_A;
 Symbol *SYM_DEFINE;
 Symbol *SYM_IF;
-Symbol *SYM_COND;
 Symbol *SYM_QUOTE;
 Symbol *SYM_ELSE;
 Symbol *SYM_BEGIN;
-Symbol *SYM_AND;
-Symbol *SYM_OR;
-Symbol *SYM_MACRO;
-Symbol *SYM_DEFINE_SYNTAX;
 Symbol *SYM_SET_I;
 Symbol *SYM_DOT;
 Symbol *SYM_DOT3;
@@ -1290,13 +1281,14 @@ static void _get_home_path( const char *argv0, char *out_path )
 	}else{
 		sprintf( path, "%s/%s/..", cwd, argv0 );
 	}
-	realpath( path, out_path );
+	//realpath( path, out_path );
+	strcpy(out_path, path);
 #endif
 }
 
 void init( const char *argv0 )
 {
-	init_prelude( argv0, true);
+	init_prelude( argv0, false);
 }
 
 void init_prelude( const char *argv0, bool with_prelude )
@@ -1367,19 +1359,11 @@ void init_prelude( const char *argv0, bool with_prelude )
 	SYM_RUNTIME_LOAD_PATH = intern("runtime-load-path");
 	SYM_RUNTIME_HOME_PATH = intern("runtime-home-path");
 	SYM_LAMBDA = intern("lambda");
-	SYM_LET = intern("let");
-	SYM_LETREC = intern("letrec");
-	SYM_LET_A = intern("let*");
 	SYM_DEFINE = intern("define");
 	SYM_IF = intern("if");
-	SYM_COND = intern("cond");
 	SYM_QUOTE = intern("quote");
 	SYM_ELSE = intern("else");
 	SYM_BEGIN = intern("begin");
-	SYM_AND = intern("and");
-	SYM_OR = intern("or");
-	SYM_MACRO = intern("macro");
-	SYM_DEFINE_SYNTAX = intern("define-syntax");
 	SYM_SET_I = intern("set!");
 	SYM_DOT = intern(".");
 	SYM_DOT3 = intern("...");
