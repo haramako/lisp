@@ -1396,7 +1396,10 @@ void init_prelude( const char *argv0, bool with_prelude )
 				exit(1);
 			}
 		}
-		eval_loop( stream_new(fd,true,"prelude.scm") );
+		Context ctx;
+		ctx.cont = NIL;
+		ctx.bundle = bundle_cur;
+		eval_loop( &ctx, stream_new(fd,true,"prelude.scm") );
 	}
 }
 

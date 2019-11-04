@@ -149,13 +149,39 @@ Value _eval_direct( Value cont, Value code )
 		}													\
 	}while(0)
 
+Value eval_loop( Context *ctx, Stream *stream )
+{
+	Value result = NIL;
+	for(;;){
+		Value stat = stream_read_value( stream );
+		if( opt_trace ) printf( "trace: %s\n", v2s_limit(stat,100) );
+		if( stat == V_EOF ) break;
 
-Value eval_loop( Stream *stream )
+		/*
+		  Value compile_hook = bundle_get( ctx->bundle, SYM_A_COMPILE_HOOK_A, NIL );
+		  if( compile_hook != NIL ){
+		  // *compile-hook* があれば呼び出す
+		  stat = cons3( compile_hook, cons3( V_QUOTE, stat, NIL ), NIL );
+		  NEXT( CONT( stat, C_BUNDLE(cont),
+		  CONT_OP( V_READ_EVAL2, code, C_BUNDLE(cont), C_NEXT(cont) ) ), NIL );
+		  }else{
+		  NEXT( CONT_OP( V_READ_EVAL2, code, C_BUNDLE(cont), C_NEXT(cont) ), stat );
+		  }
+		*/
+				
+		stat = normalize_sexp( stat );
+		if( opt_trace ) printf( "trace-ex: %s\n", v2s_limit(stat,1000) );
+		result = eval(ctx, stat);
+	}
+	return result;
+}
+
+Value eval( Context *ctx, Value sexp )
 {
 	int GC_FREQUENCY = 10000;
 	int gc_count = GC_FREQUENCY;
 	Value result = NIL;
-	Value cont = CONT_OP( V_READ_EVAL, (Value)stream, bundle_cur, NIL );
+	Value cont = CONT( sexp, ctx->bundle, NIL);
 	retain( &result );
 	retain( &cont );
 
@@ -281,10 +307,6 @@ Value eval_loop( Stream *stream )
 				NEXT( C_NEXT(cont), V(lmd) );
 			}
 
-			//case OP_DEFINE_SYNTAX:
-			//bundle_define( C_BUNDLE(cont), V2SYMBOL(CAR(code)), CADR(code) );
-			//NEXT( C_NEXT(cont), NIL );
-
 		case OP_DEFINE_SYNTAX2:
 			printf("SYNTAX2: %s\n", v2s(code));
 			NEXT_DIRECT( CADR(code),
@@ -316,7 +338,7 @@ Value eval_loop( Stream *stream )
 				if( opt_trace ) printf( "trace: %s\n", v2s_limit(stat,100) );
 				if( stat == V_EOF ) NEXT( C_NEXT(cont), NIL );
 				
-				Value compile_hook = bundle_get( bundle_cur, SYM_A_COMPILE_HOOK_A, NIL );
+				Value compile_hook = bundle_get( ctx->bundle, SYM_A_COMPILE_HOOK_A, NIL );
 				if( compile_hook != NIL ){
 					// *compile-hook* があれば呼び出す
 					stat = cons3( compile_hook, cons3( V_QUOTE, stat, NIL ), NIL );

@@ -159,10 +159,16 @@ typedef struct Pointer {
 	struct Pointer *next;
 } Pointer;
 
-typedef struct {
+typedef struct Error {
 	CellHeader h;
 	String *str;
 } Error;
+
+typedef struct Context {
+	Value cont;
+	Bundle *bundle;
+} Context;
+
 
 #define CFUNC_ARITY_RAW 127
 
@@ -394,7 +400,8 @@ Value error_newf( char *str, ... );
 
 Value call( Value lmd, Value vals, Value cont, Value *result );
 Value compile( Value code );
-Value eval_loop( Stream *s );
+Value eval_loop( Context *ctx, Stream *s );
+Value eval( Context *ctx, Value sexp );
 Value syntax_expand1( Value code );
 Value normalize_let( Value code );
 

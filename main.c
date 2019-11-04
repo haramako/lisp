@@ -53,15 +53,18 @@ int main( int argc, char **argv )
 
 	// run script
 	int result = 0;
+	Context ctx;
+	ctx.cont = NIL;
+	ctx.bundle = bundle_cur;
 	if( strcmp(argv[n],"-") == 0 ){
-		eval_loop( V_STDIN );
+		eval_loop( &ctx, V_STDIN );
 	}else{
 		FILE *f = fopen( argv[n], "r" );
 		if( !f ){
 			printf( "cannot open %s\n", argv[n] );
 			exit(1);
 		}
-		Value v = eval_loop( V_SRC_FILE = stream_new(f,true,argv[n]) );
+		Value v = eval_loop( &ctx, V_SRC_FILE = stream_new(f,true,argv[n]) );
 		if( IS_INT(v) ) result = (int)V2INT(v);
 	}
     
