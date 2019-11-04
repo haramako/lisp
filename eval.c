@@ -177,6 +177,8 @@ Value eval_loop( Context *ctx, Stream *stream )
 
 Value eval( Context *ctx, Value sexp )
 {
+	printf( "eval: %s\n", v2s(sexp));
+	
 	int GC_FREQUENCY = 10000;
 	int gc_count = GC_FREQUENCY;
 	Value result = NIL;
@@ -196,7 +198,7 @@ Value eval( Context *ctx, Value sexp )
 		release( &cont );
 		return result;
 	}
-	// printf( "> %s => %s\n", v2sn(result,20), v2sn(C_CODE(cont), 80) );
+	//printf( "> %s => %s\n", v2sn(result,20), v2sn(C_CODE(cont), 80) );
 	
 	switch( TYPE_OF(C_CODE(cont)) ){
 	case TYPE_UNUSED:
@@ -219,7 +221,9 @@ Value eval( Context *ctx, Value sexp )
 	case TYPE_SYMBOL:
 		{
 			Value v = _eval_direct( cont, C_CODE(cont) );
-			if( !v ) ERROR( "symbol not found" );
+			char buf[256];
+			sprintf(buf, "symbol '%s' not found", v2s(C_CODE(cont)));
+			if( !v ) ERROR(buf);
 			NEXT( C_NEXT(cont), v );
 		}
 	case TYPE_PAIR:
@@ -307,13 +311,13 @@ Value eval( Context *ctx, Value sexp )
 			}
 
 		case OP_DEFINE_SYNTAX2:
-			printf("SYNTAX2: %s\n", v2s(code));
+			//printf("SYNTAX2: %s\n", v2s(code));
 			NEXT_DIRECT( CADR(code),
 						 CONT_OP( V_DEFINE_SYNTAX22, CAR(code), C_BUNDLE(cont), C_NEXT(cont) ) );
 
 		case OP_DEFINE_SYNTAX22:
 			{
-				//printf("SYNTAX22: %s\n", v2s(code));
+				//printf("SYNTAX22: %s %s\n", v2s(code), v2s(result));
 				Lambda *lmd = V2LAMBDA(result);
 				lmd->type = LAMBDA_TYPE_MACRO;
 				bundle_define( C_BUNDLE(cont), V2SYMBOL(code), result );
@@ -337,6 +341,7 @@ Value eval( Context *ctx, Value sexp )
 
 Value normalize_list( Context *ctx,  Value s );
 Value normalize_begin( Context *ctx,  Value s );
+Value normalize_syntax( Context *ctx,  Value s );
 
 Value normalize_sexp( Context *ctx, Value s )
 {
@@ -382,6 +387,7 @@ Value normalize_sexp( Context *ctx, Value s )
 		return cons( V_QUOTE, rest );
 		
 	}else{
+		s = normalize_syntax(ctx, s);
 		return normalize_list(ctx, s);
 	}
 }
@@ -401,3 +407,24 @@ Value normalize_list( Context *ctx, Value list )
 	}
 }
 
+Value normalize_syntax( Context *ctx,  Value s )
+{
+	if( !IS_SYMBOL(CAR(s)) ) return s;
+	
+	//printf("hoge: %s\n", v2s(bundle_get( ctx->bundle, intern("define-syntax"), NIL )));
+	Value v = bundle_get( ctx->bundle, V2SYMBOL(CAR(s)), NIL);
+	if( !IS_LAMBDA(v) ) return s;
+	
+	Lambda *lmd = V2LAMBDA(v);
+	if( lmd->type != LAMBDA_TYPE_MACRO ){
+		return s;
+	}
+
+	//printf("normalize_syntax: %s %s\n", v2s(v), v2s(s));
+	
+	s = eval(ctx, cons5(v, cons(V_QUOTE, cons(s,NIL)), NIL, NIL, NIL));
+	
+	//printf("normalize_syntax2: %s\n", v2s(s));
+	
+	return normalize_sexp(ctx, s);
+}
