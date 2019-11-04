@@ -10,7 +10,7 @@ Value cont_error( char *str, Value cont )
 							 CONTINUATION_BUNDLE(cont), CONTINUATION_NEXT(cont) );
 }
 
-Value call( Value _lmd, Value vals, Value cont, Value *result )
+Value call( Context *ctx, Value _lmd, Value vals, Value cont, Value *result )
 {
 	Value orig_vals = vals;
 	switch( TYPE_OF(_lmd) ){
@@ -45,9 +45,8 @@ Value call( Value _lmd, Value vals, Value cont, Value *result )
 			CFunc *func = V2CFUNC(_lmd);
 			int arity = func->arity;
 			if( arity == CFUNC_ARITY_RAW ){
-				return ((CFunction)func->func)( vals, cont, result );
+				return ((CFunction)func->func)( ctx, vals, cont, result );
 			}else{
-				Bundle *bundle = CONTINUATION_BUNDLE(cont);
 				bool has_rest = (arity<0);
 				int arg_num = has_rest?(-1-arity):(arity);
 				Value v[8] = {NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
@@ -66,14 +65,14 @@ Value call( Value _lmd, Value vals, Value cont, Value *result )
 				}
 				
 				switch( arg_num ){
-				case 0: *result = ((CFunction0)func->func)( bundle ); break;
-				case 1: *result = ((CFunction1)func->func)( bundle, v[0] ); break;
-				case 2: *result = ((CFunction2)func->func)( bundle, v[0], v[1] ); break;
-				case 3: *result = ((CFunction3)func->func)( bundle, v[0], v[1], v[2] ); break;
-				case 4: *result = ((CFunction4)func->func)( bundle, v[0], v[1], v[2], v[3] ); break;
-				case 5: *result = ((CFunction5)func->func)( bundle, v[0], v[1], v[2], v[3], v[4] ); break;
-				case 6: *result = ((CFunction6)func->func)( bundle, v[0], v[1], v[2], v[3], v[4], v[5] ); break;
-				case 7: *result = ((CFunction7)func->func)( bundle, v[0], v[1], v[2], v[3], v[4], v[5], v[6] ); break;
+				case 0: *result = ((CFunction0)func->func)( ctx ); break;
+				case 1: *result = ((CFunction1)func->func)( ctx, v[0] ); break;
+				case 2: *result = ((CFunction2)func->func)( ctx, v[0], v[1] ); break;
+				case 3: *result = ((CFunction3)func->func)( ctx, v[0], v[1], v[2] ); break;
+				case 4: *result = ((CFunction4)func->func)( ctx, v[0], v[1], v[2], v[3] ); break;
+				case 5: *result = ((CFunction5)func->func)( ctx, v[0], v[1], v[2], v[3], v[4] ); break;
+				case 6: *result = ((CFunction6)func->func)( ctx, v[0], v[1], v[2], v[3], v[4], v[5] ); break;
+				case 7: *result = ((CFunction7)func->func)( ctx, v[0], v[1], v[2], v[3], v[4], v[5], v[6] ); break;
 				default:
 					assert(0);
 				}
@@ -169,7 +168,7 @@ Value eval_loop( Context *ctx, Stream *stream )
 		  }
 		*/
 				
-		stat = normalize_sexp( stat );
+		stat = normalize_sexp(ctx, stat );
 		if( opt_trace ) printf( "trace-ex: %s\n", v2s_limit(stat,1000) );
 		result = eval(ctx, stat);
 	}
@@ -263,7 +262,7 @@ Value eval( Context *ctx, Value sexp )
 					Value lmd = CAR(vals);
 					if( IS_LAMBDA(lmd) || IS_CFUNC(lmd) ){
 						Value val = NIL;
-						Value next = call(lmd, CDR(vals), cont, &val );
+						Value next = call(ctx, lmd, CDR(vals), cont, &val );
 						NEXT( next, val );
 					}else if( IS_CONTINUATION(lmd) ){
 						vals = CDR(vals);
@@ -336,31 +335,14 @@ Value eval( Context *ctx, Value sexp )
 	assert(0);
 }
 
-Value unzip_arg_val( Value arg_vals )
-{
-	Value args = NIL;
-	Value vals = NIL;
-	if( arg_vals != NIL ){
-		args = cons( CAR(CAR(arg_vals)), NIL );
-		vals = cons( CADR(CAR(arg_vals)), NIL );
-		Value args_tail = args;
-		Value vals_tail = vals;
-		for( Value cur=CDR(arg_vals); cur != NIL; cur=CDR(cur) ){
-			args_tail = CDR(args_tail) = cons( CAR(CAR(cur)), NIL);
-			vals_tail = CDR(vals_tail) = cons( CADR(CAR(cur)), NIL);
-		}
-	}
-	return cons( args, vals );
-}
+Value normalize_list( Context *ctx,  Value s );
+Value normalize_begin( Context *ctx,  Value s );
 
-Value normalize_list( Value s );
-Value normalize_begin( Value s );
-
-Value normalize_sexp( Value s )
+Value normalize_sexp( Context *ctx, Value s )
 {
 	// printf( "s:%s\n", v2s_limit(s,30) );
 	if( !IS_PAIR(s) ) return s;
-	if( IS_PAIR(CAR(s)) ) return normalize_list( s );
+	if( IS_PAIR(CAR(s)) ) return normalize_list(ctx, s );
 	if( TYPE_OF(CAR( s )) != TYPE_SYMBOL ) return s;
 
 	Symbol *sym = V2SYMBOL(CAR( s ));
@@ -368,52 +350,52 @@ Value normalize_sexp( Value s )
 	if( sym == SYM_DEFINE ){
 		if( IS_SYMBOL(CAR(rest)) ){
 			// (define sym val) の形
-			return cons( V_DEFINE, normalize_list(rest) );
+			return cons( V_DEFINE, normalize_list(ctx, rest) );
 		}else if( IS_PAIR(CAR(rest)) ){
 			// (define (sym args ...) ... ) の形
 			return cons4( V_DEFINE, CAAR(rest),
-						  cons3( V_LAMBDA, CDAR(rest), normalize_list(CDR(rest)) ), NIL );
+						  cons3( V_LAMBDA, CDAR(rest), normalize_list(ctx, CDR(rest)) ), NIL );
 		}else{
 			assert(0);
 		}
 	}else if( sym == SYM_LAMBDA ){
-		return cons3( V_LAMBDA, CAR(rest), normalize_list( CDR(rest) ) );
+		return cons3( V_LAMBDA, CAR(rest), normalize_list(ctx, CDR(rest) ) );
 
 	}else if( sym == SYM_DEFINE_SYNTAX2 ){
-		return cons( V_DEFINE_SYNTAX2, normalize_list(rest) );
+		return cons( V_DEFINE_SYNTAX2, normalize_list(ctx, rest) );
 		
 	}else if( sym == SYM_IF ){
 		Value _cond, _then, _else;
 		bind3cdr( rest, _cond, _then, _else );
 		if( _else == NIL ) _else = cons(V_UNDEF, NIL);
-		return cons4( V_IF, normalize_sexp(_cond), normalize_sexp(_then), normalize_list(_else) );
+		return cons4( V_IF, normalize_sexp(ctx, _cond), normalize_sexp(ctx, _then), normalize_list(ctx, _else) );
 		
 	}else if( sym == SYM_BEGIN ){
 		if( rest == NIL ) return V_UNDEF;
-		if( CDR(rest) == NIL ) return normalize_sexp(CAR(rest));
-		return cons( V_BEGIN, normalize_list(rest) );
+		if( CDR(rest) == NIL ) return normalize_sexp(ctx, CAR(rest));
+		return cons( V_BEGIN, normalize_list(ctx, rest) );
 		
 	}else if( sym == SYM_SET_I ){
-		return cons3( V_SET_I, CAR(rest), normalize_sexp( CDR(rest) ) );
+		return cons3( V_SET_I, CAR(rest), normalize_sexp(ctx, CDR(rest) ) );
 		
 	}else if( sym == SYM_QUOTE ){
 		return cons( V_QUOTE, rest );
 		
 	}else{
-		return normalize_list(s);
+		return normalize_list(ctx, s);
 	}
 }
 
 // implicit begin
-Value normalize_begin( Value list )
+Value normalize_begin( Context *ctx, Value list )
 {
-	return normalize_sexp( cons( (Value)SYM_BEGIN, list) );
+	return normalize_sexp(ctx, cons( (Value)SYM_BEGIN, list) );
 }
 
-Value normalize_list( Value list )
+Value normalize_list( Context *ctx, Value list )
 {
 	if( IS_PAIR(list) ){
-		return cons( normalize_sexp(CAR(list)), normalize_list(CDR(list)) );
+		return cons( normalize_sexp(ctx, CAR(list)), normalize_list(ctx, CDR(list)) );
 	}else{
 		return list;
 	}

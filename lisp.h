@@ -170,15 +170,15 @@ typedef struct Context {
 
 #define CFUNC_ARITY_RAW 127
 
-typedef Value (*CFunction)( Value args, Value cont, Value *result );
-typedef Value (*CFunction0)( Bundle *bundle );
-typedef Value (*CFunction1)( Bundle *bundle, Value v1 );
-typedef Value (*CFunction2)( Bundle *bundle, Value v1, Value v2 );
-typedef Value (*CFunction3)( Bundle *bundle, Value v1, Value v2, Value v3 );
-typedef Value (*CFunction4)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4 );
-typedef Value (*CFunction5)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4, Value v5 );
-typedef Value (*CFunction6)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6 );
-typedef Value (*CFunction7)( Bundle *bundle, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6, Value v7 );
+typedef Value (*CFunction)( Context *ctx, Value args, Value cont, Value *result );
+typedef Value (*CFunction0)( Context *ctx );
+typedef Value (*CFunction1)( Context *ctx, Value v1 );
+typedef Value (*CFunction2)( Context *ctx, Value v1, Value v2 );
+typedef Value (*CFunction3)( Context *ctx, Value v1, Value v2, Value v3 );
+typedef Value (*CFunction4)( Context *ctx, Value v1, Value v2, Value v3, Value v4 );
+typedef Value (*CFunction5)( Context *ctx, Value v1, Value v2, Value v3, Value v4, Value v5 );
+typedef Value (*CFunction6)( Context *ctx, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6 );
+typedef Value (*CFunction7)( Context *ctx, Value v1, Value v2, Value v3, Value v4, Value v5, Value v6, Value v7 );
 
 #define TYPE_OF(v) ((Type)(v)->type)
 
@@ -396,7 +396,7 @@ Value error_newf( char *str, ... );
 
 // Eval in eval.c
 
-Value call( Value lmd, Value vals, Value cont, Value *result );
+Value call( Context *ctx, Value lmd, Value vals, Value cont, Value *result );
 Value compile( Value code );
 Value eval_loop( Context *ctx, Stream *s );
 Value eval( Context *ctx, Value sexp );
@@ -475,4 +475,4 @@ void show_prof();
 void cfunc_init();
 void srfi13_init();
 
-Value normalize_sexp( Value s );
+Value normalize_sexp(Context *ctx, Value s );
