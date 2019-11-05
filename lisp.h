@@ -393,6 +393,9 @@ void stream_close( Stream *s );
 Value error_new( char *str );
 Value error_newf( char *str, ... );
 
+// Parse in parse.c
+
+int parse( Stream *s, Value *result );
 
 // Eval in eval.c
 

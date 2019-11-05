@@ -46,27 +46,10 @@
     (lambda (expr)
       (f expr (current-renamer) free-identifier=?))))
 
-(define-syntax if2
-  (lambda (expr)
-	(cons 'if (cdr expr))))
+(define (vector? x) #f)
 
-(define-syntax deftest
-  (er-macro-transformer
-   (lambda (expr rename compare)
-	 (list
-	  'begin
-	  (cons (rename 'display) (cdr expr))
-	  (cons (rename 'display) (cdr expr))))))
+(define identifier? symbol?)
 
-#;(define x 1)
-#;(if2 (eq? x 1)
-	 (display 2))
-
-(deftest 99)
-
-(puts 1)
-
-(puts (compare (rename 'else') 'else'))
 
 (define-syntax cond
   (er-macro-transformer
@@ -170,8 +153,6 @@
       (if (identifier? (cadr expr)) (car (cddr expr)) (cadr expr))))))
 
 
-(define identifier? symbol?)
-
 (define (reverse-rec r ls)
   (if (null? ls)
 	  r
@@ -235,9 +216,6 @@
   
 (define (append2 a b) (append-rec b (reverse a)))
   
-
-(puts (reverse '(1 2 3)))
-(puts (append2 '(1 2) '(3 4)))
 
 (define x 2)
 (cond
