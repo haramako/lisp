@@ -291,7 +291,7 @@ static Value _apply( Context *ctx, Value args, Value cont, Value *result ) /* CF
 
 static Value _syntax_expand1( Context *ctx, Value code ) /* 1 */
 {
-	return syntax_expand1( code );
+	assert(0);
 }
 
 static Value _eval( Context *ctx, Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW */
