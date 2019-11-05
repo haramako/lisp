@@ -121,6 +121,7 @@ static void _mark( Value v )
 	case TYPE_SPECIAL:
 		break;
 	case TYPE_PAIR:
+	case TYPE_PAIR_SOURCE:
 		_mark( CAR(v) );
 		_mark( CDR(v) );
 		break;

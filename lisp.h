@@ -16,6 +16,7 @@ typedef enum {
 	TYPE_STRING,
 	TYPE_STRING_BODY,
 	TYPE_PAIR,
+	TYPE_PAIR_SOURCE,
 	TYPE_LAMBDA,
 	TYPE_CFUNC,
 	TYPE_BUNDLE,
@@ -93,6 +94,14 @@ typedef struct Pair {
 	Value cdr;
 } Pair;
 
+typedef struct PairSource {
+	Pair pair;
+	String *filename;
+	int line;
+	int col;
+} PairSource;
+
+
 typedef enum {
 	LAMBDA_TYPE_LAMBDA = 0,
 	LAMBDA_TYPE_MACRO,
@@ -140,6 +149,7 @@ typedef struct Stream {
 	CellHeader h;
 	StreamType stream_type;
 	int line;
+	int col;
 	int pos;
 	union {
 		struct {
@@ -189,7 +199,8 @@ typedef Value (*CFunction7)( Context *ctx, Value v1, Value v2, Value v3, Value v
 #define IS_SYMBOL(v) ((v)->type==TYPE_SYMBOL)
 #define IS_STRING(v) ((v)->type==TYPE_STRING)
 #define IS_STRING_BODY(v) ((v)->type==TYPE_STRING_BODY)
-#define IS_PAIR(v) ((v)->type==TYPE_PAIR)
+#define IS_PAIR(v) ((v)->type==TYPE_PAIR || (v)->type==TYPE_PAIR_SOURCE)
+#define IS_PAIR_SOURCE(v) ((v)->type==TYPE_PAIR_SOURCE)
 #define IS_LAMBDA(v) ((v)->type==TYPE_LAMBDA)
 #define IS_CFUNC(v) ((v)->type==TYPE_CFUNC)
 #define IS_BUNDLE(v) ((v)->type==TYPE_BUNDLE)
@@ -232,6 +243,10 @@ inline StringBody* V2STRING_BODY(Value v) {
 inline Pair* V2PAIR(Value v) {
 	assert(IS_PAIR(v));
 	return (Pair*)v;
+}
+inline PairSource* V2PAIR_SOURCE(Value v) {
+	assert(IS_PAIR_SOURCE(v));
+	return (PairSource*)v;
 }
 inline Lambda* V2LAMBDA(Value v) {
 	assert(IS_LAMBDA(v));
@@ -391,6 +406,11 @@ Value cons( Value car, Value cdr );
 size_t list_length( Value v );
 Value list_copy( Value list );
 Value list_tail( Value list );
+
+int pair_source_info(Value list, char *buf, int buf_len);
+
+Value cons_src( Value src_base, Value car, Value cdr );
+Value cons_source( Value car, Value cdr, Stream *s);
 
 // Bundle
 

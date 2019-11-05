@@ -58,7 +58,7 @@ static int _parse_list( Stream *s, Value *result )
 		} else {
 			err = _parse_list( s, &cdr );
 			if( err ) return err;
-			*result = cons( val, cdr );
+			*result = cons_source( val, cdr, s);
 			return 0;
 		}
 	}
@@ -226,7 +226,7 @@ int parse( Stream *s, Value *result )
 			*result = VALUE_F;
 			return 0;
 		case 'p':
-			// for debug pringint
+			// for debug printing
 			err = parse(s, result);
 			if( err ) return err;
 			*result = cons3( V(intern("*tee*")), *result, NIL );
@@ -326,12 +326,12 @@ int parse( Stream *s, Value *result )
 	case '\'':
 		err = parse( s, result );
 		if( err ) return err;
-		*result = cons( V_QUOTE, cons(*result, NIL) );
+		*result = cons_source( V_QUOTE, cons_source(*result, NIL, s), s);
 		return err;
 	case '`':
 		err = parse( s, result );
 		if( err ) return err;
-		*result = cons( V(SYM_QUASIQUOTE), cons(*result, NIL) );
+		*result = cons_source( V(SYM_QUASIQUOTE), cons_source(*result, NIL, s), s);
 		return err;
 	case ',':
 		{
@@ -344,7 +344,7 @@ int parse( Stream *s, Value *result )
 
 			err = parse( s, result );
 			if( err ) return err;
-			*result = cons( sym, cons(*result, NIL) );
+			*result = cons_source( sym, cons_source(*result, NIL, s), s);
 			return err;
 		}
 	default:

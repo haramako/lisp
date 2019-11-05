@@ -9,6 +9,7 @@ Stream* stream_new( FILE *fd, bool close, char *filename )
 {
 	Stream *s = V2STREAM(gc_new( TYPE_STREAM ));
 	s->line = 1;
+	s->col = 0;
 	s->pos = 0;
 	s->stream_type = STREAM_TYPE_FILE;
 	s->u.file.close = close;
@@ -21,6 +22,7 @@ Stream* stream_new_str( String *str )
 {
 	Stream *s = V2STREAM(gc_new( TYPE_STREAM ));
 	s->line = 1;
+	s->col = 0;
 	s->pos = 0;
 	s->stream_type = STREAM_TYPE_STRING;
 	s->u.str = str;
@@ -36,14 +38,19 @@ int stream_getc( Stream *s )
 		char *str = STRING_BUF(s->u.str);
 		c = str[s->pos];
 	}
+	s->col++;
 	s->pos++;
-	if( c == '\n' ) s->line += 1;
+	if( c == '\n' ) {
+		s->line += 1;
+		s->col = 0;
+	}
 	return c;
 }
 
 void stream_ungetc( int c, Stream *s )
 {
 	if( c == '\n' ) s->line -= 1;
+	s->col--;
 	s->pos--;
 	if( s->stream_type == STREAM_TYPE_FILE ) {
 		ungetc( c, s->u.file.fd );
@@ -92,6 +99,7 @@ size_t stream_write( Stream *s, char *buf, size_t len )
 		memcpy( str + s->pos, buf, len );
 		str[s->pos + len] = '\0';
 	}
+	s->col += write_len;
 	s->pos += write_len;
 	assert( write_len >= 0 );
 	return write_len;

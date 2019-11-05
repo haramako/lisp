@@ -75,6 +75,7 @@ static size_t _value_to_str( char *buf, int len, Value v )
 		}
 		break;
 	case TYPE_PAIR:
+	case TYPE_PAIR_SOURCE:
 		n += snprintf( buf, len, "(" );
 		if( n >= len ) return len;
 		bool finished = false;

@@ -186,6 +186,9 @@ Value eval( Context *ctx, Value sexp )
 	int gc_count = GC_FREQUENCY;
 	Value result = NIL;
 	Value cont = CONT( sexp, ctx->bundle, NIL);
+	String *src_filename = NULL;
+	int src_line = 0;
+
 	retain( &result );
 	retain( &cont );
 
@@ -202,6 +205,14 @@ _loop:
 		return result;
 	}
 	//printf( "> %s => %s\n", v2sn(result,20), v2sn(C_CODE(cont), 80) );
+
+	if( IS_PAIR_SOURCE(C_CODE(cont)) ) {
+		PairSource *src = V2PAIR_SOURCE(C_CODE(cont));
+		src_filename = src->filename;
+		src_line = src->line;
+		//printf( "> %s at %s:%d\n", v2sn(C_CODE(cont), 20), v2s((Value)(src->filename)), src->line);
+	}
+
 
 	switch( TYPE_OF(C_CODE(cont)) ) {
 	case TYPE_UNUSED:
@@ -225,11 +236,12 @@ _loop:
 		{
 			Value v = _eval_direct( cont, C_CODE(cont) );
 			char buf[256];
-			sprintf(buf, "symbol '%s' not found", v2s(C_CODE(cont)));
+			snprintf(buf, sizeof(buf), "symbol '%s' not found", v2s(C_CODE(cont)));
 			if( !v ) ERROR(buf);
 			NEXT( C_NEXT(cont), v );
 		}
 	case TYPE_PAIR:
+	case TYPE_PAIR_SOURCE:
 		if( !IS_SPECIAL(CAR(C_CODE(cont))) ) {
 			NEXT_DIRECT( CAR(C_CODE(cont)),
 						 CONT_OP( V_APP, cons( CDR(C_CODE(cont)), NIL ), C_BUNDLE(cont), C_NEXT(cont) ) );
@@ -358,18 +370,22 @@ Value normalize_sexp( Context *ctx, Value s )
 	if( sym == SYM_DEFINE ) {
 		if( IS_SYMBOL(CAR(rest)) ) {
 			// (define sym val) の形
-			return cons( V_DEFINE, normalize_list(ctx, rest) );
+			return cons_src( s, V_DEFINE, normalize_list(ctx, rest) );
 		} else if( IS_PAIR(CAR(rest)) ) {
 			// (define (sym args ...) ... ) の形
-			return cons4( V_DEFINE, CAAR(rest),
-						  cons3( V_LAMBDA, CDAR(rest), normalize_list(ctx, CDR(rest)) ), NIL );
+			Value lambda = cons_src( s, V_LAMBDA,
+									 cons_src(CAR(rest), CDAR(rest), normalize_list(ctx, CDR(rest)) ));
+			return cons_src( s, V_DEFINE,
+							 cons_src(CAR(rest), CAAR(rest),
+									  cons_src( CDR(rest),
+												lambda, NIL )));
 		} else {
 			assert(0);
 		}
 	} else if( sym == SYM_LAMBDA ) {
 		return cons3( V_LAMBDA, CAR(rest), normalize_list(ctx, CDR(rest) ) );
 	} else if( sym == SYM_DEFINE_SYNTAX2 ) {
-		return cons( V_DEFINE_SYNTAX2, normalize_list(ctx, rest) );
+		return cons_src( s, V_DEFINE_SYNTAX2, normalize_list(ctx, rest));
 
 	} else if( sym == SYM_IF ) {
 		Value _cond, _then, _else;
@@ -397,13 +413,13 @@ Value normalize_sexp( Context *ctx, Value s )
 // implicit begin
 Value normalize_begin( Context *ctx, Value list )
 {
-	return normalize_sexp(ctx, cons( (Value)SYM_BEGIN, list) );
+	return normalize_sexp(ctx, cons_src( list, (Value)SYM_BEGIN, list) );
 }
 
 Value normalize_list( Context *ctx, Value list )
 {
 	if( IS_PAIR(list) ) {
-		return cons( normalize_sexp(ctx, CAR(list)), normalize_list(ctx, CDR(list)) );
+		return cons_src( list, normalize_sexp(ctx, CAR(list)), normalize_list(ctx, CDR(list)) );
 	} else {
 		return list;
 	}

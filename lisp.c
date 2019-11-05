@@ -43,6 +43,7 @@ const int TYPE_SIZE[] = {
 	sizeof(String),
 	sizeof(StringBody),
 	sizeof(Pair),
+	sizeof(PairSource),
 	sizeof(Lambda),
 	sizeof(CFunc),
 	sizeof(Bundle),
@@ -66,6 +67,7 @@ extern inline Symbol* V2SYMBOL(Value v);
 extern inline String* V2STRING(Value v);
 extern inline StringBody* V2STRING_BODY(Value v);
 extern inline Pair* V2PAIR(Value v);
+extern inline PairSource* V2PAIR_SOURCE(Value v);
 extern inline Lambda* V2LAMBDA(Value v);
 extern inline CFunc* V2CFUNC(Value v);
 extern inline Bundle* V2BUNDLE(Value v);
@@ -282,6 +284,52 @@ Value list_tail( Value list )
 	if( list == NIL ) return NIL;
 	for(; CDR(list) != NIL; list = CDR(list));
 	return list;
+}
+
+int pair_source_info(Value p, char *buf, int buf_len)
+{
+	if( IS_PAIR_SOURCE(p) ){
+		PairSource *src = V2PAIR_SOURCE(p);
+		char filename_buf[256];
+		string_puts(src->filename, filename_buf, sizeof(filename_buf));
+		return snprintf(buf, buf_len, "%s:%d", filename_buf, src->line);
+	}else{
+		return snprintf(buf, buf_len, "<unknown>:");
+	}
+}
+
+//********************************************************
+// PairSource
+//********************************************************
+
+Value cons_src( Value src_base, Value car, Value cdr)
+{
+	if( IS_PAIR_SOURCE(src_base) ) {
+		PairSource *src_base_cons = V2PAIR_SOURCE(src_base);
+
+		Value v = gc_new(TYPE_PAIR_SOURCE);
+		PairSource *src = V2PAIR_SOURCE(v);
+		CAR(v) = car;
+		CDR(v) = cdr;
+		src->filename = src_base_cons->filename;
+		src->line = src_base_cons->line;
+		src->col = src_base_cons->col;
+		return v;
+	} else {
+		return cons(car, cdr);
+	}
+}
+
+Value cons_source( Value car, Value cdr, Stream *s)
+{
+	Value v = gc_new(TYPE_PAIR_SOURCE);
+	PairSource *src = V2PAIR_SOURCE(v);
+	CAR(v) = car;
+	CDR(v) = cdr;
+	src->filename = s->u.file.filename;
+	src->line = s->line;
+	src->col = s->col;
+	return v;
 }
 
 //********************************************************

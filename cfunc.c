@@ -318,14 +318,20 @@ static Value _current_environment( Context *ctx, Value args, Value cont, Value *
 
 static Value _backtrace( Context *ctx, Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW */
 {
+	char buf[256];
 	printf( "backtrace:\n" );
+	pair_source_info(CONTINUATION_CODE(cont), buf, sizeof(buf));
+	printf( "%s:\n", buf);
+	
 	for( Value cur = CONTINUATION_NEXT(cont); cur != NIL; cur = CONTINUATION_NEXT(cur) ) {
 		Value code = CONTINUATION_CODE(cur);
 		//if( IS_PAIR(code) && CAR(code) == V_READ_EVAL ){
 		//	Stream *s = V2STREAM(CDR(code));
 		//	printf( "  %s:%d: *read-eval*\n", STRING_BUF(s->u.file.filename), s->line );
 		//}else{
-		printf( "  %s in %s\n",
+		pair_source_info(code, buf, sizeof(buf));
+		printf( "%s:  %s in %s\n",
+				buf,
 				v2s_limit(code, 60),
 				v2s((Value)(CONTINUATION_BUNDLE(cur)->lambda) ) );
 		//}
