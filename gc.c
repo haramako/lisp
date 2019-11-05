@@ -23,14 +23,14 @@ Pointer* retained = NULL;
 
 static CellHeader* _alloc( int arena_idx )
 {
-	if( !_cell_next[arena_idx] ){
+	if( !_cell_next[arena_idx] ) {
 		Arena *arena = malloc(ARENA_SIZE);
 		int cell_size = _arena_size[arena_idx];
 		int count = ( ARENA_SIZE - sizeof(Arena) ) / cell_size;
 		char *cur = ARENA_ENTRY(arena);
-		for( int i=0; i<count; i++, cur += cell_size ){
+		for( int i = 0; i < count; i++, cur += cell_size ) {
 			((CellHeader*)cur)->type = TYPE_UNUSED;
-			V2UNUSED((CellHeader*)cur)->next = (void*)((i<(count-1))?(cur+cell_size):(NULL));
+			V2UNUSED((CellHeader*)cur)->next = (void*)((i < (count - 1)) ? (cur + cell_size) : (NULL));
 		}
 		arena->size = cell_size;
 		arena->count = count;
@@ -49,14 +49,14 @@ static CellHeader* _alloc( int arena_idx )
 Value gc_new( Type type )
 {
 	assert( type > 0 && type < TYPE_MAX );
-	CellHeader *cell = _alloc( (TYPE_SIZE[type]>sizeof(CellHeader))?1:0);
+	CellHeader *cell = _alloc( (TYPE_SIZE[type] > sizeof(CellHeader)) ? 1 : 0);
 	cell->type = type;
 	cell->marked = -1;
-	
+
 	prof.use++;
 	prof.alloc_count++;
 	prof.cell_count[type]++;
-	
+
 	return cell;
 }
 
@@ -70,12 +70,12 @@ void retain( Value *v )
 
 void release( Value *v )
 {
-	for( Pointer **cur=&retained; *cur; cur = &((*cur)->next) ){
+	for( Pointer **cur = &retained; *cur; cur = &((*cur)->next) ) {
 		if( (*cur)->ptr != v ) continue;
-		if( (*cur)->next ){
+		if( (*cur)->next ) {
 			(*cur)->ptr = (*cur)->next->ptr;
 			(*cur)->next = (*cur)->next->next;
-		}else{
+		} else {
 			*cur = NULL;
 		}
 	}
@@ -86,8 +86,8 @@ static void _mark( Value v );
 static void _mark_dict( Dict *d )
 {
 	if( !d ) return;
-	for( int i=0; i<d->size; i++ ){
-		for( DictEntry *cur = d->entry[i]; cur; cur = cur->next ){
+	for( int i = 0; i < d->size; i++ ) {
+		for( DictEntry *cur = d->entry[i]; cur; cur = cur->next ) {
 			_mark( cur->key );
 			_mark( cur->val );
 		}
@@ -97,11 +97,11 @@ static void _mark_dict( Dict *d )
 static void _mark( Value v )
 {
 	if( !v ) return;
-	
+
 	if( v->marked == _color ) return;
 	v->marked = _color;
-	
-	switch( TYPE_OF(v) ){
+
+	switch( TYPE_OF(v) ) {
 	case TYPE_UNUSED:
 	case TYPE_MAX:
 		assert(0);
@@ -156,9 +156,9 @@ static void _mark( Value v )
 	case TYPE_STREAM:
 		{
 			Stream *s = V2STREAM(v);
-			if( s->stream_type == STREAM_TYPE_FILE ){
+			if( s->stream_type == STREAM_TYPE_FILE ) {
 				_mark( (Value)s->u.file.filename );
-			}else{
+			} else {
 				_mark( (Value)s->u.str );
 			}
 		}
@@ -178,7 +178,7 @@ static void _mark( Value v )
 
 static void _free( Value v )
 {
-	switch( TYPE_OF(v) ){
+	switch( TYPE_OF(v) ) {
 	case TYPE_STRING_BODY:
 		free( V2STRING_BODY(v)->buf );
 		break;
@@ -188,7 +188,7 @@ static void _free( Value v )
 	case TYPE_STREAM:
 		{
 			Stream *s = V2STREAM(v);
-			if( s->stream_type == STREAM_TYPE_FILE ){
+			if( s->stream_type == STREAM_TYPE_FILE ) {
 				if( s->u.file.close && s->u.file.fd != 0 ) fclose( s->u.file.fd );
 			}
 		}
@@ -201,15 +201,15 @@ static void _free( Value v )
 void gc_init()
 {
 	_arena_size[0] = sizeof(Pair);
-	for( Type i=0; i<TYPE_MAX; i++ ){
+	for( Type i = 0; i < TYPE_MAX; i++ ) {
 		if( _arena_size[1] < TYPE_SIZE[i] ) _arena_size[1] = TYPE_SIZE[i];
 	}
 }
 
 void gc_finalize()
 {
-	for( int arena_idx = 0; arena_idx<2; arena_idx++ ){
-		while( _arena_root[arena_idx] != NULL ){
+	for( int arena_idx = 0; arena_idx < 2; arena_idx++ ) {
+		while( _arena_root[arena_idx] != NULL ) {
 			Arena *cur = _arena_root[arena_idx];
 			_arena_root[arena_idx] = _arena_root[arena_idx]->next;
 			free( cur );
@@ -220,24 +220,24 @@ void gc_finalize()
 void gc_run( int verbose )
 {
 	_color = 1 - _color;
-	
+
 	// root mark
 	_mark_dict( symbol_root );
 	_mark( (Value)retained );
 
 	// sweep
 	int all = 0, kill = 0;
-	for( int arena_idx=0; arena_idx<2; arena_idx++ ){
-		for( Arena *arena = _arena_root[arena_idx]; arena != NULL; arena = arena->next ){
+	for( int arena_idx = 0; arena_idx < 2; arena_idx++ ) {
+		for( Arena *arena = _arena_root[arena_idx]; arena != NULL; arena = arena->next ) {
 			char *p = ARENA_ENTRY(arena);
 			int count = arena->count;
 			int size = arena->size;
-			for( int i=0; i<count; i++, p+=size){
+			for( int i = 0; i < count; i++, p += size) {
 				Value cur = (CellHeader*)p;
 				if( cur->type == TYPE_UNUSED ) continue;
 				all++;
 
-				if( cur->marked != _color ){
+				if( cur->marked != _color ) {
 					_free( cur );
 					cur->type = TYPE_UNUSED;
 					V2UNUSED(cur)->next = _cell_next[arena_idx];
@@ -248,7 +248,7 @@ void gc_run( int verbose )
 			}
 		}
 	}
-	
-	if( verbose ) printf( "finish gc. %d - %d => %d\n", all, kill, all-kill );
+
+	if( verbose ) printf( "finish gc. %d - %d => %d\n", all, kill, all - kill );
 }
 

@@ -30,9 +30,9 @@ Stream* stream_new_str( String *str )
 int stream_getc( Stream *s )
 {
 	int c;
-	if( s->stream_type == STREAM_TYPE_FILE ){
+	if( s->stream_type == STREAM_TYPE_FILE ) {
 		c = fgetc( s->u.file.fd );
-	}else{
+	} else {
 		char *str = STRING_BUF(s->u.str);
 		c = str[s->pos];
 	}
@@ -45,7 +45,7 @@ void stream_ungetc( int c, Stream *s )
 {
 	if( c == '\n' ) s->line -= 1;
 	s->pos--;
-	if( s->stream_type == STREAM_TYPE_FILE ){
+	if( s->stream_type == STREAM_TYPE_FILE ) {
 		ungetc( c, s->u.file.fd );
 	}
 }
@@ -54,7 +54,7 @@ Value stream_read_value( Stream *s )
 {
 	Value val = V_EOF;
 	int err = parse( s, &val );
-	if( err ){
+	if( err ) {
 		printf( "parse error: err=%d\n", err );
 		assert(0);
 	}
@@ -71,9 +71,9 @@ void stream_write_value( Stream *s, Value v )
 size_t stream_read( Stream *s, char *buf, size_t len )
 {
 	size_t read_len;
-	if( s->stream_type == STREAM_TYPE_FILE ){
+	if( s->stream_type == STREAM_TYPE_FILE ) {
 		read_len = fread( buf, len, 1, s->u.file.fd );
-	}else{
+	} else {
 		read_len = len;
 		strncpy( buf, STRING_BUF(s->u.str), len );
 	}
@@ -84,13 +84,13 @@ size_t stream_read( Stream *s, char *buf, size_t len )
 size_t stream_write( Stream *s, char *buf, size_t len )
 {
 	size_t write_len;
-	if( s->stream_type == STREAM_TYPE_FILE ){
+	if( s->stream_type == STREAM_TYPE_FILE ) {
 		write_len = fwrite( buf, len, 1, s->u.file.fd );
-	}else{
+	} else {
 		write_len = len;
 		char *str = STRING_BUF(s->u.str);
-		memcpy( str+s->pos, buf, len );
-		str[s->pos+len] = '\0';
+		memcpy( str + s->pos, buf, len );
+		str[s->pos + len] = '\0';
 	}
 	s->pos += write_len;
 	assert( write_len >= 0 );
@@ -99,7 +99,7 @@ size_t stream_write( Stream *s, char *buf, size_t len )
 
 void stream_close( Stream *s )
 {
-	if( s->stream_type == STREAM_TYPE_FILE ){
+	if( s->stream_type == STREAM_TYPE_FILE ) {
 		fclose( s->u.file.fd );
 		s->u.file.fd = 0;
 	}

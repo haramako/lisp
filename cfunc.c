@@ -15,7 +15,7 @@ static Value _eq_p( Context *ctx, Value args ) /* -1 */
 {
 	if( args == NIL ) return VALUE_T;
 	Value v = CAR(args);
-	LIST_EACH( x, CDR(args) ){
+	LIST_EACH( x, CDR(args) ) {
 		if( !eq( v, x ) ) return VALUE_F;
 	}
 	return VALUE_T;
@@ -25,7 +25,7 @@ static Value _eqv_p( Context *ctx, Value args ) /* -1 */
 {
 	if( args == NIL ) return VALUE_T;
 	Value v = CAR(args);
-	LIST_EACH( x, CDR(args) ){
+	LIST_EACH( x, CDR(args) ) {
 		if( !eqv( v, x ) ) return VALUE_F;
 	}
 	return VALUE_T;
@@ -35,7 +35,7 @@ static Value _equal_p( Context *ctx, Value args ) /* -1 */
 {
 	if( args == NIL ) return VALUE_T;
 	Value v = CAR(args);
-	LIST_EACH( x, CDR(args) ){
+	LIST_EACH( x, CDR(args) ) {
 		if( !equal( v, x ) ) return VALUE_F;
 	}
 	return VALUE_T;
@@ -44,13 +44,13 @@ static Value _equal_p( Context *ctx, Value args ) /* -1 */
 static Value _define_p( Context *ctx, Value sym ) /* 1 */
 {
 	ERROR_IF_NOT_SYMBOL( sym );
-	return bundle_find( ctx->bundle, V2SYMBOL(sym), true, false )?VALUE_T:VALUE_F;
+	return bundle_find( ctx->bundle, V2SYMBOL(sym), true, false ) ? VALUE_T : VALUE_F;
 }
 
 static Value _add( Context *ctx, Value args ) /* -1 + */
 {
 	int sum = 0;
-	LIST_EACH( n, args ){
+	LIST_EACH( n, args ) {
 		ERROR_IF_NOT_INT(n);
 		sum += V2INT(n);
 	}
@@ -61,7 +61,7 @@ static Value _sub( Context *ctx, Value args ) /* -1 - */
 {
 	ERROR_IF_NOT_INT(CAR(args));
 	int64_t sum = V2INT(CAR(args));
-	LIST_EACH( n, CDR(args) ){
+	LIST_EACH( n, CDR(args) ) {
 		ERROR_IF_NOT_INT(n);
 		sum -= V2INT(n);
 	}
@@ -71,7 +71,7 @@ static Value _sub( Context *ctx, Value args ) /* -1 - */
 static Value _mul( Context *ctx, Value args ) /* -1 * */
 {
 	int sum = 1;
-	LIST_EACH( n, args ){
+	LIST_EACH( n, args ) {
 		ERROR_IF_NOT_INT(n);
 		sum *= V2INT(n);
 	}
@@ -82,7 +82,7 @@ static Value _div( Context *ctx, Value args ) /* -1 / */
 {
 	ERROR_IF_NOT_INT(CAR(args));
 	int64_t sum = V2INT(CAR(args));
-	LIST_EACH( n, CDR(args) ){
+	LIST_EACH( n, CDR(args) ) {
 		ERROR_IF_NOT_INT(n);
 		sum /= V2INT(n);
 	}
@@ -93,7 +93,7 @@ static Value _modulo( Context *ctx, Value args ) /* -1 */
 {
 	ERROR_IF_NOT_INT(CAR(args));
 	int64_t sum = V2INT(CAR(args));
-	LIST_EACH( n, CDR(args) ){
+	LIST_EACH( n, CDR(args) ) {
 		ERROR_IF_NOT_INT(n);
 		sum %= V2INT(n);
 	}
@@ -105,9 +105,14 @@ static Value _eq( Context *ctx, Value args ) /* -1 = */
 	if( args == NIL ) return VALUE_T;
 	ERROR_IF_NOT_INT(CAR(args));
 	int64_t last = V2INT(CAR(args));
-	LIST_EACH( n, CDR(args) ){
+	LIST_EACH( n, CDR(args) ) {
 		ERROR_IF_NOT_INT(n);
-		if( !(last == V2INT(n)) ){ return VALUE_F; }else{ last = V2INT(n); }
+		if( !(last == V2INT(n)) ) {
+			return VALUE_F;
+		}
+		else {
+			last = V2INT(n);
+		}
 	}
 	return VALUE_T;
 }
@@ -191,11 +196,11 @@ static Value _list_a( Context *ctx, Value args ) /* -1 */
 {
 	Value li = cons( NIL, NIL );
 	Value tail = li;
-	for( Value cur=args; cur != NIL; cur=CDR(cur) ){
-		if( CDR(cur) != NIL ){
+	for( Value cur = args; cur != NIL; cur = CDR(cur) ) {
+		if( CDR(cur) != NIL ) {
 			CDR(tail) = cons( CAR(cur), NIL );
 			tail = CDR(tail);
-		}else{
+		} else {
 			CDR(tail) = CAR(cur);
 		}
 	}
@@ -204,64 +209,64 @@ static Value _list_a( Context *ctx, Value args ) /* -1 */
 
 static Value _not( Context *ctx, Value v ) /* 1 */
 {
-	return (v==VALUE_F)?VALUE_T:VALUE_F;
+	return (v == VALUE_F) ? VALUE_T : VALUE_F;
 }
 
 static Value _number_p( Context *ctx, Value v ) /* 1 */
 {
-	return IS_INT(v)?VALUE_T:VALUE_F;
+	return IS_INT(v) ? VALUE_T : VALUE_F;
 }
 
 static Value _char_p( Context *ctx, Value v ) /* 1 */
 {
-	return IS_CHAR(v)?VALUE_T:VALUE_F;
+	return IS_CHAR(v) ? VALUE_T : VALUE_F;
 }
 
 static Value _symbol_p( Context *ctx, Value v ) /* 1 */
 {
-	return IS_SYMBOL(v)?VALUE_T:VALUE_F;
+	return IS_SYMBOL(v) ? VALUE_T : VALUE_F;
 }
 
 static Value _pair_p( Context *ctx, Value v ) /* 1 */
 {
-	return IS_PAIR(v)?VALUE_T:VALUE_F;
+	return IS_PAIR(v) ? VALUE_T : VALUE_F;
 }
 
 static Value _null_p( Context *ctx, Value v ) /* 1 */
 {
-	return (v==NIL)?VALUE_T:VALUE_F;
+	return (v == NIL) ? VALUE_T : VALUE_F;
 }
 
 static Value _list_p( Context *ctx, Value v ) /* 1 */
 {
-	return (v==NIL||IS_PAIR(v))?VALUE_T:VALUE_F;
+	return (v == NIL || IS_PAIR(v)) ? VALUE_T : VALUE_F;
 }
 
 static Value _string_p( Context *ctx, Value v ) /* 1 */
 {
-	return (IS_STRING(v))?VALUE_T:VALUE_F;
+	return (IS_STRING(v)) ? VALUE_T : VALUE_F;
 }
 
 static Value _procedure_p( Context *ctx, Value v ) /* 1 */
 {
-	return ((TYPE_OF(v)==TYPE_CFUNC)||(TYPE_OF(v)==TYPE_LAMBDA))?VALUE_T:VALUE_F;
+	return ((TYPE_OF(v) == TYPE_CFUNC) || (TYPE_OF(v) == TYPE_LAMBDA)) ? VALUE_T : VALUE_F;
 }
 
 static Value _macro_p( Context *ctx, Value v ) /* 1 */
 {
-	return (TYPE_OF(v)==TYPE_LAMBDA&&V2LAMBDA(v)->type==LAMBDA_TYPE_MACRO)?VALUE_T:VALUE_F;
+	return (TYPE_OF(v) == TYPE_LAMBDA && V2LAMBDA(v)->type == LAMBDA_TYPE_MACRO) ? VALUE_T : VALUE_F;
 }
 
 static Value _apply( Context *ctx, Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW */
 {
 	// 継続の場合
-	switch( TYPE_OF(CAR(args)) ){
+	switch( TYPE_OF(CAR(args)) ) {
 	case TYPE_CONTINUATION:
 		{
 			Value rest = CADR(args);
-			if( IS_PAIR(CDR(rest)) ){
+			if( IS_PAIR(CDR(rest)) ) {
 				*result = cons( V(intern("VALUES")), rest );
-			}else{
+			} else {
 				*result = CAR(rest);
 			}
 			return CAR(args);
@@ -272,12 +277,12 @@ static Value _apply( Context *ctx, Value args, Value cont, Value *result ) /* CF
 			Value lmd = CAR(args);
 			Value head = cons( NIL, NIL );
 			Value tail = head;
-			for( Value cur=CDR(args); cur != NIL; cur = CDR(cur) ){
-				if( CDR(cur) == NIL ){
-					for( Value v=CAR(cur); v != NIL; v = CDR(v) ){
+			for( Value cur = CDR(args); cur != NIL; cur = CDR(cur) ) {
+				if( CDR(cur) == NIL ) {
+					for( Value v = CAR(cur); v != NIL; v = CDR(v) ) {
 						tail = CDR(tail) = cons( CAR(v), NIL );
 					}
-				}else{
+				} else {
 					tail = CDR(tail) = cons( CAR(cur), NIL );
 				}
 			}
@@ -314,16 +319,16 @@ static Value _current_environment( Context *ctx, Value args, Value cont, Value *
 static Value _backtrace( Context *ctx, Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW */
 {
 	printf( "backtrace:\n" );
-	for( Value cur=CONTINUATION_NEXT(cont); cur != NIL; cur = CONTINUATION_NEXT(cur) ){
+	for( Value cur = CONTINUATION_NEXT(cont); cur != NIL; cur = CONTINUATION_NEXT(cur) ) {
 		Value code = CONTINUATION_CODE(cur);
 		//if( IS_PAIR(code) && CAR(code) == V_READ_EVAL ){
 		//	Stream *s = V2STREAM(CDR(code));
 		//	printf( "  %s:%d: *read-eval*\n", STRING_BUF(s->u.file.filename), s->line );
 		//}else{
-			printf( "  %s in %s\n",
-					v2s_limit(code, 60),
-					v2s((Value)(CONTINUATION_BUNDLE(cur)->lambda) ) );
-			//}
+		printf( "  %s in %s\n",
+				v2s_limit(code, 60),
+				v2s((Value)(CONTINUATION_BUNDLE(cur)->lambda) ) );
+		//}
 	}
 	*result = NIL;
 	return CONTINUATION_NEXT(cont);
@@ -340,7 +345,7 @@ static Value _load( Context *ctx, Value args, Value cont, Value *result ) /* CFU
 {
 	Value vfilename;
 	bind1arg( args, vfilename);
-    assert(vfilename);
+	assert(vfilename);
 	String *filename = V2STRING(vfilename);
 	FILE *fd = fopen( STRING_BUF(filename), "r" );
 	if( !fd ) assert(0);
@@ -352,14 +357,14 @@ static Value _load( Context *ctx, Value args, Value cont, Value *result ) /* CFU
 
 static Value _exit_func( Context *ctx, Value args, Value cont, Value *result ) /* CFUNC_ARITY_RAW exit */
 {
-	bind1arg(args,*result);
+	bind1arg(args, *result);
 	if( !*result ) *result = NIL;
 	return NIL;
 }
 
 static Value _eof_object_p( Context *ctx, Value v ) /* 1 */
 {
-	return (v==V_EOF)?VALUE_T:VALUE_F;
+	return (v == V_EOF) ? VALUE_T : VALUE_F;
 }
 
 static Value _display( Context *ctx, Value v, Value rest ) /* -2 */
@@ -371,15 +376,15 @@ static Value _display( Context *ctx, Value v, Value rest ) /* -2 */
 	if( !vport ) vport = bundle_get( ctx->bundle, SYM_CURRENT_OUTPUT_PORT, NULL );
 	ERROR_IF_NOT_STREAM(vport);
 	Stream *port = V2STREAM(vport);
-	
-	switch( TYPE_OF(v) ){
+
+	switch( TYPE_OF(v) ) {
 	case TYPE_CHAR:
 		{
 			int c = V2CHAR(v);
-			if( c >= 32 && c <= 126 ){
+			if( c >= 32 && c <= 126 ) {
 				buf[0] = c;
 				stream_write( port, buf, 1 );
-			}else{
+			} else {
 				len = sprintf( buf, "#\\%02x", c );
 				stream_write( port, buf, len );
 			}
@@ -454,7 +459,7 @@ static Value _open_input_string( Context *ctx, Value str ) /* 1 */
 
 static Value _open_output_string( Context *ctx ) /* 0 */
 {
-	Stream *s = stream_new_str( string_new_len("",8192) );
+	Stream *s = stream_new_str( string_new_len("", 8192) );
 	return (Value)s;
 }
 
@@ -485,7 +490,7 @@ static Value _get_output_string( Context *ctx, Value v ) /* 1 */
 static Value _char_eq_p( Context *ctx, Value first, Value rest ) /* -2 char=? */
 {
 	ERROR_IF_NOT_CHAR(first);
-	LIST_EACH( c, rest ){
+	LIST_EACH( c, rest ) {
 		ERROR_IF_NOT_CHAR(c);
 		if( V2CHAR(first) != V2CHAR(c) ) return VALUE_F;
 	}
@@ -536,14 +541,14 @@ static Value _char_upcase( Context *ctx, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_CHAR(v);
 	int c = V2CHAR(v);
-	return ( c >= 'a' && c <= 'z' )?CHAR2V(c-32):v;
+	return ( c >= 'a' && c <= 'z' ) ? CHAR2V(c - 32) : v;
 }
 
 static Value _char_downcase( Context *ctx, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_CHAR(v);
 	int c = V2CHAR(v);
-	return ( c >= 'A' && c <= 'Z' )?CHAR2V(c+32):v;
+	return ( c >= 'A' && c <= 'Z' ) ? CHAR2V(c + 32) : v;
 }
 
 static Value _number_to_string( Context *ctx, Value v ) /* 1 */
@@ -566,7 +571,7 @@ static Value _string_append( Context *ctx, Value args ) /* -1 */
 {
 	char buf[10240];
 	char *tail = buf;
-	for( Value cur=args; cur != NIL; cur=CDR(cur) ){
+	for( Value cur = args; cur != NIL; cur = CDR(cur) ) {
 		ERROR_IF_NOT_STRING(CAR(cur));
 		tail += sprintf( tail, "%s", STRING_BUF(V2STRING(CAR(cur))) );
 	}
@@ -579,9 +584,9 @@ static Value _string_to_list( Context *ctx, Value v ) /* 1 */
 	char *str = STRING_BUF(V2STRING(v));
 	if( str[0] == '\0' ) return NIL;
 
-	Value r = cons(CHAR2V(str[0]),NIL);
+	Value r = cons(CHAR2V(str[0]), NIL);
 	Value tail = r;
-	for( int i=1; str[i]; i++ ){
+	for( int i = 1; str[i]; i++ ) {
 		tail = CDR(tail) = cons( CHAR2V(str[i]), NIL );
 	}
 	return r;
@@ -590,11 +595,11 @@ static Value _string_to_list( Context *ctx, Value v ) /* 1 */
 static Value _list_to_string( Context *ctx, Value v ) /* 1 */
 {
 	if( v == NIL ) return (Value)string_new("");
-	
+
 	ERROR_IF_NOT_PAIR(v);
 	char buf[1024];
-	int i=0;
-	LIST_EACH(cur,v){
+	int i = 0;
+	LIST_EACH(cur, v) {
 		buf[i] = (char)V2CHAR(cur);
 		i++;
 	}
@@ -607,7 +612,7 @@ static Value _string( Context *ctx, Value cs ) /* -1 */
 	if( cs == NIL ) return (Value)string_new("");
 	char buf[1024];
 	int i = 0;
-	LIST_EACH(c,cs){
+	LIST_EACH(c, cs) {
 		ERROR_IF_NOT_CHAR(c);
 		buf[i] = (char)V2CHAR(c);
 		i++;
@@ -624,7 +629,7 @@ static Value _make_string( Context *ctx, Value _len, Value rest ) /* -2 */
 	int c = '\0';
 	Value _c;
 	bind1arg( rest, _c );
-	if( _c ){
+	if( _c ) {
 		ERROR_IF_NOT_CHAR(_c);
 		c = V2CHAR(_c);
 	}
@@ -637,7 +642,7 @@ static Value _string_null_p( Context *ctx, Value v ) /* 1 */
 {
 	ERROR_IF_NOT_STRING(v);
 	String *s = V2STRING(v);
-	return (s->len == 0)?VALUE_T:VALUE_F;
+	return (s->len == 0) ? VALUE_T : VALUE_F;
 }
 
 static Value _string_length( Context *ctx, Value v ) /* 1 */
@@ -659,7 +664,10 @@ static Value _string_set_i( Context *ctx, Value v, Value _idx, Value _c ) /* 3 *
 {
 	char *str = STRING_BUF(V2STRING(v));
 	int idx = (int)V2INT(_idx);
-	if( idx >= V2STRING(v)->len ){ printf("%d %zd\n", (int)idx, V2STRING(v)->len ); assert(0); }
+	if( idx >= V2STRING(v)->len ) {
+		printf("%d %zd\n", (int)idx, V2STRING(v)->len );
+		assert(0);
+	}
 	str[idx] = V2CHAR(_c);
 	return NIL;
 }
@@ -672,15 +680,15 @@ static Value _substring( Context *ctx, Value v, Value _start, Value rest ) /* -3
 	bind1arg( rest, _end );
 	if( _end ) end = (int)V2INT(_end);
 	String *s = V2STRING(v);
-	return (Value)string_substr( s, start, end-start );
+	return (Value)string_substr( s, start, end - start );
 }
 
 static Value _sys_getenv( Context *ctx, Value name ) /* 1 */
 {
 	char *str = getenv( STRING_BUF(V2STRING(name)) );
-	if( str ){
+	if( str ) {
 		return (Value)string_new( str );
-	}else{
+	} else {
 		return VALUE_F;
 	}
 }
@@ -697,17 +705,17 @@ static Value _file_exists_p( Context *ctx, Value _path ) /* 1 */
 static Value _runtime_value_set_i( Context *ctx, Value _name, Value val ) /* 2 */
 {
 	char *name;
-	if( IS_SYMBOL(_name) ){
+	if( IS_SYMBOL(_name) ) {
 		name = STRING_BUF(V2SYMBOL(_name)->str);
-	}else if( IS_STRING(_name) ){
+	} else if( IS_STRING(_name) ) {
 		name = STRING_BUF(V2STRING(_name));
-	}else{
+	} else {
 		assert(0);
 	}
-	
-	if( strcmp( name, "trace" ) == 0 ){
+
+	if( strcmp( name, "trace" ) == 0 ) {
 		opt_trace = V2INT(val);
-	}else{
+	} else {
 		assert(0);
 	}
 	return NIL;

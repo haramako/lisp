@@ -31,7 +31,7 @@ int main( int argc, char **argv )
 	display_val( "hoge: ", intern("hoge") );
 	printf( "%p\n", intern("hoge") );
 	printf( "%p\n", intern("hoge") );
-	
+
 	dict_set( d1, intern("hoge"), INT2V(1) );
 	display_val( "d1[hoge] ", dict_get( d1, intern("hoge") ) );
 	dict_set( d1, intern("hoge"), INT2V(2) );
@@ -49,7 +49,7 @@ int main( int argc, char **argv )
 		display_val( "d1: ", dict_get( d1, INT2V(i) ) );
 	}
 	*/
-	
+
 	return 0;
 }
 

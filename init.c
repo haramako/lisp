@@ -26,11 +26,11 @@ static void handler(int sig) {
 
 	// print out all the frames to stderr
 	fprintf(stderr, "\nError: signal %d:\n", sig);
-	backtrace_symbols_fd(array+3, (int)size-3, 2/*=stderr*/);
-	if( V_SRC_FILE ){
-		if( V_SRC_FILE->stream_type == STREAM_TYPE_FILE ){
+	backtrace_symbols_fd(array + 3, (int)size - 3, 2/*=stderr*/);
+	if( V_SRC_FILE ) {
+		if( V_SRC_FILE->stream_type == STREAM_TYPE_FILE ) {
 			printf( "%s:%d: error\n", STRING_BUF(V_SRC_FILE->u.file.filename), V_SRC_FILE->line );
-		}else{
+		} else {
 			printf( "(str):%d: error\n", V_SRC_FILE->line );
 		}
 	}
@@ -99,9 +99,9 @@ static void _get_home_path( const char *argv0, char *out_path )
 #else
 	char cwd[PATH_MAX], path[PATH_MAX];
 	getcwd( cwd, sizeof(cwd) );
-	if( argv0[0] == '/' ){
+	if( argv0[0] == '/' ) {
 		sprintf( path, "%s/..", argv0 );
-	}else{
+	} else {
 		sprintf( path, "%s/%s/..", cwd, argv0 );
 	}
 	//realpath( path, out_path );
@@ -118,14 +118,14 @@ void init_prelude( const char *argv0, bool with_prelude )
 {
 	char home_path[PATH_MAX];
 	_get_home_path( argv0, home_path );
-	
+
 	signal( SIGABRT, handler );
 	signal( SIGSEGV, handler );
-	
+
 	gc_init();
 
 	retained = NULL;
-	
+
 	NIL = gc_new(TYPE_NIL);
 	retain( &NIL );
 	VALUE_T = gc_new(TYPE_BOOL);
@@ -135,11 +135,11 @@ void init_prelude( const char *argv0, bool with_prelude )
 	V_UNDEF = gc_new(TYPE_SPECIAL);
 	V2SPECIAL(V_UNDEF)->str = "#<undef>";
 	retain( &V_UNDEF );
-	
+
 	bundle_cur = bundle_new( NULL );
 	retain( (Value*)&bundle_cur );
 	symbol_root = dict_new( hash_eqv, eqv );
-	
+
 	V_EOF = gc_new(TYPE_SPECIAL);
 	V2SPECIAL(V_EOF)->str = "#<eof>";
 	retain( &V_EOF );
@@ -149,7 +149,7 @@ void init_prelude( const char *argv0, bool with_prelude )
 	retain( (Value*)&V_STDOUT );
 	V_END_OF_LINE = (Value)string_new("\n");
 	retain( &V_END_OF_LINE );
-	
+
 	_INIT_OPERATOR(V_BEGIN, "begin", OP_BEGIN);
 	_INIT_OPERATOR(V_APP, "%app", OP_APP);
 	_INIT_OPERATOR(V_QUOTE, "quote", OP_QUOTE);
@@ -202,17 +202,17 @@ void init_prelude( const char *argv0, bool with_prelude )
 	char lib_path[PATH_MAX];
 	bundle_define( bundle_cur, SYM_RUNTIME_HOME_PATH, (Value)string_new(home_path) );
 	sprintf( lib_path, "%s/lib", home_path );
-   	bundle_define( bundle_cur, SYM_RUNTIME_LOAD_PATH,
-				   cons4( (Value)string_new("."), (Value)string_new("lib"), (Value)string_new(lib_path),NIL ) );
-    
-	if( with_prelude ){
+	bundle_define( bundle_cur, SYM_RUNTIME_LOAD_PATH,
+				   cons4( (Value)string_new("."), (Value)string_new("lib"), (Value)string_new(lib_path), NIL ) );
+
+	if( with_prelude ) {
 		char path[PATH_MAX];
 		sprintf( path, "%s/prelude.scm", lib_path );
 		FILE *fd = fopen( path, "r" );
-		if( !fd ){
+		if( !fd ) {
 			sprintf( path, "./lib/prelude.scm" );
 			fd = fopen( path, "r" );
-			if( !fd ){
+			if( !fd ) {
 				printf( "cannot open prelude.scm\n" );
 				exit(1);
 			}
@@ -220,7 +220,7 @@ void init_prelude( const char *argv0, bool with_prelude )
 		Context ctx;
 		ctx.cont = NIL;
 		ctx.bundle = bundle_cur;
-		eval_loop( &ctx, stream_new(fd,true,"prelude.scm") );
+		eval_loop( &ctx, stream_new(fd, true, "prelude.scm") );
 	}
 }
 
@@ -231,15 +231,15 @@ void finalize()
 	dict_free( symbol_root );
 	symbol_root = NULL;
 	gc_run(opt_trace);
-    gc_finalize();
+	gc_finalize();
 }
 
 void show_prof()
 {
 	printf( "alloc use: %d / %d (%3.2f%%) total: %d\n",
-			prof.use, prof.size, (100.0*prof.use/prof.size), prof.alloc_count );
+			prof.use, prof.size, (100.0 * prof.use / prof.size), prof.alloc_count );
 	printf( "cell count:\n" );
-	for( int type=1; type<TYPE_MAX; type++ ){
+	for( int type = 1; type < TYPE_MAX; type++ ) {
 		printf( "  %16s: %8d\n", TYPE_NAMES[type], prof.cell_count[type] );
 	}
 }

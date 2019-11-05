@@ -6,7 +6,7 @@
 
 Dict* dict_new_size( int size, HashFunction hash_func, CompareFunction comp_func )
 {
-	Dict *dict = malloc(sizeof(Dict)+sizeof(DictEntry*)*(size-1));
+	Dict *dict = malloc(sizeof(Dict) + sizeof(DictEntry*) * (size - 1));
 	dict->size = size;
 	dict->hash_func = hash_func;
 	dict->comp_func = comp_func;
@@ -21,11 +21,11 @@ Dict* dict_new( HashFunction hash_func, CompareFunction comp_func )
 
 void dict_free( Dict *d )
 {
-	for( int i=0; i<d->size; i++ ){
-        for( DictEntry *cur = d->entry[i]; cur; ){
-            DictEntry *next = cur->next;
-            free( cur );
-            cur = next;
+	for( int i = 0; i < d->size; i++ ) {
+		for( DictEntry *cur = d->entry[i]; cur; ) {
+			DictEntry *next = cur->next;
+			free( cur );
+			cur = next;
 		}
 	}
 	free( d );
@@ -34,8 +34,8 @@ void dict_free( Dict *d )
 Dict* dict_rehash( Dict *d )
 {
 	Dict *new_dict = dict_new_size( d->size * 1.7, d->hash_func, d->comp_func );
-	for( int i=0; i<d->size; i++ ){
-		for( DictEntry *cur = d->entry[i]; cur; cur = cur->next ){
+	for( int i = 0; i < d->size; i++ ) {
+		for( DictEntry *cur = d->entry[i]; cur; cur = cur->next ) {
 			dict_set( new_dict, cur->key, cur->val );
 		}
 	}
@@ -47,10 +47,10 @@ DictEntry* dict_find( Dict *d, Value key, bool create )
 {
 	int idx = d->hash_func( key ) % d->size;
 	assert( idx < d->size );
-	for( DictEntry *cur = d->entry[idx]; cur; cur = cur->next ){
+	for( DictEntry *cur = d->entry[idx]; cur; cur = cur->next ) {
 		if( d->comp_func( cur->key, key ) ) return cur;
 	}
-	if( create ){
+	if( create ) {
 		DictEntry *new_entry = malloc(sizeof(DictEntry));
 		new_entry->key = key;
 		new_entry->val = NIL;
@@ -58,7 +58,7 @@ DictEntry* dict_find( Dict *d, Value key, bool create )
 		d->entry[idx] = new_entry;
 		d->use++;
 		return new_entry;
-	}else{
+	} else {
 		return NULL;
 	}
 }
@@ -72,9 +72,9 @@ void dict_set( Dict *d, Value key, Value val )
 Value dict_get( Dict *d, Value key )
 {
 	DictEntry *entry = dict_find( d, key, false );
-	if( entry ){
+	if( entry ) {
 		return entry->val;
-	}else{
+	} else {
 		return NULL;
 	}
 }

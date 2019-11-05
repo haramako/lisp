@@ -48,7 +48,7 @@ typedef enum {
 
 typedef struct CellHeader* Value;
 
-typedef struct CellHeader{
+typedef struct CellHeader {
 	char type;
 	char marked;
 } CellHeader;
@@ -199,23 +199,68 @@ typedef Value (*CFunction7)( Context *ctx, Value v1, Value v2, Value v3, Value v
 #define IS_ERROR(v) ((v)->type==TYPE_ERROR)
 
 #define V(v) ((Value)v)
-inline Unused* V2UNUSED(Value v){ assert(IS_UNUSED(v)); return (Unused*)v; }
-inline Special* V2SPECIAL(Value v){ assert(IS_SPECIAL(v)); return (Special*)v; }
-inline int64_t V2INT(Value v){ assert(IS_INT(v)); return ((Integer*)v)->number; }
+inline Unused* V2UNUSED(Value v) {
+	assert(IS_UNUSED(v));
+	return (Unused*)v;
+}
+inline Special* V2SPECIAL(Value v) {
+	assert(IS_SPECIAL(v));
+	return (Special*)v;
+}
+inline int64_t V2INT(Value v) {
+	assert(IS_INT(v));
+	return ((Integer*)v)->number;
+}
 #define INT2V(v) ((Value)int_new(v))
-inline int V2CHAR(Value v){ assert(IS_CHAR(v)); return (int)((Integer*)v)->number; }
+inline int V2CHAR(Value v) {
+	assert(IS_CHAR(v));
+	return (int)((Integer*)v)->number;
+}
 #define CHAR2V(v) ((Value)char_new((int)v))
-inline Symbol* V2SYMBOL(Value v){ assert(IS_SYMBOL(v)); return (Symbol*)v; }
-inline String* V2STRING(Value v){ assert(IS_STRING(v)); return (String*)v; }
-inline StringBody* V2STRING_BODY(Value v){ assert(IS_STRING_BODY(v)); return (StringBody*)v; }
-inline Pair* V2PAIR(Value v){ assert(IS_PAIR(v)); return (Pair*)v; }
-inline Lambda* V2LAMBDA(Value v){ assert(IS_LAMBDA(v)); return (Lambda*)v; }
-inline CFunc* V2CFUNC(Value v){ assert(IS_CFUNC(v)); return (CFunc*)v; }
-inline Bundle* V2BUNDLE(Value v){ assert(IS_BUNDLE(v)); return (Bundle*)v; }
-inline Continuation* V2CONTINUATION(Value v){ assert(IS_CONTINUATION(v)); return (Continuation*)v; }
-inline Stream* V2STREAM(Value v){ assert(IS_STREAM(v)); return (Stream*)v; }
-inline Pointer* V2POINTER(Value v){ assert(IS_POINTER(v)); return (Pointer*)v; }
-inline Error* V2ERROR(Value v){ assert(IS_ERROR(v)); return (Error*)v; }
+inline Symbol* V2SYMBOL(Value v) {
+	assert(IS_SYMBOL(v));
+	return (Symbol*)v;
+}
+inline String* V2STRING(Value v) {
+	assert(IS_STRING(v));
+	return (String*)v;
+}
+inline StringBody* V2STRING_BODY(Value v) {
+	assert(IS_STRING_BODY(v));
+	return (StringBody*)v;
+}
+inline Pair* V2PAIR(Value v) {
+	assert(IS_PAIR(v));
+	return (Pair*)v;
+}
+inline Lambda* V2LAMBDA(Value v) {
+	assert(IS_LAMBDA(v));
+	return (Lambda*)v;
+}
+inline CFunc* V2CFUNC(Value v) {
+	assert(IS_CFUNC(v));
+	return (CFunc*)v;
+}
+inline Bundle* V2BUNDLE(Value v) {
+	assert(IS_BUNDLE(v));
+	return (Bundle*)v;
+}
+inline Continuation* V2CONTINUATION(Value v) {
+	assert(IS_CONTINUATION(v));
+	return (Continuation*)v;
+}
+inline Stream* V2STREAM(Value v) {
+	assert(IS_STREAM(v));
+	return (Stream*)v;
+}
+inline Pointer* V2POINTER(Value v) {
+	assert(IS_POINTER(v));
+	return (Pointer*)v;
+}
+inline Error* V2ERROR(Value v) {
+	assert(IS_ERROR(v));
+	return (Error*)v;
+}
 
 size_t value_to_str( char *buf, int len, Value v );
 char* v2s( Value v );
@@ -438,7 +483,7 @@ extern Value V_IF, V_IF2;
   error syntax-rules syntax-rest
   runtime-load-path runtime-home-path lambda
   define if quote else begin ) +
-  [["set!", "SYM_SET_I"], 
+  [["set!", "SYM_SET_I"],
    ['%define-syntax', 'SYM_DEFINE_SYNTAX2']] )
 */
 extern Symbol *SYM_A_COMPILE_HOOK_A;
